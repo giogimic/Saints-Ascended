@@ -56,31 +56,28 @@ export function Layout({
   }, []);
   return (
     <CyberLayout>
-      <div className="min-h-screen flex flex-col relative z-10">
-        <Header onToggleConsole={() => setConsoleOpen(!consoleOpen)} />
-        
-        <div className="flex-1 flex">
-          {showSidebar && (
-            <Sidebar 
-              isOpen={sidebarOpen}
-              onAddServer={onAddServer}
-              onGlobalSettings={onGlobalSettings}
-              onToggleSidebar={onToggleSidebar}
-              totalServers={sidebarStats.totalServers}
-              onlineServers={sidebarStats.onlineServers}
-              totalPlayers={sidebarStats.totalPlayers}
-            />
-          )}
+      <div className="flex min-h-screen">
+        {showSidebar && (
+          <Sidebar
+            isOpen={sidebarOpen}
+            onAddServer={onAddServer}
+            onGlobalSettings={onGlobalSettings}
+            onToggleSidebar={onToggleSidebar}
+            totalServers={sidebarStats.totalServers}
+            onlineServers={sidebarStats.onlineServers}
+            totalPlayers={sidebarStats.totalPlayers}
+          />
+        )}
+        <div className="flex-1 flex flex-col">
+          <Header onToggleConsole={() => setConsoleOpen(!consoleOpen)} />
           
-          <div className={`flex-1 flex flex-col transition-all duration-300 ${showSidebar ? (sidebarOpen ? 'ml-64' : 'ml-16') : 'ml-0'}`}>
-            <main className="flex-1">
-              <div className="container mx-auto px-6 py-8">
-                {children}
-              </div>
-            </main>
-            
-            <Footer />
-          </div>
+          <main className="flex-1 overflow-y-auto">
+            <div className="container mx-auto px-6 py-8">
+              {children}
+            </div>
+          </main>
+          
+          <Footer />
         </div>
         
         {/* Terminal Console */}

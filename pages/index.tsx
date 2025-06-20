@@ -6,49 +6,40 @@ import { DashboardOverview } from "@/components/dashboard/DashboardOverview";
 import { ModernServerList } from "@/components/servers/ModernServerList";
 import { AddServerForm } from "@/components/forms/AddServerForm";
 import { GlobalSettingsModal } from "@/components/GlobalSettingsModal";
+import { AddModsModal } from "@/components/mods/AddModsModal";
 import { toast } from "react-hot-toast";
 import type { ServerConfig, ServerStatus } from "@/types/server";
 import type { GlobalSettings } from "@/lib/global-settings";
 import { ErrorHandler, ErrorType, ErrorSeverity } from "@/lib/error-handler";
+import { useModal } from "@/context/ModalContext";
 
 export default function Dashboard() {
   const router = useRouter();
+  const { currentModal, openModal, closeModal, payload } = useModal();
   const [servers, setServers] = useState<ServerConfig[]>([]);
   const [serverStatuses, setServerStatuses] = useState<
     Record<string, ServerStatus>
   >({});
   const [loading, setLoading] = useState(true);
-  const [showAddServerModal, setShowAddServerModal] = useState(false);
-  const [showGlobalSettingsModal, setShowGlobalSettingsModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings | null>(
     null
   );
   const [error, setError] = useState<string | null>(null);
 
-  const handleGlobalSettingsClick = useCallback(() => {
-    console.log("Opening global settings modal");
-    setShowGlobalSettingsModal(true);
-  }, []);
-
-  const handleGlobalSettingsClose = useCallback(() => {
-    console.log("Closing global settings modal");
-    setShowGlobalSettingsModal(false);
-  }, []);
-
   const handleGlobalSettingsUpdate = useCallback((settings: GlobalSettings) => {
     try {
       setGlobalSettings(settings);
       document.title = settings.siteTitle;
       updateFavicon(settings.favicon);
-      setShowGlobalSettingsModal(false);
+      closeModal();
     } catch (error) {
       ErrorHandler.handleError(error, {
         component: "Dashboard",
         action: "handleGlobalSettingsUpdate",
       });
     }
-  }, []);
+  }, [closeModal]);
 
   const loadInitialSettings = useCallback(async () => {
     const result = await ErrorHandler.handleAsync(
@@ -83,6 +74,8 @@ export default function Dashboard() {
         updatedAt: new Date(),
       });
     }
+
+    setLoading(false);
   }, []);
 
   const updateFavicon = (favicon: string) => {
@@ -169,7 +162,7 @@ export default function Dashboard() {
 
   const handleAddServerSuccess = async (serverId: string) => {
     try {
-      setShowAddServerModal(false);
+      closeModal();
       toast.success("Server created successfully!");
 
       // Refresh the server list
@@ -187,7 +180,7 @@ export default function Dashboard() {
   };
 
   const handleAddServerCancel = () => {
-    setShowAddServerModal(false);
+    closeModal();
   };
 
   const handleServerAction = async (serverId: string, action: string) => {
@@ -200,24 +193,23 @@ export default function Dashboard() {
         });
 
         if (!response.ok) {
-          throw new Error(`Server action failed: ${response.statusText}`);
+          const errorData = await response.json();
+          throw new Error(errorData.error || `Failed to ${action} server`);
         }
+        
+        // Optimistically update status
+        setServerStatuses(prev => ({
+          ...prev,
+          [serverId]: {
+            ...prev[serverId],
+            status: action === 'start' ? 'online' : 'offline'
+          }
+        }));
 
-        const data = await response.json();
-        return data;
+        toast.success(`Server ${action} initiated!`);
       },
-      {
-        component: "Dashboard",
-        action: "handleServerAction",
-        serverId,
-      }
+      { component: "Dashboard", action: "handleServerAction", serverId }
     );
-
-    if (result.success) {
-      toast.success(`Server ${action} successful`);
-      // Refresh server statuses
-      await fetchServers();
-    }
   };
 
   const handleRetry = () => {
@@ -229,19 +221,14 @@ export default function Dashboard() {
       <Layout
         showSidebar={true}
         sidebarOpen={sidebarOpen}
-        onAddServer={() => setShowAddServerModal(true)}
-        onGlobalSettings={handleGlobalSettingsClick}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+        onAddServer={() => openModal('addServer')}
+        onGlobalSettings={() => openModal('globalSettings')}
         globalSettings={globalSettings}
         sidebarStats={{
           totalServers: servers.length,
-          onlineServers: Object.values(serverStatuses).filter(
-            (s) => s.status === "online"
-          ).length,
-          totalPlayers: Object.values(serverStatuses).reduce(
-            (sum, s) => sum + s.players.current,
-            0
-          ),
+          onlineServers: Object.values(serverStatuses).filter(s => s.status === 'online').length,
+          totalPlayers: Object.values(serverStatuses).reduce((acc, s) => acc + s.players.current, 0)
         }}
       >
         <Head>
@@ -264,19 +251,14 @@ export default function Dashboard() {
       <Layout
         showSidebar={true}
         sidebarOpen={sidebarOpen}
-        onAddServer={() => setShowAddServerModal(true)}
-        onGlobalSettings={handleGlobalSettingsClick}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+        onAddServer={() => openModal('addServer')}
+        onGlobalSettings={() => openModal('globalSettings')}
         globalSettings={globalSettings}
         sidebarStats={{
           totalServers: servers.length,
-          onlineServers: Object.values(serverStatuses).filter(
-            (s) => s.status === "online"
-          ).length,
-          totalPlayers: Object.values(serverStatuses).reduce(
-            (sum, s) => sum + s.players.current,
-            0
-          ),
+          onlineServers: Object.values(serverStatuses).filter(s => s.status === 'online').length,
+          totalPlayers: Object.values(serverStatuses).reduce((acc, s) => acc + s.players.current, 0)
         }}
       >
         <Head>
@@ -298,89 +280,76 @@ export default function Dashboard() {
   }
 
   return (
-    <Layout
-      showSidebar={true}
-      sidebarOpen={sidebarOpen}
-      onAddServer={() => setShowAddServerModal(true)}
-      onGlobalSettings={handleGlobalSettingsClick}
-      onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-      globalSettings={globalSettings}
-      sidebarStats={{
-        totalServers: servers.length,
-        onlineServers: Object.values(serverStatuses).filter(
-          (s) => s.status === "online"
-        ).length,
-        totalPlayers: Object.values(serverStatuses).reduce(
-          (sum, s) => sum + s.players.current,
-          0
-        ),
-      }}
-    >
+    <>
       <Head>
         <title>{globalSettings?.siteTitle || "Saints Ascended"}</title>
       </Head>
+      <Layout
+        showSidebar={true}
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+        onAddServer={() => openModal('addServer')}
+        onGlobalSettings={() => openModal('globalSettings')}
+        globalSettings={globalSettings}
+        sidebarStats={{
+          totalServers: servers.length,
+          onlineServers: Object.values(serverStatuses).filter(s => s.status === 'online').length,
+          totalPlayers: Object.values(serverStatuses).reduce((acc, s) => acc + s.players.current, 0)
+        }}
+      >
+        <DashboardOverview servers={servers} serverStatuses={serverStatuses} />
+        <div className="mt-8">
+          <ModernServerList
+            servers={servers}
+            serverStatuses={serverStatuses}
+            onServerAction={handleServerAction}
+            onEditServer={(serverId) => router.push(`/servers/${serverId}/edit`)}
+            onDeleteServer={async (serverId) => {
+              if (!confirm("Are you sure you want to delete this server?"))
+                return;
 
-      <div className="main-content">
-        <DashboardOverview 
-          servers={servers} 
-          serverStatuses={serverStatuses} 
-        />
+              const result = await ErrorHandler.handleAsync(
+                async () => {
+                  const response = await fetch(`/api/servers/${serverId}`, {
+                    method: "DELETE",
+                  });
 
-        {/* Server List - Only show if there are servers */}
-        {servers.length > 0 && (
-          <div className="mt-8">
-            <ModernServerList
-              servers={servers}
-              serverStatuses={serverStatuses}
-              onServerAction={handleServerAction}
-              onEditServer={(serverId) => router.push(`/servers/${serverId}/edit`)}
-              onDeleteServer={async (serverId) => {
-                if (!confirm("Are you sure you want to delete this server?"))
-                  return;
+                  if (!response.ok) {
+                    throw new Error("Failed to delete server");
+                  }
 
-                const result = await ErrorHandler.handleAsync(
-                  async () => {
-                    const response = await fetch(`/api/servers/${serverId}`, {
-                      method: "DELETE",
-                    });
+                  return response.json();
+                },
+                { component: "Dashboard", action: "deleteServer", serverId }
+              );
 
-                    if (!response.ok) {
-                      throw new Error("Failed to delete server");
-                    }
-
-                    return response.json();
-                  },
-                  { component: "Dashboard", action: "deleteServer", serverId }
-                );
-
-                if (result.success) {
-                  toast.success("Server deleted successfully");
-                  fetchServers();
-                }
-              }}
-              onViewDashboard={(serverId) => router.push(`/servers/${serverId}`)}
-              loading={loading}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Modals */}
-      {showAddServerModal && (
+              if (result.success) {
+                toast.success("Server deleted successfully");
+                fetchServers();
+              }
+            }}
+            onViewDashboard={(serverId) => router.push(`/servers/${serverId}`)}
+            loading={loading}
+          />
+        </div>
+      </Layout>
+      {currentModal === 'addServer' && (
         <AddServerForm
           onSuccess={handleAddServerSuccess}
           onClose={handleAddServerCancel}
         />
       )}
-
-      {showGlobalSettingsModal && (
+      {currentModal === 'globalSettings' && (
         <GlobalSettingsModal
-          isOpen={showGlobalSettingsModal}
-          onClose={handleGlobalSettingsClose}
+          isOpen={true}
+          onClose={closeModal}
           onSettingsUpdate={handleGlobalSettingsUpdate}
           settings={globalSettings}
         />
       )}
-    </Layout>
+      {currentModal === 'addMods' && payload?.serverId && (
+        <AddModsModal />
+      )}
+    </>
   );
 }

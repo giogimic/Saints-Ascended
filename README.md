@@ -13,7 +13,7 @@ Saints Ascended is a comprehensive server management tool designed specifically 
 ### 📦 Mod Manager
 - Browse thousands of mods from CurseForge
 - Search mods by category (Quality of Life, Maps, RPG, etc.)
-- One-click mod installation and management
+- One-click mod management
 - Real-time mod updates and notifications
 
 ### 🎨 Modern Interface

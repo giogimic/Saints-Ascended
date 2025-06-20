@@ -87,7 +87,19 @@ const ModManager: React.FC<ModManagerProps> = ({
   const [backgroundFetchStatus, setBackgroundFetchStatus] = useState<any>(null);
   const [installedModsSearchQuery, setInstalledModsSearchQuery] = useState(""); // For searching installed mods
 
-  // Instant cache loading for installed mods
+  // Generate launch options based on enabled mods
+  const generateModLaunchOptions = useCallback((modsArray: ModInfo[]) => {
+    const enabledMods = modsArray.filter(mod => mod.enabled);
+    if (enabledMods.length === 0) {
+      return "";
+    }
+    
+    // Create comma-separated list of mod IDs
+    const modIds = enabledMods.map(mod => mod.workshopId || mod.id).join(',');
+    return `-mods=${modIds}`;
+  }, []);
+
+  // Instant cache loading for installed mods with launch options update
   const loadInstalledModsFromCache = useCallback(() => {
     try {
       const cacheKey = getInstalledModsCacheKey(serverId);
@@ -96,6 +108,9 @@ const ModManager: React.FC<ModManagerProps> = ({
         const cachedMods = JSON.parse(cachedData);
         if (Array.isArray(cachedMods) && cachedMods.length > 0) {
           setMods(cachedMods);
+          // Generate initial launch options from cached mods
+          const initialLaunchOptions = generateModLaunchOptions(cachedMods);
+          setLaunchOptions(initialLaunchOptions);
           addConsoleInfo(`💾 Loaded ${cachedMods.length} installed mods from cache (instant)`);
           return cachedMods;
         }
@@ -104,7 +119,7 @@ const ModManager: React.FC<ModManagerProps> = ({
       console.error("Failed to load mods from cache:", error);
     }
     return null;
-  }, [serverId]);
+  }, [serverId, generateModLaunchOptions]);
 
   // Save installed mods to cache
   const saveInstalledModsToCache = useCallback((modsToCache: ModInfo[]) => {
@@ -131,7 +146,34 @@ const ModManager: React.FC<ModManagerProps> = ({
     modCacheClient.prefetchPopularCategories();
   }, [serverId, loadInstalledModsFromCache]);
 
-  // Load mods from API - Enhanced with caching
+  // Update launch options whenever mods change
+  const updateLaunchOptions = useCallback(async (modsArray: ModInfo[]) => {
+    const newLaunchOptions = generateModLaunchOptions(modsArray);
+    
+    // Only update if different to prevent unnecessary API calls
+    if (newLaunchOptions !== launchOptions) {
+      setLaunchOptions(newLaunchOptions);
+      
+      // Save to server
+      try {
+        const response = await fetch(`/api/servers/${serverId}/mods/storage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ launchOptions: newLaunchOptions })
+        });
+        if (response.ok) {
+          addConsoleInfo(`🚀 Updated mod launch options: ${newLaunchOptions || '(empty)'}`);
+        } else {
+          addConsoleWarning("⚠️ Failed to save launch options to server");
+        }
+      } catch (error) {
+        console.error("Failed to save launch options:", error);
+        addConsoleError(`❌ Failed to save launch options: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+  }, [launchOptions, serverId, generateModLaunchOptions]);
+
+  // Load mods from API - Enhanced with caching and auto-launch options
   const loadMods = async () => {
     setIsLoadingMods(true);
     try {
@@ -148,6 +190,7 @@ const ModManager: React.FC<ModManagerProps> = ({
         if (currentModsString !== newModsString) {
           setMods(modsArray);
           saveInstalledModsToCache(modsArray); // Cache the fresh data
+          updateLaunchOptions(modsArray); // Auto-update launch options
           addConsoleInfo(`🔄 Refreshed ${modsArray.length} installed mods from server`);
           
           if (onModsUpdate) {
@@ -420,7 +463,7 @@ const ModManager: React.FC<ModManagerProps> = ({
     }
   };
 
-  // Add mod with instant cache update
+  // Add mod with instant cache update and launch options update
   const addMod = async (modData: CurseForgeModData) => {
     try {
       const newMod: ModInfo = {
@@ -441,6 +484,7 @@ const ModManager: React.FC<ModManagerProps> = ({
       const updatedMods = [...mods, newMod];
       setMods(updatedMods);
       saveInstalledModsToCache(updatedMods);
+      updateLaunchOptions(updatedMods); // Auto-update launch options
 
       const response = await fetch(`/api/servers/${serverId}/mods`, {
         method: 'POST',
@@ -450,8 +494,11 @@ const ModManager: React.FC<ModManagerProps> = ({
 
       if (response.ok) {
         toast.success(`Added ${modData.name}`);
-        addConsoleInfo(`✅ Added mod: ${modData.name} (ID: ${modData.id})`);
-        setShowSearchModal(false); // Close search modal after successful add
+        addConsoleSuccess(`✅ Added mod: ${modData.name} (ID: ${modData.id})`);
+        
+        // Close search modal after successful add
+        setShowSearchModal(false);
+        
         if (onModsUpdate) {
           onModsUpdate(updatedMods);
         }
@@ -459,16 +506,13 @@ const ModManager: React.FC<ModManagerProps> = ({
         // Revert optimistic update on failure
         setMods(mods);
         saveInstalledModsToCache(mods);
-        toast.error(`Failed to add ${modData.name}`);
-        addConsoleError(`❌ Failed to add mod: ${modData.name}`);
+        updateLaunchOptions(mods);
+        throw new Error('Failed to add mod to server');
       }
     } catch (error) {
-      // Revert optimistic update on error
-      setMods(mods);
-      saveInstalledModsToCache(mods);
-      console.error("Error adding mod:", error);
-      toast.error("Failed to add mod");
-      addConsoleError(`❌ Error adding mod: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Failed to add mod:", error);
+      toast.error(`Failed to add ${modData.name}`);
+      addConsoleError(`❌ Failed to add mod ${modData.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -582,22 +626,28 @@ const ModManager: React.FC<ModManagerProps> = ({
     }));
   };
 
-  // Remove mod with instant cache update
+  // Remove mod with cache and launch options update
   const removeMod = async (modId: string) => {
+    const modToRemove = mods.find(m => m.id === modId);
+    if (!modToRemove) return;
+
     try {
-      // Optimistically update UI and cache first
-      const updatedMods = mods.filter(mod => mod.id !== modId);
-      const modToRemove = mods.find(mod => mod.id === modId);
+      // Optimistically update UI first
+      const updatedMods = mods.filter(m => m.id !== modId);
       setMods(updatedMods);
       saveInstalledModsToCache(updatedMods);
+      updateLaunchOptions(updatedMods); // Auto-update launch options
 
-      const response = await fetch(`/api/servers/${serverId}/mods/${modId}`, {
-        method: 'DELETE'
+      const response = await fetch(`/api/servers/${serverId}/mods`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modId })
       });
 
       if (response.ok) {
-        toast.success(`Removed ${modToRemove?.name || 'mod'}`);
-        addConsoleInfo(`🗑️ Removed mod: ${modToRemove?.name || modId}`);
+        toast.success(`Removed ${modToRemove.name}`);
+        addConsoleSuccess(`✅ Removed mod: ${modToRemove.name} (ID: ${modId})`);
+        
         if (onModsUpdate) {
           onModsUpdate(updatedMods);
         }
@@ -605,73 +655,44 @@ const ModManager: React.FC<ModManagerProps> = ({
         // Revert optimistic update on failure
         setMods(mods);
         saveInstalledModsToCache(mods);
-        toast.error("Failed to remove mod");
-        addConsoleError(`❌ Failed to remove mod: ${modToRemove?.name || modId}`);
+        updateLaunchOptions(mods);
+        throw new Error('Failed to remove mod from server');
       }
     } catch (error) {
-      // Revert optimistic update on error
-      setMods(mods);
-      saveInstalledModsToCache(mods);
-      console.error("Error removing mod:", error);
-      toast.error("Failed to remove mod");
-      addConsoleError(`❌ Error removing mod: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Failed to remove mod:", error);
+      toast.error(`Failed to remove ${modToRemove.name}`);
+      addConsoleError(`❌ Failed to remove mod ${modToRemove.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
-  // Update load order with instant cache update
-  const updateLoadOrder = async (modId: string, newLoadOrder: number) => {
-    try {
-      // Optimistically update UI and cache first
-      const updatedMods = mods.map(mod => 
-        mod.id === modId ? { ...mod, loadOrder: newLoadOrder } : mod
-      ).sort((a, b) => a.loadOrder - b.loadOrder);
-      
-      setMods(updatedMods);
-      saveInstalledModsToCache(updatedMods);
-
-      const response = await fetch(`/api/servers/${serverId}/mods/${modId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ loadOrder: newLoadOrder })
-      });
-
-      if (response.ok) {
-        if (onModsUpdate) {
-          onModsUpdate(updatedMods);
-        }
-      } else {
-        // Revert optimistic update on failure
-        loadMods(); // Reload from server to get correct state
-        toast.error("Failed to update load order");
-      }
-    } catch (error) {
-      // Revert optimistic update on error
-      loadMods(); // Reload from server to get correct state
-      console.error("Error updating load order:", error);
-      toast.error("Failed to update load order");
-    }
-  };
-
-  // Toggle mod enabled/disabled with instant cache update
+  // Toggle mod enabled/disabled with cache and launch options update
   const toggleMod = async (modId: string) => {
+    const mod = mods.find(m => m.id === modId);
+    if (!mod) return;
+
     try {
-      // Optimistically update UI and cache first
-      const updatedMods = mods.map(mod => 
-        mod.id === modId ? { ...mod, enabled: !mod.enabled } : mod
+      // Optimistically update UI first
+      const updatedMods = mods.map(m => 
+        m.id === modId ? { ...m, enabled: !m.enabled } : m
       );
-      
-      const modToToggle = updatedMods.find(mod => mod.id === modId);
       setMods(updatedMods);
       saveInstalledModsToCache(updatedMods);
+      updateLaunchOptions(updatedMods); // Auto-update launch options
 
-      const response = await fetch(`/api/servers/${serverId}/mods/${modId}`, {
-        method: 'PATCH',
+      const response = await fetch(`/api/servers/${serverId}/mods`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: modToToggle?.enabled })
+        body: JSON.stringify({ 
+          modId, 
+          enabled: !mod.enabled 
+        })
       });
 
       if (response.ok) {
-        toast.success(`${modToToggle?.enabled ? 'Enabled' : 'Disabled'} ${modToToggle?.name}`);
+        const action = !mod.enabled ? 'enabled' : 'disabled';
+        toast.success(`${mod.name} ${action}`);
+        addConsoleInfo(`🔄 ${action.charAt(0).toUpperCase() + action.slice(1)} mod: ${mod.name}`);
+        
         if (onModsUpdate) {
           onModsUpdate(updatedMods);
         }
@@ -679,14 +700,13 @@ const ModManager: React.FC<ModManagerProps> = ({
         // Revert optimistic update on failure
         setMods(mods);
         saveInstalledModsToCache(mods);
-        toast.error("Failed to toggle mod");
+        updateLaunchOptions(mods);
+        throw new Error('Failed to toggle mod on server');
       }
     } catch (error) {
-      // Revert optimistic update on error
-      setMods(mods);
-      saveInstalledModsToCache(mods);
-      console.error("Error toggling mod:", error);
-      toast.error("Failed to toggle mod");
+      console.error("Failed to toggle mod:", error);
+      toast.error(`Failed to toggle ${mod.name}`);
+      addConsoleError(`❌ Failed to toggle mod ${mod.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -736,15 +756,25 @@ const ModManager: React.FC<ModManagerProps> = ({
     </div>
   );
 
+  // Enhanced launch options render with auto-generation
   const renderLaunchOptions = () => (
     <div>
-      <h3 className="font-bold text-matrix-400 uppercase tracking-wider mb-2">Launch Options</h3>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="font-bold text-matrix-400 uppercase tracking-wider">Mod Launch Options</h3>
+        <div className="text-xs text-matrix-600">
+          Auto-generated from enabled mods
+        </div>
+      </div>
       <textarea
         value={launchOptions}
         onChange={handleLaunchOptionsChange}
-        placeholder="-mod=<mod_id> -another-option"
-        className="w-full h-24 bg-cyber-bg border-2 border-matrix-500/50 focus:border-matrix-500 p-2 text-matrix-400 font-mono resize-none"
+        placeholder="-mods=ModID1,ModID2,ModID3 (Auto-generated based on enabled mods)"
+        className="w-full h-24 bg-cyber-bg border-2 border-matrix-500/50 focus:border-matrix-500 p-2 text-matrix-400 font-mono resize-none text-sm"
+        title="Launch options are automatically generated from your enabled mods. You can also manually edit them if needed."
       />
+      <div className="text-xs text-matrix-600 mt-1">
+        💡 Tip: Launch options update automatically when you enable/disable mods
+      </div>
     </div>
   );
 

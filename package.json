@@ -16,9 +16,9 @@
     "verify": "node scripts/verify-installation.js",
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",
-    "db:push": "prisma db push",
+    "db:push": "npx cross-env DATABASE_URL=\"file:./prisma/dev.db\" prisma db push",
     "db:migrate": "npx cross-env DATABASE_URL=\"file:./prisma/dev.db\" prisma migrate dev",
-    "db:deploy": "prisma migrate deploy",
+    "db:deploy": "npx cross-env DATABASE_URL=\"file:./prisma/dev.db\" prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:seed": "node prisma/seed.js",
     "db:reset": "prisma migrate reset"

@@ -35,7 +35,7 @@ export default async function handler(
         .json({ error: `Mod with ID ${modId} not found on CurseForge` });
     }
 
-    const existingMod = await installedModsStorage.getMod(modId);
+    const existingMod = await installedModsStorage.getMod(serverId, modId);
 
     if (!existingMod) {
       // This can happen in a race condition, but we can still create the entry.
@@ -50,9 +50,11 @@ export default async function handler(
         isEnabled: true,
         loadOrder: 999, // Or some default
         installedAt: new Date(),
+        serverId: serverId,
+        modId: modId,
       }),
       name: modDetails.name,
-      summary: modDetails.summary,
+      description: modDetails.summary,
       lastUpdated: new Date(modDetails.dateModified),
       downloadCount: modDetails.downloadCount,
       thumbsUpCount: modDetails.thumbsUpCount,

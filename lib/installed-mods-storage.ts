@@ -6,7 +6,7 @@ import { PrismaClient } from "@prisma/client";
 export interface InstalledModMetadata {
   id: string;
   name: string;
-  summary?: string;
+  description?: string;
   downloadCount?: number;
   thumbsUpCount?: number;
   logoUrl?: string;
@@ -20,6 +20,8 @@ export interface InstalledModMetadata {
   websiteUrl?: string;
   isEnabled: boolean;
   loadOrder: number;
+  serverId: string;
+  modId: string;
 }
 
 export interface InstalledModsData {
@@ -75,23 +77,25 @@ class InstalledModsStorage {
         });
 
         if (dbMods.length > 0) {
-          const mods = dbMods.map((mod) => ({
-            id: mod.id,
+          const mods = (dbMods as any[]).map((mod) => ({
+            id: String(mod.id),
             name: mod.name,
-            summary: mod.summary || undefined,
+            description: mod.description || undefined,
             downloadCount: mod.downloadCount || undefined,
             thumbsUpCount: mod.thumbsUpCount || undefined,
             logoUrl: mod.logoUrl || undefined,
             author: mod.author || undefined,
             lastUpdated: mod.lastUpdated,
-            installedAt: mod.installedAt,
+            installedAt: mod.createdAt,
             version: mod.version || undefined,
-            fileSize: mod.fileSize || undefined,
+            fileSize: mod.fileSize ? Number(mod.fileSize) : undefined,
             category: mod.category || undefined,
             tags: mod.tags ? JSON.parse(mod.tags) : [],
             websiteUrl: mod.websiteUrl || undefined,
-            isEnabled: mod.isEnabled,
+            isEnabled: mod.enabled,
             loadOrder: mod.loadOrder,
+            serverId: mod.serverId,
+            modId: mod.modId,
           }));
 
           return {
@@ -128,23 +132,27 @@ class InstalledModsStorage {
         await this.prisma.installedMod.deleteMany(); // Clear existing
 
         for (const mod of data.mods) {
-          await this.prisma.installedMod.create({
+          if (!mod.serverId || !mod.modId) {
+            throw new Error('serverId and modId are required for database operations');
+          }
+          
+          await (this.prisma.installedMod as any).create({
             data: {
-              id: mod.id,
+              serverId: mod.serverId,
+              modId: mod.modId,
               name: mod.name,
-              summary: mod.summary,
+              description: mod.description,
               downloadCount: mod.downloadCount,
               thumbsUpCount: mod.thumbsUpCount,
               logoUrl: mod.logoUrl,
               author: mod.author,
               lastUpdated: mod.lastUpdated,
-              installedAt: mod.installedAt,
               version: mod.version,
               fileSize: mod.fileSize,
               category: mod.category,
               tags: mod.tags ? JSON.stringify(mod.tags) : null,
               websiteUrl: mod.websiteUrl,
-              isEnabled: mod.isEnabled,
+              enabled: mod.isEnabled,
               loadOrder: mod.loadOrder,
             },
           });
@@ -173,42 +181,50 @@ class InstalledModsStorage {
   async saveMod(mod: InstalledModMetadata): Promise<void> {
     try {
       if (this.dbAvailable) {
-        // Save to database
-        await this.prisma.installedMod.upsert({
-          where: { id: mod.id },
+        if (!mod.serverId || !mod.modId) {
+          throw new Error('serverId and modId are required for database operations');
+        }
+
+        // Save to database using upsert with composite unique key
+        await (this.prisma.installedMod as any).upsert({
+          where: {
+            serverId_modId: {
+              serverId: mod.serverId,
+              modId: mod.modId,
+            },
+          },
           update: {
             name: mod.name,
-            summary: mod.summary,
+            description: mod.description,
             downloadCount: mod.downloadCount,
             thumbsUpCount: mod.thumbsUpCount,
             logoUrl: mod.logoUrl,
             author: mod.author,
             lastUpdated: mod.lastUpdated,
-            installedAt: mod.installedAt,
             version: mod.version,
             fileSize: mod.fileSize,
             category: mod.category,
             tags: mod.tags ? JSON.stringify(mod.tags) : null,
             websiteUrl: mod.websiteUrl,
-            isEnabled: mod.isEnabled,
+            enabled: mod.isEnabled,
             loadOrder: mod.loadOrder,
           },
           create: {
-            id: mod.id,
+            serverId: mod.serverId,
+            modId: mod.modId,
             name: mod.name,
-            summary: mod.summary,
+            description: mod.description,
             downloadCount: mod.downloadCount,
             thumbsUpCount: mod.thumbsUpCount,
             logoUrl: mod.logoUrl,
             author: mod.author,
             lastUpdated: mod.lastUpdated,
-            installedAt: mod.installedAt,
             version: mod.version,
             fileSize: mod.fileSize,
             category: mod.category,
             tags: mod.tags ? JSON.stringify(mod.tags) : null,
             websiteUrl: mod.websiteUrl,
-            isEnabled: mod.isEnabled,
+            enabled: mod.isEnabled,
             loadOrder: mod.loadOrder,
           },
         });
@@ -236,11 +252,16 @@ class InstalledModsStorage {
   /**
    * Remove a mod from storage
    */
-  async removeMod(modId: string): Promise<void> {
+  async removeMod(modId: string, serverId: string): Promise<void> {
     try {
       if (this.dbAvailable) {
-        await this.prisma.installedMod.delete({
-          where: { id: modId },
+        await (this.prisma.installedMod as any).delete({
+          where: {
+            serverId_modId: {
+              serverId,
+              modId,
+            },
+          },
         });
         return;
       }
@@ -258,32 +279,39 @@ class InstalledModsStorage {
   /**
    * Get a specific mod by ID
    */
-  async getMod(modId: string): Promise<InstalledModMetadata | null> {
+  async getMod(modId: string, serverId: string): Promise<InstalledModMetadata | null> {
     try {
       if (this.dbAvailable) {
-        const mod = await this.prisma.installedMod.findUnique({
-          where: { id: modId },
+        const mod = await (this.prisma.installedMod as any).findUnique({
+          where: {
+            serverId_modId: {
+              serverId,
+              modId,
+            },
+          },
         });
 
         if (!mod) return null;
 
         return {
-          id: mod.id,
+          id: String(mod.id),
           name: mod.name,
-          summary: mod.summary || undefined,
+          description: mod.description || undefined,
           downloadCount: mod.downloadCount || undefined,
           thumbsUpCount: mod.thumbsUpCount || undefined,
           logoUrl: mod.logoUrl || undefined,
           author: mod.author || undefined,
           lastUpdated: mod.lastUpdated,
-          installedAt: mod.installedAt,
+          installedAt: mod.createdAt,
           version: mod.version || undefined,
-          fileSize: mod.fileSize || undefined,
+          fileSize: mod.fileSize ? Number(mod.fileSize) : undefined,
           category: mod.category || undefined,
           tags: mod.tags ? JSON.parse(mod.tags) : [],
           websiteUrl: mod.websiteUrl || undefined,
-          isEnabled: mod.isEnabled,
+          isEnabled: mod.enabled,
           loadOrder: mod.loadOrder,
+          serverId: mod.serverId,
+          modId: mod.modId,
         };
       }
 
@@ -317,9 +345,10 @@ class InstalledModsStorage {
    */
   async updateModFromCurseForge(
     modId: string,
+    serverId: string,
     curseForgeData: CurseForgeModData
   ): Promise<void> {
-    const existingMod = await this.getMod(modId);
+    const existingMod = await this.getMod(modId, serverId);
     if (!existingMod) {
       console.warn(
         `Mod ${modId} not found in local storage, cannot update metadata`
@@ -330,7 +359,7 @@ class InstalledModsStorage {
     const updatedMod: InstalledModMetadata = {
       ...existingMod,
       name: curseForgeData.name,
-      summary: curseForgeData.summary,
+      description: curseForgeData.summary,
       downloadCount: curseForgeData.downloadCount,
       thumbsUpCount: curseForgeData.thumbsUpCount,
       logoUrl: curseForgeData.logo?.thumbnailUrl,
@@ -349,10 +378,11 @@ class InstalledModsStorage {
    */
   async updateModStatus(
     modId: string,
+    serverId: string,
     isEnabled: boolean,
     loadOrder: number
   ): Promise<void> {
-    const existingMod = await this.getMod(modId);
+    const existingMod = await this.getMod(modId, serverId);
     if (!existingMod) {
       console.warn(
         `Mod ${modId} not found in local storage, cannot update status`
@@ -374,17 +404,22 @@ class InstalledModsStorage {
    * Bulk update mod statuses
    */
   async updateModStatuses(
-    updates: Array<{ id: string; isEnabled: boolean; loadOrder: number }>
+    updates: Array<{ id: string; serverId: string; isEnabled: boolean; loadOrder: number }>
   ): Promise<void> {
     try {
       if (this.dbAvailable) {
         // Use database transaction for bulk update
         await this.prisma.$transaction(
           updates.map((update) =>
-            this.prisma.installedMod.update({
-              where: { id: update.id },
+            (this.prisma.installedMod as any).update({
+              where: {
+                serverId_modId: {
+                  serverId: update.serverId,
+                  modId: update.id,
+                },
+              },
               data: {
-                isEnabled: update.isEnabled,
+                enabled: update.isEnabled,
                 loadOrder: update.loadOrder,
                 lastUpdated: new Date(),
               },
@@ -421,13 +456,14 @@ class InstalledModsStorage {
    */
   convertCurseForgeToInstalledMod(
     curseForgeData: CurseForgeModData,
+    serverId: string,
     isEnabled: boolean = true,
     loadOrder: number = 1
   ): InstalledModMetadata {
     return {
       id: curseForgeData.id.toString(),
       name: curseForgeData.name,
-      summary: curseForgeData.summary,
+      description: curseForgeData.summary,
       downloadCount: curseForgeData.downloadCount,
       thumbsUpCount: curseForgeData.thumbsUpCount,
       logoUrl: curseForgeData.logo?.thumbnailUrl,
@@ -439,6 +475,8 @@ class InstalledModsStorage {
       tags: curseForgeData.categories?.map((cat) => cat.name) || [],
       isEnabled,
       loadOrder,
+      serverId,
+      modId: curseForgeData.id.toString(),
     };
   }
 
@@ -457,43 +495,38 @@ class InstalledModsStorage {
    * Validate and migrate data if needed
    */
   private validateAndMigrateData(data: any): InstalledModsData {
-    // Basic validation
     if (!data || typeof data !== "object") {
       return this.getDefaultData();
     }
 
-    // Ensure required fields exist
     if (!Array.isArray(data.mods)) {
       data.mods = [];
     }
 
-    if (!data.lastSync) {
-      data.lastSync = new Date();
-    }
-
-    if (!data.version) {
-      data.version = this.currentVersion;
-    }
-
-    // Validate each mod entry
-    data.mods = data.mods.filter((mod: any) => {
-      if (!mod || typeof mod !== "object") return false;
-      if (!mod.id || !mod.name) return false;
+    // Ensure each mod has required fields
+    data.mods = data.mods.map((mod: any) => {
+      if (!mod || typeof mod !== "object") return null;
 
       // Ensure required fields exist
       if (!mod.lastUpdated) mod.lastUpdated = new Date();
       if (!mod.installedAt) mod.installedAt = new Date();
       if (mod.isEnabled === undefined) mod.isEnabled = true;
       if (mod.loadOrder === undefined) mod.loadOrder = 1;
+      if (!mod.serverId) mod.serverId = "";
+      if (!mod.modId) mod.modId = mod.id || "";
 
-      return true;
-    });
+      return mod;
+    }).filter(Boolean);
+
+    // Ensure metadata exists
+    if (!data.lastSync) data.lastSync = new Date();
+    if (!data.version) data.version = this.currentVersion;
 
     return data as InstalledModsData;
   }
 
   /**
-   * Clear all installed mods data
+   * Clear all installed mods
    */
   async clearAll(): Promise<void> {
     try {
@@ -502,9 +535,11 @@ class InstalledModsStorage {
         return;
       }
 
-      await this.saveInstalledMods(this.getDefaultData());
+      // Fallback to JSON file
+      const data = this.getDefaultData();
+      await this.saveInstalledMods(data);
     } catch (error) {
-      console.error("Error clearing all mods:", error);
+      console.error("Error clearing installed mods:", error);
       throw error;
     }
   }
@@ -526,14 +561,14 @@ class InstalledModsStorage {
   }
 
   /**
-   * Check if storage file exists
+   * Check if storage file exists (for JSON fallback)
    */
   exists(): boolean {
     return existsSync(this.filePath);
   }
 
   /**
-   * Get the file path for debugging
+   * Get the file path (for JSON fallback)
    */
   getFilePath(): string {
     return this.filePath;
@@ -549,5 +584,4 @@ class InstalledModsStorage {
   }
 }
 
-// Export singleton instance
 export const installedModsStorage = new InstalledModsStorage();

@@ -91,7 +91,7 @@ export default async function handler(
     );
 
     // Cache the results
-    if (mods && mods.length > 0) {
+    if (mods && mods.mods && mods.mods.length > 0) {
       await modCache.setSearchResults(
         searchQuery,
         undefined,
@@ -99,12 +99,12 @@ export default async function handler(
         sortOrder as "asc" | "desc",
         1,
         pageSizeNum,
-        mods,
-        mods.length
+        mods.mods,
+        mods.totalCount
       );
     }
 
-    const safeMods = convertBigIntsToStrings(mods);
+    const safeMods = convertBigIntsToStrings(mods?.mods || []);
     res.status(200).json({ data: safeMods, source: "api" });
   } catch (error) {
     console.error("CurseForge search error:", error);

@@ -120,54 +120,36 @@ class ModCacheService {
       const searchKeywords = this.generateSearchKeywords(mod);
 
       // Store in database with enhanced fields
-      await this.prisma.mod.upsert({
+      await (this.prisma.mod as any).upsert({
         where: { id: mod.id },
         update: {
-          gameId: mod.gameId,
           name: mod.name,
-          slug: mod.slug,
           summary: mod.summary,
-          status: mod.status,
           downloadCount: mod.downloadCount,
-          isFeatured: mod.isFeatured,
-          primaryCategoryId: mod.primaryCategoryId,
-          classId: mod.classId,
-          dateCreated: new Date(mod.dateCreated),
-          dateModified: new Date(mod.dateModified),
-          dateReleased: mod.dateReleased ? new Date(mod.dateReleased) : null,
-          allowModDistribution: mod.allowModDistribution,
-          gamePopularityRank: mod.gamePopularityRank,
-          isAvailable: mod.isAvailable,
           thumbsUpCount: mod.thumbsUpCount,
-          // Enhanced fields
-          searchKeywords,
-          popularityScore,
+          logoUrl: mod.logo?.thumbnailUrl,
+          author: mod.authors?.[0]?.name,
           lastUpdated: new Date(),
-          lastFetched: new Date(),
+          websiteUrl: mod.links?.websiteUrl,
+          category: mod.categories?.[0]?.name,
+          tags: mod.categories?.map((cat) => cat.name).join(", "),
+          searchKeywords: this.generateSearchKeywords(mod),
+          popularityScore: this.calculatePopularityScore(mod),
         },
         create: {
           id: mod.id,
-          gameId: mod.gameId,
           name: mod.name,
-          slug: mod.slug,
           summary: mod.summary,
-          status: mod.status,
           downloadCount: mod.downloadCount,
-          isFeatured: mod.isFeatured,
-          primaryCategoryId: mod.primaryCategoryId,
-          classId: mod.classId,
-          dateCreated: new Date(mod.dateCreated),
-          dateModified: new Date(mod.dateModified),
-          dateReleased: mod.dateReleased ? new Date(mod.dateReleased) : null,
-          allowModDistribution: mod.allowModDistribution,
-          gamePopularityRank: mod.gamePopularityRank,
-          isAvailable: mod.isAvailable,
           thumbsUpCount: mod.thumbsUpCount,
-          // Enhanced fields
-          searchKeywords,
-          popularityScore,
+          logoUrl: mod.logo?.thumbnailUrl,
+          author: mod.authors?.[0]?.name,
           lastUpdated: new Date(),
-          lastFetched: new Date(),
+          websiteUrl: mod.links?.websiteUrl,
+          category: mod.categories?.[0]?.name,
+          tags: mod.categories?.map((cat) => cat.name).join(", "),
+          searchKeywords: this.generateSearchKeywords(mod),
+          popularityScore: this.calculatePopularityScore(mod),
         },
       });
 
@@ -227,7 +209,7 @@ class ModCacheService {
 
       if (dbCache && new Date() < dbCache.expiresAt) {
         // Update hit count and last accessed
-        await this.prisma.modCache.update({
+        await (this.prisma.modCache as any).update({
           where: { id: dbCache.id },
           data: {
             hitCount: { increment: 1 },
@@ -307,22 +289,21 @@ class ModCacheService {
     try {
       if (this.dbAvailable) {
         const modIds = results.map((mod) => mod.id);
-        const expiresAt = new Date(Date.now() + this.SEARCH_CACHE_TTL);
-
-        await this.prisma.modCache.upsert({
+        await (this.prisma.modCache as any).upsert({
           where: { query: cacheKey },
           update: {
             results: JSON.stringify(modIds),
             totalCount,
-            expiresAt,
+            expiresAt: new Date(Date.now() + this.SEARCH_CACHE_TTL),
+            hitCount: { increment: 1 },
             lastAccessed: new Date(),
           },
           create: {
             query: cacheKey,
             results: JSON.stringify(modIds),
             totalCount,
-            expiresAt,
-            hitCount: 0,
+            expiresAt: new Date(Date.now() + this.SEARCH_CACHE_TTL),
+            hitCount: 1,
             lastAccessed: new Date(),
           },
         });
@@ -478,11 +459,11 @@ class ModCacheService {
     try {
       if (!this.dbAvailable) return;
 
-      await this.prisma.modSearchAnalytics.upsert({
+      await (this.prisma as any).modSearchAnalytics.upsert({
         where: {
           searchTerm_category: {
             searchTerm,
-            category: category || null,
+            category: category || "",
           },
         },
         update: {
@@ -490,14 +471,14 @@ class ModCacheService {
           searchCount: { increment: 1 },
           lastSearched: new Date(),
           avgResultCount: {
-            set: this.prisma.raw(`
+            set: (this.prisma as any).raw(`
               (avgResultCount * searchCount + ${resultCount}) / (searchCount + 1)
             `),
           },
         },
         create: {
           searchTerm,
-          category: category || null,
+          category: category || "",
           resultCount,
           searchCount: 1,
           lastSearched: new Date(),
@@ -952,7 +933,6 @@ class ModCacheService {
           create: {
             modId: mod.id,
             logoId: mod.logo.id,
-            modId: mod.logo.modId,
             title: mod.logo.title,
             description: mod.logo.description,
             thumbnailUrl: mod.logo.thumbnailUrl,

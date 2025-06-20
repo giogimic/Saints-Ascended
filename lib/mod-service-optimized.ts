@@ -115,7 +115,7 @@ class ModServiceOptimized {
     );
 
     // Store in cache
-    if (mods && mods.length > 0) {
+    if (mods && mods.mods && mods.mods.length > 0) {
       await modCache.setSearchResults(
         config.query || "",
         config.categoryId?.toString(),
@@ -123,12 +123,12 @@ class ModServiceOptimized {
         "desc",
         1,
         20,
-        mods,
-        mods.length
+        mods.mods,
+        mods.totalCount
       );
     }
 
-    return mods || [];
+    return mods?.mods || [];
   }
 
   // Start cache warming service
@@ -211,7 +211,7 @@ class ModServiceOptimized {
     );
 
     // Update cache
-    if (mods && mods.length > 0) {
+    if (mods && mods.mods && mods.mods.length > 0) {
       await modCache.setSearchResults(
         config.query || "",
         config.categoryId?.toString(),
@@ -219,8 +219,8 @@ class ModServiceOptimized {
         "desc",
         1,
         20,
-        mods,
-        mods.length
+        mods.mods,
+        mods.totalCount
       );
     }
   }

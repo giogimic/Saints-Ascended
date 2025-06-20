@@ -198,7 +198,7 @@ class CacheRefreshService {
       );
 
       // Update cache with fresh data
-      if (mods && mods.length > 0) {
+      if (mods && mods.mods && mods.mods.length > 0) {
         await modCache.setSearchResults(
           primarySearchTerm,
           category,
@@ -206,12 +206,12 @@ class CacheRefreshService {
           sortOrder,
           1,
           pageSize,
-          mods,
-          mods.length
+          mods.mods,
+          mods.totalCount
         );
         log(
           LOG_LEVEL.DEBUG,
-          `Updated cache for ${category}: ${mods.length} mods`
+          `Updated cache for ${category}: ${mods.mods.length} mods`
         );
       } else {
         log(LOG_LEVEL.DEBUG, `No mods found for category: ${category}`);

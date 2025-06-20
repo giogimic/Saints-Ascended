@@ -72,6 +72,8 @@ export default async function handler(
             installedAt: new Date(),
             isEnabled,
             loadOrder,
+            serverId: serverId,
+            modId: modId,
           };
         }
 
@@ -95,11 +97,12 @@ export default async function handler(
             parseInt(updateModId)
           );
           await installedModsStorage.updateModFromCurseForge(
+            serverId,
             updateModId,
             curseForgeData
           );
 
-          const updatedMod = await installedModsStorage.getMod(updateModId);
+          const updatedMod = await installedModsStorage.getMod(serverId, updateModId);
           return res.status(200).json({
             data: updatedMod,
             message: "Mod metadata updated successfully",
@@ -119,7 +122,7 @@ export default async function handler(
           return res.status(400).json({ error: "Mod ID is required" });
         }
 
-        await installedModsStorage.removeMod(deleteModId);
+        await installedModsStorage.removeMod(serverId, deleteModId);
         return res.status(200).json({
           message: "Mod removed successfully",
         });

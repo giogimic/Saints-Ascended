@@ -28,7 +28,7 @@ export default async function handler(
       comprehensive = "true", // Use comprehensive search by default
       warmCache = "false",
       getStats = "false",
-      getWarmingStatus = "false"
+      warmingStatus = "false"
     } = req.query;
 
     // Handle cache warming request
@@ -51,7 +51,7 @@ export default async function handler(
     }
 
     // Handle warming status request
-    if (getWarmingStatus === "true") {
+    if (warmingStatus === "true") {
       const status = getWarmingStatus();
       const safeStatus = convertBigIntsToStrings(status);
       return res.status(200).json({ 
@@ -137,7 +137,7 @@ export default async function handler(
       return res.status(500).json({
         error: "Failed to search mods",
         details: safeError.message,
-        errorCode: handledError.errorCode
+        errorType: handledError.type
       });
     }
 
@@ -227,7 +227,7 @@ async function searchSingleCategory(
       );
 
       // Cache the results
-      if (mods && mods.length > 0) {
+      if (mods && Array.isArray(mods) && mods.length > 0) {
         await modCache.setSearchResults(
           query || categoryConfig.query || "",
           categoryConfig.categoryId?.toString(),
@@ -254,7 +254,7 @@ async function searchSingleCategory(
       );
 
       // Cache the results
-      if (searchResult.mods && searchResult.mods.length > 0) {
+      if (searchResult.mods && Array.isArray(searchResult.mods) && searchResult.mods.length > 0) {
         await modCache.setSearchResults(
           query || categoryConfig.query || "",
           categoryConfig.categoryId?.toString(),
@@ -319,7 +319,7 @@ async function performGeneralSearch(
       );
 
       // Cache the results
-      if (mods && mods.length > 0) {
+      if (mods && Array.isArray(mods) && mods.length > 0) {
         await modCache.setSearchResults(
           query,
           undefined,
@@ -350,7 +350,7 @@ async function performGeneralSearch(
       );
 
       // Cache the results
-      if (searchResult.mods && searchResult.mods.length > 0) {
+      if (searchResult.mods && Array.isArray(searchResult.mods) && searchResult.mods.length > 0) {
         await modCache.setSearchResults(
           query,
           undefined,
@@ -467,4 +467,4 @@ function getWarmingStatus(): Record<string, any> {
     lastWarmed: new Date().toISOString(),
     status: "idle"
   };
-} 
+}

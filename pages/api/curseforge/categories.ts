@@ -507,7 +507,7 @@ export default async function handler(
     );
 
     // Cache the results
-    if (mods && mods.length > 0) {
+    if (mods && mods.mods && mods.mods.length > 0) {
       await modCache.setSearchResults(
         primarySearchTerm,
         category,
@@ -515,17 +515,17 @@ export default async function handler(
         sortOrder,
         pageNum,
         pageSizeNum,
-        mods,
-        mods.length
+        mods.mods,
+        mods.totalCount
       );
     }
 
     return res.status(200).json({
       success: true,
       data: serializeBigInts({
-        mods: mods || [],
-        totalCount: mods?.length || 0,
-        totalPages: Math.ceil((mods?.length || 0) / pageSizeNum),
+        mods: mods?.mods || [],
+        totalCount: mods?.totalCount || 0,
+        totalPages: Math.ceil((mods?.totalCount || 0) / pageSizeNum),
         currentPage: pageNum,
         pageSize: pageSizeNum,
       }),

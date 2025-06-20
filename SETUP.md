@@ -11,28 +11,137 @@ This guide will help you install and configure the Saints Ascended dashboard for
 
 ## Quick Start
 
+### Automatic Installation (Recommended)
+
+**Windows:**
+1. Clone the repository and navigate to the directory
+2. Run `install/setup.bat` as administrator
+3. Follow the prompts to configure your CurseForge API key
+
+**Linux/macOS:**
+1. Clone the repository and navigate to the directory
+2. Run `chmod +x install/setup.sh && ./install/setup.sh`
+3. Follow the prompts to configure your CurseForge API key
+
+### Manual Installation
+
 1. **Clone the repository**
    ```sh
    git clone <repository-url>
    cd saints-ascended
    ```
 
-2. **Install dependencies**
+2. **Set up environment variables**
+   ```sh
+   cp .env.example .env
+   ```
+   
+   **CRITICAL:** Edit the `.env` file and add your CurseForge API key:
+   - Go to https://console.curseforge.com/
+   - Create an account or sign in
+   - Create a new API key
+   - Replace `YOUR_CURSEFORGE_API_KEY_HERE` with your actual API key
+   
+   The application **will NOT work** without a valid CurseForge API key!
+
+3. **Install dependencies**
    ```sh
    npm install
    # or
    bun install
    ```
 
-3. **Run the dashboard**
+4. **Set up the database**
+   ```sh
+   npm run db:generate
+   npm run db:push
+   ```
+
+5. **Run the dashboard**
    ```sh
    npm run dev
    # or
    bun run dev
    ```
 
-4. **Access the dashboard**
+6. **Access the dashboard**
    Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## Environment Variables
+
+The `.env` file contains critical configuration. Here are the required variables:
+
+```bash
+# Database path - points to your SQLite database
+DATABASE_URL="file:./prisma/data/mods.db"
+
+# CurseForge API key - REQUIRED for mod management
+CURSEFORGE_API_KEY="your_actual_api_key_here"
+
+# Application environment
+NODE_ENV="development"
+```
+
+## Deployment to Another Server
+
+When moving the project to a different server:
+
+1. **Copy the entire project directory**
+2. **Copy your `.env` file** (most important!)
+3. **Run the setup script again:**
+   - Windows: `install/setup.bat`
+   - Linux/macOS: `./install/setup.sh`
+4. **Alternative manual deployment:**
+   ```bash
+   npm install
+   npm run db:deploy
+   npm run dev
+   ```
+
+## Database Deployment Commands
+
+If you encounter database issues, try these commands in order:
+
+```bash
+# Method 1: Standard deployment
+npm run db:deploy
+
+# Method 2: Database push (development)
+npm run db:push
+
+# Method 3: Manual deployment (if cross-env fails)
+# Windows:
+.\deploy-db.bat
+
+# Linux/macOS/Git Bash:
+./deploy-db.sh
+
+# PowerShell:
+.\deploy-db.ps1
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **"CURSEFORGE_API_KEY not configured" error:**
+   - Check that your `.env` file exists
+   - Verify the API key is correctly set (not the placeholder)
+   - Ensure there are no extra spaces or quotes
+
+2. **"Environment variable not found: DATABASE_URL" error:**
+   - Run the appropriate deployment script for your system
+   - Check that the `.env` file exists and has the correct DATABASE_URL
+
+3. **Database migration errors:**
+   - Delete `prisma/migrations` folder and run `npm run db:push`
+   - Or run the manual deployment scripts
+
+4. **Permission errors on Linux/macOS:**
+   ```bash
+   chmod +x install/setup.sh
+   chmod +x deploy-db.sh
+   ```
 
 ## Installer Scripts
 
@@ -59,6 +168,7 @@ This guide will help you install and configure the Saints Ascended dashboard for
 - Add mods by pasting one or more CurseForge mod IDs (comma-separated).
 - The dashboard will fetch mod info and cache it for instant UI updates.
 - Remove or reorder mods as needed.
+- **Note:** Requires a valid CurseForge API key!
 
 ## Configuration Editing
 

@@ -1004,22 +1004,180 @@ const ModManager: React.FC<ModManagerProps> = ({
   // Render main mod list
   const renderModList = () => {
     const displayMods = getDisplayMods();
+    
+    // Filter installed mods by search query
+    const filteredInstalledMods = displayMods.filter(mod =>
+      mod.name.toLowerCase().includes(installedModsSearchQuery.toLowerCase()) ||
+      mod.description.toLowerCase().includes(installedModsSearchQuery.toLowerCase())
+    );
+
     return (
       <div>
-        {displayMods.length === 0 ? (
+        {filteredInstalledMods.length === 0 ? (
           <div className="text-center p-8 border-2 border-dashed border-matrix-500/30">
             <PuzzlePieceIcon className="mx-auto h-10 w-10 text-matrix-600" />
-            <h4 className="mt-4 font-bold text-matrix-500">No Mods Installed</h4>
-            <p className="text-sm text-matrix-600">{`Click 'Add Mods' to get started.`}</p>
+            <h4 className="mt-4 font-bold text-matrix-500">
+              {installedModsSearchQuery ? 'No Matching Mods Found' : 'No Mods Installed'}
+            </h4>
+            <p className="text-sm text-matrix-600">
+              {installedModsSearchQuery 
+                ? `No mods match "${installedModsSearchQuery}". Try a different search term.`
+                : `Click 'Add Mods' to get started.`
+              }
+            </p>
           </div>
         ) : (
-          <ul className="space-y-3">
-            {displayMods.map((mod) => (
-              <li key={mod.id} className="flex items-center gap-4 p-3 bg-cyber-bg/50 border border-matrix-500/20">
-                {/* Mod details */}
-              </li>
+          <div className="space-y-3">
+            {filteredInstalledMods.map((mod) => (
+              <div key={mod.id} className="bg-cyber-bg/50 border border-matrix-500/20 p-4 hover:bg-matrix-900/50 transition-colors">
+                <div className="flex items-start gap-4">
+                  {/* Mod Icon/Logo */}
+                  <div className="flex-shrink-0">
+                    <div className="w-16 h-16 bg-matrix-800/50 rounded flex items-center justify-center border border-matrix-500/30">
+                      <PuzzlePieceIcon className="h-8 w-8 text-matrix-600" />
+                    </div>
+                  </div>
+
+                  {/* Mod Information */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h3 className="font-bold text-matrix-400 text-lg truncate">{mod.name}</h3>
+                        <p className="text-sm text-matrix-600 mt-1 line-clamp-2">{mod.description}</p>
+                        
+                        {/* Mod Stats */}
+                        <div className="flex items-center gap-4 mt-2 text-xs text-matrix-700">
+                          <span className="flex items-center gap-1">
+                            📦 Version: {mod.version}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            🆔 ID: {mod.workshopId}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            📊 {mod.size}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            📅 {formatDate(mod.lastUpdated)}
+                          </span>
+                        </div>
+
+                        {/* Dependencies & Incompatibilities */}
+                        {(mod.dependencies.length > 0 || mod.incompatibilities.length > 0) && (
+                          <div className="mt-2 text-xs">
+                            {mod.dependencies.length > 0 && (
+                              <div className="text-blue-400">
+                                🔗 Dependencies: {mod.dependencies.join(', ')}
+                              </div>
+                            )}
+                            {mod.incompatibilities.length > 0 && (
+                              <div className="text-red-400">
+                                ⚠️ Conflicts: {mod.incompatibilities.join(', ')}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Enabled/Disabled Status */}
+                      <div className="flex-shrink-0 ml-4">
+                        <div className={clsx(
+                          "px-3 py-1 text-xs font-bold uppercase tracking-wider",
+                          mod.enabled 
+                            ? "bg-green-900/30 text-green-400 border border-green-500/30" 
+                            : "bg-red-900/30 text-red-400 border border-red-500/30"
+                        )}>
+                          {mod.enabled ? "✅ Enabled" : "❌ Disabled"}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-2 mt-4">
+                      <button
+                        onClick={() => toggleMod(mod.id)}
+                        className={clsx(
+                          "px-4 py-2 text-sm font-bold transition-colors",
+                          mod.enabled
+                            ? "bg-red-600 hover:bg-red-500 text-white"
+                            : "bg-green-600 hover:bg-green-500 text-white"
+                        )}
+                        title={mod.enabled ? "Disable mod" : "Enable mod"}
+                      >
+                        {mod.enabled ? "Disable" : "Enable"}
+                      </button>
+
+                      <button
+                        onClick={() => removeMod(mod.id)}
+                        className="bg-red-700 hover:bg-red-600 text-white px-4 py-2 text-sm font-bold transition-colors"
+                        title="Remove mod completely"
+                      >
+                        Remove
+                      </button>
+
+                      {/* View on CurseForge (if available) */}
+                      <button
+                        onClick={() => window.open(`https://www.curseforge.com/ark-survival-ascended/mods/${mod.workshopId}`, '_blank')}
+                        className="bg-matrix-600 hover:bg-matrix-500 text-white px-4 py-2 text-sm font-bold transition-colors flex items-center gap-1"
+                        title="View on CurseForge"
+                      >
+                        <EyeIcon className="h-4 w-4" />
+                        View
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Load Order (for advanced users) */}
+                <div className="mt-3 pt-3 border-t border-matrix-500/20">
+                  <div className="flex items-center justify-between text-xs text-matrix-700">
+                    <span>Load Order: {mod.loadOrder}</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          // Move up in load order
+                          const currentIndex = mods.findIndex(m => m.id === mod.id);
+                          if (currentIndex > 0) {
+                            const newMods = [...mods];
+                            [newMods[currentIndex], newMods[currentIndex - 1]] = [newMods[currentIndex - 1], newMods[currentIndex]];
+                            // Update load orders
+                            newMods.forEach((m, i) => m.loadOrder = i);
+                            setMods(newMods);
+                            saveInstalledModsToCache(newMods);
+                            updateLaunchOptions(newMods);
+                          }
+                        }}
+                        disabled={mod.loadOrder === 0}
+                        className="text-matrix-600 hover:text-matrix-400 disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Move up in load order"
+                      >
+                        ⬆️
+                      </button>
+                      <button
+                        onClick={() => {
+                          // Move down in load order
+                          const currentIndex = mods.findIndex(m => m.id === mod.id);
+                          if (currentIndex < mods.length - 1) {
+                            const newMods = [...mods];
+                            [newMods[currentIndex], newMods[currentIndex + 1]] = [newMods[currentIndex + 1], newMods[currentIndex]];
+                            // Update load orders
+                            newMods.forEach((m, i) => m.loadOrder = i);
+                            setMods(newMods);
+                            saveInstalledModsToCache(newMods);
+                            updateLaunchOptions(newMods);
+                          }
+                        }}
+                        disabled={mod.loadOrder === mods.length - 1}
+                        className="text-matrix-600 hover:text-matrix-400 disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Move down in load order"
+                      >
+                        ⬇️
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
     )

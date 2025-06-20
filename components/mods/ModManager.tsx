@@ -374,9 +374,7 @@ const ModManager: React.FC<ModManagerProps> = ({
       let successCount = 0;
       let errorCount = 0;
 
-      for (let i = 0; i < modIds.length; i++) {
-        const modId = modIds[i];
-        
+      for (const modId of modIds) {
         try {
           // First try to fetch mod info from CurseForge
           let modData: any = null;
@@ -405,7 +403,7 @@ const ModManager: React.FC<ModManagerProps> = ({
             version: "Unknown",
             workshopId: modId,
         enabled: true,
-            loadOrder: mods.length + i,
+            loadOrder: mods.length + successCount,
             dependencies: [],
             incompatibilities: [],
             size: modData?.downloadCount ? `${Math.floor(modData.downloadCount / 1000)}K downloads` : undefined,
@@ -422,7 +420,23 @@ const ModManager: React.FC<ModManagerProps> = ({
           if (response.ok) {
             successCount++;
             addConsoleInfo(`✅ Successfully added mod: ${newMod.name} (ID: ${modId})`);
-    } else {
+            // Fire-and-forget request to fetch full details in the background
+            fetch(`/api/servers/${serverId}/mods/fetch-details`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ modId }),
+            })
+            .then(res => {
+              if (res.ok) {
+                addConsoleInfo(`[BG] Fetched details for mod ${modId}`);
+              } else {
+                addConsoleWarning(`[BG] Failed to fetch details for mod ${modId}`);
+              }
+            })
+            .catch(err => {
+              addConsoleError(`[BG] Error fetching details for mod ${modId}: ${err.message}`);
+            });
+          } else {
             errorCount++;
             const errorText = await response.text();
             console.error(`Failed to add mod ${modId}:`, errorText);

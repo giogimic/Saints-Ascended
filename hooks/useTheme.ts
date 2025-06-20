@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { getStoredTheme, setTheme as setThemeInManager } from '@/lib/theme-manager';
+import React, { createContext, useContext, useEffect, ReactNode } from "react";
+import { initializeTheme } from "@/lib/theme-manager";
 
 interface ThemeContextType {
   theme: string;
@@ -13,25 +13,30 @@ interface ThemeProviderProps {
 }
 
 export function ThemeProvider({ children }: ThemeProviderProps) {
-  const [theme, setThemeState] = useState<string>(getStoredTheme());
+  // Always use the dark theme
+  const theme = "tromper";
 
+  // No-op setTheme function for compatibility
   const setTheme = (newTheme: string) => {
-    setThemeState(newTheme);
-    setThemeInManager(newTheme);
+    // Do nothing - we only support the dark theme
   };
 
   // Initialize theme on mount
   useEffect(() => {
-    setTheme(getStoredTheme());
+    initializeTheme();
   }, []);
 
-  return React.createElement(ThemeContext.Provider, { value: { theme, setTheme } }, children);
+  return React.createElement(
+    ThemeContext.Provider,
+    { value: { theme, setTheme } },
+    children
+  );
 }
 
 export function useTheme() {
   const context = useContext(ThemeContext);
   if (context === undefined) {
-    throw new Error('useTheme must be used within a ThemeProvider');
+    throw new Error("useTheme must be used within a ThemeProvider");
   }
   return context;
-} 
+}

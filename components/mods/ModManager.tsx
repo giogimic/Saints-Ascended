@@ -1029,10 +1029,36 @@ const ModManager: React.FC<ModManagerProps> = ({
     const newText = event.target.value;
     setLaunchOptionsText(newText);
 
-    const modIdsMatch = newText.match(/-mods=([^,\s]+)/);
-    if (modIdsMatch) {
-      const modIds = modIdsMatch[1].split(",").filter((id) => id.trim());
+    // More robust mod parsing that can handle various formats:
+    // -mods=123,456,789
+    // -mods=123, 456, 789
+    // -mods=-mods=123,456 (duplicate prefix)
+    // -mods=123,456,789 -other-param
 
+    let modIds: string[] = [];
+
+    // First, try to find -mods= parameter
+    const modParamMatch = newText.match(/-mods=(.+?)(?:\s+-\w+|$)/);
+    if (modParamMatch) {
+      let modListString = modParamMatch[1].trim();
+
+      // Handle case where someone pasted "-mods=-mods=123,456" (duplicate prefix)
+      if (modListString.startsWith("-mods=")) {
+        modListString = modListString.substring(6); // Remove the duplicate "-mods="
+      }
+
+      // Split by comma and clean up each ID
+      modIds = modListString
+        .split(",")
+        .map((id) => id.trim())
+        .filter((id) => id && /^\d+$/.test(id)); // Only keep valid numeric IDs
+
+      console.log("Original text:", newText);
+      console.log("Extracted mod list string:", modListString);
+      console.log("Parsed mod IDs:", modIds);
+    }
+
+    if (modIds.length > 0) {
       const updatedMods = modIds.map((id, index) => ({
         id: id.trim(),
         name: `Mod ${id.trim()}`,
@@ -1733,19 +1759,43 @@ const ModManager: React.FC<ModManagerProps> = ({
               {/* Launch Options */}
               <div className="card bg-base-100 border border-base-content/10 shadow-lg w-full">
                 <div className="card-body">
-                  <h4 className="text-sm font-medium text-base-content mb-3">
-                    Launch Options
-                  </h4>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-medium text-base-content">
+                      Launch Options
+                    </h4>
+                    <button
+                      onClick={() => {
+                        // Re-trigger parsing of current text
+                        const event = {
+                          target: { value: launchOptionsText },
+                        } as React.ChangeEvent<HTMLTextAreaElement>;
+                        handleLaunchOptionsChange(event);
+                      }}
+                      className="btn btn-outline btn-xs"
+                      title="Re-parse mod list from current text"
+                    >
+                      <ArrowPathIcon className="h-3 w-3 mr-1" />
+                      Parse
+                    </button>
+                  </div>
                   <textarea
                     value={launchOptionsText}
                     onChange={handleLaunchOptionsChange}
-                    placeholder="-mods=modid1,modid2,modid3"
-                    className="textarea textarea-bordered w-full h-24 bg-base-200 border-base-content/20 focus:border-primary font-mono text-sm"
+                    placeholder="Paste your mod list here, e.g.:&#10;-mods=969258,988797,928621,930366,953154&#10;&#10;Supports various formats:&#10;• -mods=123,456,789&#10;• -mods=123, 456, 789&#10;• -mods=-mods=123,456 (duplicate prefix)&#10;• Full launch commands with other parameters"
+                    className="textarea textarea-bordered w-full h-32 bg-base-200 border-base-content/20 focus:border-primary font-mono text-sm"
                   />
-                  <p className="text-xs text-base-content/60 mt-2">
-                    This will be automatically generated based on your enabled
-                    mods and their load order.
-                  </p>
+                  <div className="flex items-start justify-between mt-2">
+                    <p className="text-xs text-base-content/60 flex-1">
+                      This will be automatically generated based on your enabled
+                      mods and their load order. You can also paste mod lists
+                      here and they will be parsed automatically.
+                    </p>
+                    {mods.length > 0 && (
+                      <div className="text-xs text-success ml-4">
+                        ✓ {mods.length} mod{mods.length !== 1 ? "s" : ""} loaded
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

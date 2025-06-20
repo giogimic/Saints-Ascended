@@ -293,24 +293,60 @@ export class CurseForgeAPI {
   private static getApiKey(): string {
     const apiKey = process.env.CURSEFORGE_API_KEY;
 
-    // If the environment variable is truncated (less than 50 chars), try reading from file
-    if (!apiKey || (apiKey && apiKey.length < 50)) {
+    // Always try to read from .env.local file first for better reliability
+    try {
+      const envPath = path.join(process.cwd(), ".env.local");
+      if (fs.existsSync(envPath)) {
+        const envContent = fs.readFileSync(envPath, "utf8");
+        const lines = envContent.split("\n");
+        const curseforgeLine = lines.find((line) =>
+          line.trim().startsWith("CURSEFORGE_API_KEY=")
+        );
+        if (curseforgeLine) {
+          const fileKey = curseforgeLine.split("=")[1]?.trim() || "";
+          // Remove quotes if present
+          const cleanKey = fileKey.replace(/^["']|["']$/g, "");
+
+          if (cleanKey && cleanKey.length >= 32) {
+            log(LOG_LEVEL.INFO, "Using API key from .env.local file");
+            return cleanKey;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error reading API key from .env.local:", error);
+    }
+
+    // Fallback to environment variable if file reading failed
+    if (apiKey && apiKey.length >= 32) {
+      log(LOG_LEVEL.INFO, "Using API key from environment variable");
+      return apiKey;
+    }
+
+    // If environment variable is truncated, try to read from file again with different approach
+    if (apiKey && apiKey.length < 50) {
+      log(
+        LOG_LEVEL.WARN,
+        "Environment variable appears truncated, attempting to read from .env.local file"
+      );
       try {
         const envPath = path.join(process.cwd(), ".env.local");
         if (fs.existsSync(envPath)) {
           const envContent = fs.readFileSync(envPath, "utf8");
           const lines = envContent.split("\n");
           const curseforgeLine = lines.find((line) =>
-            line.startsWith("CURSEFORGE_API_KEY=")
+            line.trim().startsWith("CURSEFORGE_API_KEY=")
           );
           if (curseforgeLine) {
-            const fileKey = curseforgeLine.split("=")[1] || "";
-            if (fileKey.length > (apiKey?.length || 0)) {
+            const fileKey = curseforgeLine.split("=")[1]?.trim() || "";
+            const cleanKey = fileKey.replace(/^["']|["']$/g, "");
+
+            if (cleanKey && cleanKey.length > apiKey.length) {
               log(
                 LOG_LEVEL.INFO,
                 "Using API key from .env.local file (environment variable was truncated)"
               );
-              return fileKey;
+              return cleanKey;
             }
           }
         }
@@ -836,5 +872,74 @@ export class CurseForgeAPI {
       console.error("Failed to get game:", error);
       throw error;
     }
+  }
+
+  /**
+   * Check API key configuration and return diagnostic information
+   */
+  static checkApiKeyConfiguration(): {
+    hasApiKey: boolean;
+    source: "env" | "file" | "none";
+    keyLength: number;
+    isValidFormat: boolean;
+    message: string;
+  } {
+    const apiKey = process.env.CURSEFORGE_API_KEY;
+    let fileKey = "";
+
+    // Try to read from .env.local file
+    try {
+      const envPath = path.join(process.cwd(), ".env.local");
+      if (fs.existsSync(envPath)) {
+        const envContent = fs.readFileSync(envPath, "utf8");
+        const lines = envContent.split("\n");
+        const curseforgeLine = lines.find((line) =>
+          line.trim().startsWith("CURSEFORGE_API_KEY=")
+        );
+        if (curseforgeLine) {
+          const keyPart = curseforgeLine.split("=")[1]?.trim() || "";
+          fileKey = keyPart.replace(/^["']|["']$/g, "");
+        }
+      }
+    } catch (error) {
+      console.error("Error reading API key from .env.local:", error);
+    }
+
+    // Determine which key to use
+    let finalKey = "";
+    let source: "env" | "file" | "none" = "none";
+
+    if (fileKey && fileKey.length >= 32) {
+      finalKey = fileKey;
+      source = "file";
+    } else if (apiKey && apiKey.length >= 32) {
+      finalKey = apiKey;
+      source = "env";
+    }
+
+    const isValidFormat =
+      finalKey.length >= 32 && /^[a-zA-Z0-9]+$/.test(finalKey);
+
+    let message = "";
+    if (!finalKey) {
+      message =
+        "No API key found. Please add CURSEFORGE_API_KEY to your .env.local file or environment variables.";
+    } else if (finalKey.length < 32) {
+      message =
+        "API key appears to be truncated. Please check your .env.local file or environment variable configuration.";
+    } else if (!isValidFormat) {
+      message =
+        "API key format appears invalid. CurseForge API keys should be alphanumeric and at least 32 characters long.";
+    } else {
+      message = `API key configured successfully (${source === "file" ? "from .env.local file" : "from environment variable"}).`;
+    }
+
+    return {
+      hasApiKey: !!finalKey,
+      source,
+      keyLength: finalKey.length,
+      isValidFormat,
+      message,
+    };
   }
 }

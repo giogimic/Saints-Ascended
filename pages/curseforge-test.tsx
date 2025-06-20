@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Layout } from "../components/ui/Layout";
 import { CurseForgeAPI } from "../lib/curseforge-api";
 
@@ -7,6 +7,24 @@ export default function CurseForgeTest() {
   const [testResult, setTestResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [apiKeyConfig, setApiKeyConfig] = useState<any>(null);
+
+  // Load API key configuration on component mount
+  useEffect(() => {
+    checkApiKeyConfig();
+  }, []);
+
+  const checkApiKeyConfig = async () => {
+    try {
+      const response = await fetch("/api/curseforge/check-api-key");
+      if (response.ok) {
+        const data = await response.json();
+        setApiKeyConfig(data.data);
+      }
+    } catch (error) {
+      console.error("Failed to check API key config:", error);
+    }
+  };
 
   const testEndpoint = async (endpoint: string, testName: string) => {
     setLoading(true);
@@ -72,8 +90,43 @@ export default function CurseForgeTest() {
       <div className="container mx-auto p-6">
         <h1 className="text-3xl font-bold mb-6">CurseForge API Test</h1>
 
+        {/* API Key Configuration Status */}
         <div className="card bg-base-200 p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">API Configuration</h2>
+          <h2 className="text-xl font-semibold mb-4">API Key Configuration</h2>
+
+          {apiKeyConfig && (
+            <div
+              className={`alert ${apiKeyConfig.hasApiKey && apiKeyConfig.isValidFormat ? "alert-success" : "alert-error"} mb-4`}
+            >
+              <div>
+                <h3 className="font-bold">API Key Status</h3>
+                <div className="text-sm">
+                  <p>
+                    <strong>Status:</strong>{" "}
+                    {apiKeyConfig.hasApiKey ? "Configured" : "Not Configured"}
+                  </p>
+                  <p>
+                    <strong>Source:</strong>{" "}
+                    {apiKeyConfig.source === "file"
+                      ? ".env.local file"
+                      : apiKeyConfig.source === "env"
+                        ? "Environment variable"
+                        : "None"}
+                  </p>
+                  <p>
+                    <strong>Length:</strong> {apiKeyConfig.keyLength} characters
+                  </p>
+                  <p>
+                    <strong>Format:</strong>{" "}
+                    {apiKeyConfig.isValidFormat ? "Valid" : "Invalid"}
+                  </p>
+                  <p>
+                    <strong>Message:</strong> {apiKeyConfig.message}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="form-control mb-4">
             <label className="label">
@@ -119,11 +172,29 @@ export default function CurseForgeTest() {
             <div>
               <h3 className="font-bold">API Key Requirements</h3>
               <div className="text-xs">
-                You need a valid CurseForge API key with proper permissions. For
-                third-party apps, you need to apply for access.
+                <p>
+                  You need a valid CurseForge API key with proper permissions.
+                  For third-party apps, you need to apply for access.
+                </p>
+                <p className="mt-2">
+                  <strong>To fix truncated API key issues:</strong>
+                </p>
+                <ul className="list-disc list-inside mt-1">
+                  <li>Ensure your .env.local file contains the full API key</li>
+                  <li>Remove any quotes around the API key value</li>
+                  <li>Check that the API key is at least 32 characters long</li>
+                  <li>Restart the development server after making changes</li>
+                </ul>
               </div>
             </div>
           </div>
+
+          <button
+            onClick={checkApiKeyConfig}
+            className="btn btn-outline btn-sm"
+          >
+            Refresh API Key Status
+          </button>
         </div>
 
         <div className="card bg-base-200 p-6 mb-6">

@@ -1,64 +1,46 @@
-// Theme management system for DaisyUI
+// Simplified theme management for single dark theme
 export const AVAILABLE_THEMES = [
-  { name: 'tromper', label: 'Tromper', description: 'Ultra-dark tech theme with neon green accents' },
-  { name: 'light', label: 'Light', description: 'Clean & minimal light theme' },
-  { name: 'dark', label: 'Dark', description: 'Clean & minimal dark theme' },
-  { name: 'cupcake', label: 'Cupcake', description: 'Soft pastel theme' },
-  { name: 'cyberpunk', label: 'Cyberpunk', description: 'Retro-futuristic theme with bright colors' },
-  { name: 'synthwave', label: 'Synthwave', description: '80s synthwave aesthetic' },
-  { name: 'night', label: 'Night', description: 'Dark theme optimized for night use' },
-  { name: 'dracula', label: 'Dracula', description: 'Dark theme based on Dracula color scheme' },
-  { name: 'business', label: 'Business', description: 'Professional light theme' },
-  { name: 'forest', label: 'Forest', description: 'Dark green nature-inspired theme' }
+  {
+    name: "tromper",
+    label: "Dark Theme",
+    description: "Ultra-dark tech theme with neon green accents",
+  },
 ];
 
-const THEME_STORAGE_KEY = 'ark-server-manager-theme';
+const THEME_STORAGE_KEY = "ark-server-manager-theme";
+const DEFAULT_THEME = "tromper";
 
 export const getStoredTheme = (): string => {
-  if (typeof window === 'undefined') return 'tromper';
-  return localStorage.getItem(THEME_STORAGE_KEY) || 'tromper';
+  return DEFAULT_THEME; // Always return the dark theme
 };
 
-export const setTheme = (themeName: string): void => {
-  if (typeof window === 'undefined') return;
-  
-  // Store theme preference
-  localStorage.setItem(THEME_STORAGE_KEY, themeName);
-  
+export const setTheme = (themeName: string = DEFAULT_THEME): void => {
+  if (typeof window === "undefined") return;
+
+  // Always use the dark theme
+  const theme = DEFAULT_THEME;
+
   // Apply theme to HTML element
   const html = document.documentElement;
-  html.setAttribute('data-theme', themeName);
-  
-  // Force a re-render by toggling a class
-  html.classList.remove('theme-transition');
-  void html.offsetWidth; // Trigger reflow
-  html.classList.add('theme-transition');
+  html.setAttribute("data-theme", theme);
+
+  // Store theme preference (always dark)
+  localStorage.setItem(THEME_STORAGE_KEY, theme);
 };
 
 export const initializeTheme = (): void => {
-  if (typeof window === 'undefined') return;
-  
-  // Add transition class to HTML element
-  document.documentElement.classList.add('theme-transition');
-  
-  // Set initial theme from storage or default
-  const storedTheme = getStoredTheme();
-  setTheme(storedTheme);
-  
-  // Remove transition class after initial theme is set
-  setTimeout(() => {
-    document.documentElement.classList.remove('theme-transition');
-  }, 300);
+  if (typeof window === "undefined") return;
+
+  // Set the dark theme immediately
+  setTheme(DEFAULT_THEME);
 };
 
-// Check if theme is dark
-export const isDarkTheme = (themeName: string = getStoredTheme()): boolean => {
-  const darkThemes = ['tromper', 'dark', 'cyberpunk', 'synthwave', 'night', 'dracula', 'forest'];
-  return darkThemes.includes(themeName);
+// Always return true since we only have dark theme
+export const isDarkTheme = (themeName: string = DEFAULT_THEME): boolean => {
+  return true;
 };
 
-// Get theme category
-export const getThemeCategory = (themeName: string = getStoredTheme()): string => {
-  if (themeName === 'tromper') return 'Custom';
-  return 'DaisyUI';
-}; 
+// Always return Custom since we only have our custom theme
+export const getThemeCategory = (themeName: string = DEFAULT_THEME): string => {
+  return "Custom";
+};

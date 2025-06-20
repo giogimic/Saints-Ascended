@@ -37,6 +37,12 @@ model Mod {
   isAvailable       Boolean  @default(true)
   thumbsUpCount     Int      @default(0)
   
+  // Enhanced fields for better search and filtering
+  searchKeywords    String?  // Normalized keywords for search
+  popularityScore   Float    @default(0) // Calculated popularity score
+  lastUpdated       DateTime @default(now()) // When mod data was last updated
+  updateFrequency   Int      @default(24) // Hours between updates
+  
   // Relations
   links             ModLinks?
   categories        ModCategory[]
@@ -52,6 +58,11 @@ model Mod {
   lastFetched       DateTime @default(now())
   
   @@map("mods")
+  @@index([name])
+  @@index([downloadCount])
+  @@index([popularityScore])
+  @@index([lastUpdated])
+  @@index([searchKeywords])
 }
 
 model ModLinks {
@@ -85,6 +96,9 @@ model ModCategory {
   mod                Mod      @relation(fields: [modId], references: [id], onDelete: Cascade)
   
   @@map("mod_categories")
+  @@index([categoryId])
+  @@index([name])
+  @@index([modId, categoryId])
 }
 
 model ModAuthor {
@@ -97,6 +111,8 @@ model ModAuthor {
   mod    Mod      @relation(fields: [modId], references: [id], onDelete: Cascade)
   
   @@map("mod_authors")
+  @@index([authorId])
+  @@index([name])
 }
 
 model ModLogo {
@@ -158,6 +174,10 @@ model ModFile {
   mod                   Mod      @relation(fields: [modId], references: [id], onDelete: Cascade)
   
   @@map("mod_files")
+  @@index([fileId])
+  @@index([releaseType])
+  @@index([fileDate])
+  @@index([downloadCount])
 }
 
 model ModFileHash {
@@ -169,6 +189,8 @@ model ModFileHash {
   file     ModFile  @relation(fields: [fileId], references: [id], onDelete: Cascade)
   
   @@map("mod_file_hashes")
+  @@index([value])
+  @@index([algo])
 }
 
 model ModFileGameVersion {
@@ -179,6 +201,7 @@ model ModFileGameVersion {
   file     ModFile  @relation(fields: [fileId], references: [id], onDelete: Cascade)
   
   @@map("mod_file_game_versions")
+  @@index([version])
 }
 
 model ModFileSortableGameVersion {
@@ -194,6 +217,8 @@ model ModFileSortableGameVersion {
   file                  ModFile  @relation(fields: [fileId], references: [id], onDelete: Cascade)
   
   @@map("mod_file_sortable_game_versions")
+  @@index([gameVersion])
+  @@index([gameVersionTypeId])
 }
 
 model ModFileDependency {
@@ -205,6 +230,8 @@ model ModFileDependency {
   file         ModFile  @relation(fields: [fileId], references: [id], onDelete: Cascade)
   
   @@map("mod_file_dependencies")
+  @@index([modId])
+  @@index([relationType])
 }
 
 model ModFileModule {
@@ -216,50 +243,117 @@ model ModFileModule {
   file        ModFile  @relation(fields: [fileId], references: [id], onDelete: Cascade)
   
   @@map("mod_file_modules")
+  @@index([name])
 }
 
 model ModFileIndex {
-  id                    Int      @id @default(autoincrement())
-  modId                 Int
-  gameVersion           String
-  fileId                Int
-  filename              String
-  releaseType           Int
-  gameVersionTypeId     Int
-  modLoader             Int?
+  id                Int      @id @default(autoincrement())
+  modId             Int
+  gameVersion       String
+  fileId            Int
+  filename          String
+  releaseType       Int
+  gameVersionTypeId Int
+  modLoader         Int?
   
-  mod                   Mod      @relation(fields: [modId], references: [id], onDelete: Cascade)
+  mod               Mod      @relation(fields: [modId], references: [id], onDelete: Cascade)
   
   @@map("mod_file_indexes")
+  @@index([gameVersion])
+  @@index([releaseType])
+  @@index([gameVersionTypeId])
 }
 
+// Enhanced cache model with better indexing and metadata
 model ModCache {
-  id        Int      @id @default(autoincrement())
-  query     String   @unique
-  results   String   // JSON string of mod IDs
-  timestamp DateTime @default(now())
-  expiresAt DateTime
+  id          Int      @id @default(autoincrement())
+  query       String   @unique
+  results     String   // JSON array of mod IDs
+  totalCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+  hitCount    Int      @default(0) // Track cache usage
+  lastAccessed DateTime @default(now())
   
   @@map("mod_cache")
+  @@index([expiresAt])
+  @@index([lastAccessed])
+  @@index([hitCount])
 }
 
+// Enhanced installed mods model with better tracking
 model InstalledMod {
-  id            String   @id
-  name          String
-  summary       String?
-  downloadCount Int?
-  thumbsUpCount Int?
-  logoUrl       String?
-  author        String?
-  lastUpdated   DateTime @default(now())
-  installedAt   DateTime @default(now())
-  version       String?
-  fileSize      Int?
-  category      String?
-  tags          String?  // JSON string of tags
-  websiteUrl    String?
-  isEnabled     Boolean  @default(true)
-  loadOrder     Int      @default(1)
+  id              Int      @id @default(autoincrement())
+  serverId        String
+  modId           String
+  name            String
+  description     String?
+  version         String?
+  workshopId      String?
+  enabled         Boolean  @default(true)
+  loadOrder       Int      @default(0)
+  dependencies    String?  // JSON array
+  incompatibilities String? // JSON array
+  size            String?
+  lastUpdated     DateTime @default(now())
+  
+  // Enhanced CurseForge data
+  curseForgeData  String?  // JSON object with full CurseForge data
+  downloadCount   Int      @default(0)
+  thumbsUpCount   Int      @default(0)
+  logoUrl         String?
+  author          String?
+  category        String?
+  tags            String?  // JSON array
+  websiteUrl      String?
+  fileSize        BigInt?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
   
   @@map("installed_mods")
+  @@unique([serverId, modId])
+  @@index([serverId])
+  @@index([modId])
+  @@index([enabled])
+  @@index([loadOrder])
+  @@index([name])
+}
+
+// New model for tracking search analytics and popular mods
+model ModSearchAnalytics {
+  id              Int      @id @default(autoincrement())
+  searchTerm      String
+  category        String?
+  resultCount     Int      @default(0)
+  searchCount     Int      @default(1) // How many times this search was performed
+  lastSearched    DateTime @default(now())
+  avgResultCount  Float    @default(0) // Average results for this search
+  
+  @@map("mod_search_analytics")
+  @@unique([searchTerm, category])
+  @@index([searchTerm])
+  @@index([category])
+  @@index([searchCount])
+  @@index([lastSearched])
+}
+
+// New model for tracking popular mods by category
+model PopularMods {
+  id              Int      @id @default(autoincrement())
+  category        String
+  modId           Int
+  name            String
+  downloadCount   Int      @default(0)
+  thumbsUpCount   Int      @default(0)
+  popularityScore Float    @default(0)
+  rank            Int      @default(0)
+  lastUpdated     DateTime @default(now())
+  
+  @@map("popular_mods")
+  @@unique([category, modId])
+  @@index([category])
+  @@index([modId])
+  @@index([popularityScore])
+  @@index([rank])
 }

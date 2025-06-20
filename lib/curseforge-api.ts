@@ -500,49 +500,51 @@ export class CurseForgeAPI {
   }
 
   /**
-   * Search for mods using the CurseForge API
+   * Enhanced search for mods with improved coverage and pagination
    */
   static async searchMods(
     searchFilter: string,
     categoryId?: number,
     sortField: SortField = "name",
     sortOrder: "asc" | "desc" = "asc",
-    pageSize: number = 20
-  ): Promise<CurseForgeMod[]> {
+    pageSize: number = 20,
+    page: number = 1,
+    includeAllCategories: boolean = false
+  ): Promise<{ mods: CurseForgeMod[]; totalCount: number; hasMore: boolean }> {
     try {
-      // Check cache first
+      // Check cache first with enhanced key
+      const cacheKey = this.generateEnhancedCacheKey(
+        searchFilter,
+        categoryId,
+        sortField,
+        sortOrder,
+        page,
+        pageSize,
+        includeAllCategories
+      );
+      
       const cachedResult = await modCache.searchMods(
         searchFilter,
         categoryId?.toString(),
         sortField,
         sortOrder,
-        1,
+        page,
         pageSize
       );
 
       if (cachedResult.data.length > 0) {
-        log(LOG_LEVEL.DEBUG, `Cache hit for search: ${searchFilter}`);
-        // Ensure logo is never null
-        const mods = cachedResult.data.map((mod) => ({
-          ...mod,
-          logo: mod.logo || {
-            id: 0,
-            modId: mod.id,
-            title: "",
-            description: "",
-            thumbnailUrl: "",
-            url: "",
-          },
-        })) as CurseForgeMod[];
-        return mods;
+        log(LOG_LEVEL.DEBUG, `Cache hit for enhanced search: ${cacheKey}`);
+        const mods = this.normalizeModData(cachedResult.data);
+        return {
+          mods,
+          totalCount: cachedResult.totalCount,
+          hasMore: cachedResult.data.length === pageSize
+        };
       }
 
-      log(
-        LOG_LEVEL.DEBUG,
-        `Cache miss for search: ${searchFilter}, fetching from API`
-      );
+      log(LOG_LEVEL.DEBUG, `Cache miss for enhanced search: ${cacheKey}, fetching from API`);
 
-      // Fetch from API
+      // Enhanced API request with better parameters
       const SORT_FIELD_MAP: Record<SortField, number> = {
         name: 1,
         popularity: 2,
@@ -555,52 +557,278 @@ export class CurseForgeAPI {
         searchFilter: searchFilter.trim(),
         sortField: SORT_FIELD_MAP[sortField].toString(),
         sortOrder: sortOrder,
-        pageSize: pageSize.toString(),
+        pageSize: Math.min(pageSize, 50).toString(), // API limit
+        index: ((page - 1) * pageSize).toString(),
       });
 
-      if (categoryId) {
+      if (categoryId && !includeAllCategories) {
         params.append("categoryId", categoryId.toString());
       }
+
+      // Add additional parameters for better coverage
+      params.append("classId", "5"); // Mods class
+      params.append("gameVersionTypeId", "68441"); // Latest game version
 
       const data: CurseForgeSearchResponse =
         await this.makeRequest<CurseForgeSearchResponse>(
           `/mods/search?${params}`
         );
 
-      // Store in cache
+      // Normalize and deduplicate results
+      const normalizedMods = this.normalizeModData(data.data as CurseForgeModData[]);
+      const deduplicatedMods = this.deduplicateMods(normalizedMods);
+
+      // Store in cache with enhanced metadata
       await modCache.setSearchResults(
         searchFilter,
         categoryId?.toString(),
         sortField,
         sortOrder,
-        1,
+        page,
         pageSize,
-        data.data as CurseForgeModData[],
+        deduplicatedMods as CurseForgeModData[],
         data.pagination.totalCount
       );
 
-      // Store individual mods in cache
-      for (const mod of data.data) {
+      // Store individual mods in cache for faster future access
+      for (const mod of deduplicatedMods) {
         await modCache.setMod(mod as CurseForgeModData);
       }
 
-      // Ensure logo is never null for API results
-      const mods = data.data.map((mod) => ({
-        ...mod,
-        logo: mod.logo || {
-          id: 0,
-          modId: mod.id,
-          title: "",
-          description: "",
-          thumbnailUrl: "",
-          url: "",
-        },
-      })) as CurseForgeMod[];
-      return mods;
+      return {
+        mods: deduplicatedMods,
+        totalCount: data.pagination.totalCount,
+        hasMore: data.pagination.index + data.pagination.resultCount < data.pagination.totalCount
+      };
     } catch (error) {
       console.error("Failed to search CurseForge mods:", error);
       throw error;
     }
+  }
+
+  /**
+   * Enhanced search with multiple strategies for better coverage
+   */
+  static async searchModsComprehensive(
+    searchFilter: string,
+    categoryId?: number,
+    sortField: SortField = "popularity",
+    sortOrder: "asc" | "desc" = "desc",
+    pageSize: number = 20
+  ): Promise<CurseForgeMod[]> {
+    try {
+      const allMods: CurseForgeMod[] = [];
+      const seenIds = new Set<number>();
+
+      // Strategy 1: Direct search
+      const directResults = await this.searchMods(
+        searchFilter,
+        categoryId,
+        sortField,
+        sortOrder,
+        pageSize,
+        1,
+        false
+      );
+      
+      directResults.mods.forEach(mod => {
+        if (!seenIds.has(mod.id)) {
+          allMods.push(mod);
+          seenIds.add(mod.id);
+        }
+      });
+
+      // Strategy 2: Broader search without category filter
+      if (categoryId && allMods.length < pageSize) {
+        const broaderResults = await this.searchMods(
+          searchFilter,
+          undefined,
+          sortField,
+          sortOrder,
+          pageSize - allMods.length,
+          1,
+          true
+        );
+        
+        broaderResults.mods.forEach(mod => {
+          if (!seenIds.has(mod.id)) {
+            allMods.push(mod);
+            seenIds.add(mod.id);
+          }
+        });
+      }
+
+      // Strategy 3: Popular mods fallback if still insufficient
+      if (allMods.length < Math.min(pageSize, 10)) {
+        const popularResults = await this.searchMods(
+          "",
+          categoryId,
+          "popularity",
+          "desc",
+          pageSize - allMods.length,
+          1,
+          false
+        );
+        
+        popularResults.mods.forEach(mod => {
+          if (!seenIds.has(mod.id)) {
+            allMods.push(mod);
+            seenIds.add(mod.id);
+          }
+        });
+      }
+
+      return allMods.slice(0, pageSize);
+    } catch (error) {
+      console.error("Failed to perform comprehensive search:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch mods by category with enhanced coverage
+   */
+  static async getModsByCategory(
+    categoryId: number,
+    sortField: SortField = "popularity",
+    sortOrder: "asc" | "desc" = "desc",
+    pageSize: number = 20,
+    page: number = 1
+  ): Promise<{ mods: CurseForgeMod[]; totalCount: number; hasMore: boolean }> {
+    try {
+      // First try category-specific search
+      const categoryResults = await this.searchMods(
+        "",
+        categoryId,
+        sortField,
+        sortOrder,
+        pageSize,
+        page,
+        false
+      );
+
+      // If insufficient results, supplement with popular mods in same category
+      if (categoryResults.mods.length < pageSize && page === 1) {
+        const popularResults = await this.searchMods(
+          "",
+          categoryId,
+          "popularity",
+          "desc",
+          pageSize - categoryResults.mods.length,
+          1,
+          false
+        );
+
+        const seenIds = new Set(categoryResults.mods.map(m => m.id));
+        const additionalMods = popularResults.mods.filter(mod => !seenIds.has(mod.id));
+        
+        categoryResults.mods.push(...additionalMods);
+        categoryResults.hasMore = categoryResults.hasMore || popularResults.hasMore;
+      }
+
+      return categoryResults;
+    } catch (error) {
+      console.error("Failed to get mods by category:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Normalize mod data to ensure consistency
+   */
+  private static normalizeModData(mods: CurseForgeModData[]): CurseForgeMod[] {
+    return mods.map(mod => ({
+      ...mod,
+      // Ensure logo is never null
+      logo: mod.logo || {
+        id: 0,
+        modId: mod.id,
+        title: "",
+        description: "",
+        thumbnailUrl: "",
+        url: "",
+      },
+      // Normalize name and summary
+      name: mod.name?.trim() || "Unknown Mod",
+      summary: mod.summary?.trim() || "",
+      // Ensure numeric fields are valid
+      downloadCount: Math.max(0, mod.downloadCount || 0),
+      thumbsUpCount: Math.max(0, mod.thumbsUpCount || 0),
+      // Normalize dates - keep as strings for API compatibility
+      dateCreated: mod.dateCreated || new Date().toISOString(),
+      dateModified: mod.dateModified || new Date().toISOString(),
+      dateReleased: mod.dateReleased || "",
+      // Ensure arrays are always arrays
+      categories: Array.isArray(mod.categories) ? mod.categories : [],
+      authors: Array.isArray(mod.authors) ? mod.authors : [],
+      screenshots: Array.isArray(mod.screenshots) ? mod.screenshots : [],
+      latestFiles: Array.isArray(mod.latestFiles) ? mod.latestFiles : [],
+      latestFilesIndexes: Array.isArray(mod.latestFilesIndexes) ? mod.latestFilesIndexes : [],
+    }));
+  }
+
+  /**
+   * Deduplicate mods based on ID and name similarity
+   */
+  private static deduplicateMods(mods: CurseForgeMod[]): CurseForgeMod[] {
+    const seenIds = new Set<number>();
+    const seenNames = new Set<string>();
+    const uniqueMods: CurseForgeMod[] = [];
+
+    for (const mod of mods) {
+      const normalizedName = mod.name.toLowerCase().trim();
+      
+      // Check for exact ID match
+      if (seenIds.has(mod.id)) {
+        continue;
+      }
+      
+      // Check for name similarity (fuzzy matching)
+      const isDuplicateName = Array.from(seenNames).some(seenName => {
+        const similarity = this.calculateNameSimilarity(normalizedName, seenName);
+        return similarity > 0.8; // 80% similarity threshold
+      });
+      
+      if (!isDuplicateName) {
+        uniqueMods.push(mod);
+        seenIds.add(mod.id);
+        seenNames.add(normalizedName);
+      }
+    }
+
+    return uniqueMods;
+  }
+
+  /**
+   * Calculate similarity between two mod names
+   */
+  private static calculateNameSimilarity(name1: string, name2: string): number {
+    const words1 = name1.split(/\s+/).filter(w => w.length > 2);
+    const words2 = name2.split(/\s+/).filter(w => w.length > 2);
+    
+    if (words1.length === 0 || words2.length === 0) {
+      return 0;
+    }
+    
+    const commonWords = words1.filter(word => words2.includes(word));
+    const totalWords = Math.max(words1.length, words2.length);
+    
+    return commonWords.length / totalWords;
+  }
+
+  /**
+   * Generate enhanced cache key with more parameters
+   */
+  private static generateEnhancedCacheKey(
+    searchFilter: string,
+    categoryId?: number,
+    sortField: SortField = "name",
+    sortOrder: "asc" | "desc" = "asc",
+    page: number = 1,
+    pageSize: number = 20,
+    includeAllCategories: boolean = false
+  ): string {
+    return `${searchFilter}_${categoryId || 'all'}_${sortField}_${sortOrder}_${page}_${pageSize}_${includeAllCategories}`;
   }
 
   /**
@@ -793,7 +1021,7 @@ export class CurseForgeAPI {
   private static async getNextModsToFetch(): Promise<number[]> {
     try {
       // Get popular mods first (higher priority)
-      const popularMods = await this.searchMods(
+      const popularResults = await this.searchMods(
         "",
         undefined,
         "popularity",
@@ -808,14 +1036,14 @@ export class CurseForgeAPI {
       for (const category of categories.slice(0, 5)) {
         // Limit to top 5 categories
         try {
-          const mods = await this.searchMods(
+          const categoryResults = await this.searchMods(
             "",
             category.id,
             "popularity",
             "desc",
             20
           );
-          categoryMods.push(...mods.map((m) => m.id));
+          categoryMods.push(...categoryResults.mods.map((m) => m.id));
         } catch (error) {
           console.error(
             `Background: Failed to fetch category ${category.name}:`,
@@ -825,7 +1053,7 @@ export class CurseForgeAPI {
       }
 
       // Combine and deduplicate
-      const allModIds = [...popularMods.map((m) => m.id), ...categoryMods];
+      const allModIds = [...popularResults.mods.map((m) => m.id), ...categoryMods];
       const uniqueModIds = [...new Set(allModIds)];
 
       // Filter out mods already in cache

@@ -6,6 +6,8 @@ interface ModCacheEntry {
   data: CurseForgeModData;
   timestamp: number;
   expiresAt: number;
+  hitCount: number;
+  lastAccessed: number;
 }
 
 interface SearchCacheEntry {
@@ -13,6 +15,8 @@ interface SearchCacheEntry {
   totalCount: number;
   timestamp: number;
   expiresAt: number;
+  hitCount: number;
+  lastAccessed: number;
 }
 
 class ModCacheService {
@@ -22,10 +26,12 @@ class ModCacheService {
   private inMemoryCache: Map<string, any> = new Map();
   private dbAvailable: boolean = false;
 
-  // Cache TTLs (in milliseconds)
+  // Enhanced cache TTLs (in milliseconds)
   private readonly MOD_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
   private readonly SEARCH_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
-  private readonly MAX_CACHE_SIZE = 1000; // Maximum number of cached items
+  private readonly POPULAR_MODS_TTL = 6 * 60 * 60 * 1000; // 6 hours
+  private readonly MAX_CACHE_SIZE = 2000; // Increased cache size
+  private readonly MAX_SEARCH_CACHE_SIZE = 500; // Separate limit for search cache
 
   constructor() {
     try {
@@ -42,7 +48,7 @@ class ModCacheService {
   }
 
   /**
-   * Get a mod from cache (in-memory first, then database)
+   * Enhanced mod retrieval with popularity scoring and analytics
    */
   async getMod(modId: number): Promise<CurseForgeModData | null> {
     try {
@@ -79,7 +85,10 @@ class ModCacheService {
       // Convert database model to CurseForge format
       const curseForgeMod = this.convertDbToCurseForge(mod);
 
-      // Store in memory cache
+      // Update access analytics
+      await this.updateModAccessAnalytics(modId);
+
+      // Store in memory cache with enhanced metadata
       this.setModInMemoryCache(modId, curseForgeMod);
 
       return curseForgeMod;
@@ -91,7 +100,7 @@ class ModCacheService {
   }
 
   /**
-   * Store a mod in both memory and database cache
+   * Enhanced mod storage with popularity scoring and search keywords
    */
   async setMod(mod: CurseForgeModData): Promise<void> {
     try {
@@ -104,7 +113,13 @@ class ModCacheService {
         return;
       }
 
-      // Store in database
+      // Calculate popularity score
+      const popularityScore = this.calculatePopularityScore(mod);
+      
+      // Generate search keywords
+      const searchKeywords = this.generateSearchKeywords(mod);
+
+      // Store in database with enhanced fields
       await this.prisma.mod.upsert({
         where: { id: mod.id },
         update: {
@@ -124,6 +139,10 @@ class ModCacheService {
           gamePopularityRank: mod.gamePopularityRank,
           isAvailable: mod.isAvailable,
           thumbsUpCount: mod.thumbsUpCount,
+          // Enhanced fields
+          searchKeywords,
+          popularityScore,
+          lastUpdated: new Date(),
           lastFetched: new Date(),
         },
         create: {
@@ -144,12 +163,20 @@ class ModCacheService {
           gamePopularityRank: mod.gamePopularityRank,
           isAvailable: mod.isAvailable,
           thumbsUpCount: mod.thumbsUpCount,
+          // Enhanced fields
+          searchKeywords,
+          popularityScore,
+          lastUpdated: new Date(),
           lastFetched: new Date(),
         },
       });
 
       // Store related data
       await this.storeModRelations(mod);
+
+      // Update popular mods tracking
+      await this.updatePopularModsTracking(mod);
+
     } catch (error) {
       console.error("Error storing mod in cache:", error);
       // Fall back to in-memory cache
@@ -161,7 +188,7 @@ class ModCacheService {
   }
 
   /**
-   * Search mods with caching
+   * Enhanced search with analytics and better caching
    */
   async searchMods(
     query: string,
@@ -183,6 +210,9 @@ class ModCacheService {
     // Check in-memory cache first
     const memoryEntry = this.searchCache.get(cacheKey);
     if (memoryEntry && Date.now() < memoryEntry.expiresAt) {
+      // Update hit count and last accessed
+      memoryEntry.hitCount++;
+      memoryEntry.lastAccessed = Date.now();
       return {
         data: memoryEntry.data,
         totalCount: memoryEntry.totalCount,
@@ -196,27 +226,60 @@ class ModCacheService {
       });
 
       if (dbCache && new Date() < dbCache.expiresAt) {
+        // Update hit count and last accessed
+        await this.prisma.modCache.update({
+          where: { id: dbCache.id },
+          data: {
+            hitCount: { increment: 1 },
+            lastAccessed: new Date(),
+          },
+        });
+
         const modIds = JSON.parse(dbCache.results) as number[];
         const mods = await this.getModsByIds(modIds);
 
         // Store in memory cache
-        this.setSearchInMemoryCache(cacheKey, mods, mods.length);
+        this.setSearchInMemoryCache(cacheKey, mods, dbCache.totalCount);
 
         return {
           data: mods,
-          totalCount: mods.length,
+          totalCount: dbCache.totalCount,
         };
       }
     } catch (error) {
       console.error("Error checking database cache:", error);
     }
 
-    // If not in cache, return null to indicate cache miss
-    return { data: [], totalCount: 0 };
+    // If not in cache, perform search
+    const searchResults = await this.performDatabaseSearch(
+      query,
+      category,
+      sortBy,
+      sortOrder,
+      page,
+      pageSize
+    );
+
+    // Store results in cache
+    await this.setSearchResults(
+      query,
+      category,
+      sortBy,
+      sortOrder,
+      page,
+      pageSize,
+      searchResults.data,
+      searchResults.totalCount
+    );
+
+    // Update search analytics
+    await this.updateSearchAnalytics(query, category, searchResults.totalCount);
+
+    return searchResults;
   }
 
   /**
-   * Store search results in cache
+   * Enhanced search results storage with analytics
    */
   async setSearchResults(
     query: string,
@@ -242,21 +305,350 @@ class ModCacheService {
 
     // Store in database cache
     try {
-      const modIds = results.map((mod) => mod.id);
-      await this.prisma.modCache.upsert({
-        where: { query: cacheKey },
+      if (this.dbAvailable) {
+        const modIds = results.map((mod) => mod.id);
+        const expiresAt = new Date(Date.now() + this.SEARCH_CACHE_TTL);
+
+        await this.prisma.modCache.upsert({
+          where: { query: cacheKey },
+          update: {
+            results: JSON.stringify(modIds),
+            totalCount,
+            expiresAt,
+            lastAccessed: new Date(),
+          },
+          create: {
+            query: cacheKey,
+            results: JSON.stringify(modIds),
+            totalCount,
+            expiresAt,
+            hitCount: 0,
+            lastAccessed: new Date(),
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Error storing search results in database:", error);
+    }
+  }
+
+  /**
+   * Perform database search with enhanced filtering
+   */
+  private async performDatabaseSearch(
+    query: string,
+    category?: string,
+    sortBy: string = "popularity",
+    sortOrder: string = "desc",
+    page: number = 1,
+    pageSize: number = 50
+  ): Promise<{ data: CurseForgeModData[]; totalCount: number }> {
+    try {
+      const skip = (page - 1) * pageSize;
+      
+      // Build where clause
+      const where: any = {
+        isAvailable: true,
+      };
+
+      if (query.trim()) {
+        where.OR = [
+          { name: { contains: query, mode: 'insensitive' } },
+          { summary: { contains: query, mode: 'insensitive' } },
+          { searchKeywords: { contains: query.toLowerCase(), mode: 'insensitive' } },
+        ];
+      }
+
+      if (category) {
+        where.categories = {
+          some: {
+            name: { contains: category, mode: 'insensitive' }
+          }
+        };
+      }
+
+      // Build order by clause
+      const orderBy: any = {};
+      switch (sortBy) {
+        case 'popularity':
+          orderBy.popularityScore = sortOrder;
+          break;
+        case 'downloads':
+          orderBy.downloadCount = sortOrder;
+          break;
+        case 'updated':
+          orderBy.lastUpdated = sortOrder;
+          break;
+        case 'name':
+        default:
+          orderBy.name = sortOrder;
+          break;
+      }
+
+      // Get total count
+      const totalCount = await this.prisma.mod.count({ where });
+
+      // Get mods
+      const mods = await this.prisma.mod.findMany({
+        where,
+        orderBy,
+        skip,
+        take: pageSize,
+        include: {
+          links: true,
+          categories: true,
+          authors: true,
+          logo: true,
+          screenshots: true,
+          latestFiles: {
+            include: {
+              hashes: true,
+              gameVersions: true,
+              sortableGameVersions: true,
+              dependencies: true,
+              modules: true,
+            },
+          },
+          latestFilesIndexes: true,
+        },
+      });
+
+      // Convert to CurseForge format
+      const curseForgeMods = mods.map(mod => this.convertDbToCurseForge(mod));
+
+      return {
+        data: curseForgeMods,
+        totalCount,
+      };
+    } catch (error) {
+      console.error("Error performing database search:", error);
+      return { data: [], totalCount: 0 };
+    }
+  }
+
+  /**
+   * Calculate popularity score for a mod
+   */
+  private calculatePopularityScore(mod: CurseForgeModData): number {
+    const downloadWeight = 0.6;
+    const thumbsUpWeight = 0.3;
+    const featuredWeight = 0.1;
+
+    const downloadScore = Math.log10(mod.downloadCount + 1) / 6; // Normalize to 0-1
+    const thumbsUpScore = Math.log10(mod.thumbsUpCount + 1) / 4; // Normalize to 0-1
+    const featuredScore = mod.isFeatured ? 1 : 0;
+
+    return (
+      downloadScore * downloadWeight +
+      thumbsUpScore * thumbsUpWeight +
+      featuredScore * featuredWeight
+    );
+  }
+
+  /**
+   * Generate search keywords for a mod
+   */
+  private generateSearchKeywords(mod: CurseForgeModData): string {
+    const keywords = [
+      mod.name.toLowerCase(),
+      mod.summary.toLowerCase(),
+      ...mod.categories.map(cat => cat.name.toLowerCase()),
+      ...mod.authors.map(author => author.name.toLowerCase()),
+    ];
+
+    // Remove common words and duplicates
+    const commonWords = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'];
+    const filteredKeywords = keywords
+      .join(' ')
+      .split(/\s+/)
+      .filter(word => word.length > 2 && !commonWords.includes(word))
+      .filter((word, index, arr) => arr.indexOf(word) === index);
+
+    return filteredKeywords.join(' ');
+  }
+
+  /**
+   * Update search analytics
+   */
+  private async updateSearchAnalytics(
+    searchTerm: string,
+    category: string | undefined,
+    resultCount: number
+  ): Promise<void> {
+    try {
+      if (!this.dbAvailable) return;
+
+      await this.prisma.modSearchAnalytics.upsert({
+        where: {
+          searchTerm_category: {
+            searchTerm,
+            category: category || null,
+          },
+        },
         update: {
-          results: JSON.stringify(modIds),
-          expiresAt: new Date(Date.now() + this.SEARCH_CACHE_TTL),
+          resultCount,
+          searchCount: { increment: 1 },
+          lastSearched: new Date(),
+          avgResultCount: {
+            set: this.prisma.raw(`
+              (avgResultCount * searchCount + ${resultCount}) / (searchCount + 1)
+            `),
+          },
         },
         create: {
-          query: cacheKey,
-          results: JSON.stringify(modIds),
-          expiresAt: new Date(Date.now() + this.SEARCH_CACHE_TTL),
+          searchTerm,
+          category: category || null,
+          resultCount,
+          searchCount: 1,
+          lastSearched: new Date(),
+          avgResultCount: resultCount,
         },
       });
     } catch (error) {
-      console.error("Error storing search results in database cache:", error);
+      console.error("Error updating search analytics:", error);
+    }
+  }
+
+  /**
+   * Update mod access analytics
+   */
+  private async updateModAccessAnalytics(modId: number): Promise<void> {
+    try {
+      if (!this.dbAvailable) return;
+
+      // Update last accessed time
+      await this.prisma.mod.update({
+        where: { id: modId },
+        data: { lastUpdated: new Date() },
+      });
+    } catch (error) {
+      console.error("Error updating mod access analytics:", error);
+    }
+  }
+
+  /**
+   * Update popular mods tracking
+   */
+  private async updatePopularModsTracking(mod: CurseForgeModData): Promise<void> {
+    try {
+      if (!this.dbAvailable) return;
+
+      const popularityScore = this.calculatePopularityScore(mod);
+
+      // Update for each category
+      for (const category of mod.categories) {
+        await this.prisma.popularMods.upsert({
+          where: {
+            category_modId: {
+              category: category.name,
+              modId: mod.id,
+            },
+          },
+          update: {
+            name: mod.name,
+            downloadCount: mod.downloadCount,
+            thumbsUpCount: mod.thumbsUpCount,
+            popularityScore,
+            lastUpdated: new Date(),
+          },
+          create: {
+            category: category.name,
+            modId: mod.id,
+            name: mod.name,
+            downloadCount: mod.downloadCount,
+            thumbsUpCount: mod.thumbsUpCount,
+            popularityScore,
+            rank: 0, // Will be calculated separately
+            lastUpdated: new Date(),
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Error updating popular mods tracking:", error);
+    }
+  }
+
+  /**
+   * Get popular mods by category
+   */
+  async getPopularMods(category: string, limit: number = 20): Promise<CurseForgeModData[]> {
+    try {
+      if (!this.dbAvailable) return [];
+
+      const popularMods = await this.prisma.popularMods.findMany({
+        where: { category },
+        orderBy: { popularityScore: 'desc' },
+        take: limit,
+      });
+
+      const modIds = popularMods.map(pm => pm.modId);
+      return await this.getModsByIds(modIds);
+    } catch (error) {
+      console.error("Error getting popular mods:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Clear expired cache entries
+   */
+  async clearExpiredCache(): Promise<void> {
+    try {
+      if (!this.dbAvailable) return;
+
+      const now = new Date();
+
+      // Clear expired mod cache entries
+      await this.prisma.modCache.deleteMany({
+        where: { expiresAt: { lt: now } },
+      });
+
+      // Clear old search analytics (older than 30 days)
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      await this.prisma.modSearchAnalytics.deleteMany({
+        where: { lastSearched: { lt: thirtyDaysAgo } },
+      });
+
+      // Clear memory cache
+      this.clearExpiredMemoryCache();
+    } catch (error) {
+      console.error("Error clearing expired cache:", error);
+    }
+  }
+
+  /**
+   * Clear expired memory cache entries
+   */
+  private clearExpiredMemoryCache(): void {
+    const now = Date.now();
+
+    // Clear expired mod cache
+    for (const [key, entry] of this.modCache.entries()) {
+      if (now > entry.expiresAt) {
+        this.modCache.delete(key);
+      }
+    }
+
+    // Clear expired search cache
+    for (const [key, entry] of this.searchCache.entries()) {
+      if (now > entry.expiresAt) {
+        this.searchCache.delete(key);
+      }
+    }
+
+    // Enforce size limits
+    if (this.modCache.size > this.MAX_CACHE_SIZE) {
+      const entries = Array.from(this.modCache.entries());
+      entries.sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
+      const toDelete = entries.slice(0, this.modCache.size - this.MAX_CACHE_SIZE);
+      toDelete.forEach(([key]) => this.modCache.delete(key));
+    }
+
+    if (this.searchCache.size > this.MAX_SEARCH_CACHE_SIZE) {
+      const entries = Array.from(this.searchCache.entries());
+      entries.sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
+      const toDelete = entries.slice(0, this.searchCache.size - this.MAX_SEARCH_CACHE_SIZE);
+      toDelete.forEach(([key]) => this.searchCache.delete(key));
     }
   }
 
@@ -274,39 +666,6 @@ class ModCacheService {
     }
 
     return results;
-  }
-
-  /**
-   * Clear expired cache entries
-   */
-  async clearExpiredCache(): Promise<void> {
-    const now = Date.now();
-
-    // Clear expired memory cache
-    for (const [key, entry] of this.modCache.entries()) {
-      if (now >= entry.expiresAt) {
-        this.modCache.delete(key);
-      }
-    }
-
-    for (const [key, entry] of this.searchCache.entries()) {
-      if (now >= entry.expiresAt) {
-        this.searchCache.delete(key);
-      }
-    }
-
-    // Clear expired database cache
-    try {
-      await this.prisma.modCache.deleteMany({
-        where: {
-          expiresAt: {
-            lt: new Date(),
-          },
-        },
-      });
-    } catch (error) {
-      console.error("Error clearing expired database cache:", error);
-    }
   }
 
   /**
@@ -339,6 +698,8 @@ class ModCacheService {
       data: mod,
       timestamp: Date.now(),
       expiresAt: Date.now() + this.MOD_CACHE_TTL,
+      hitCount: 0,
+      lastAccessed: Date.now(),
     });
   }
 
@@ -360,6 +721,8 @@ class ModCacheService {
       totalCount,
       timestamp: Date.now(),
       expiresAt: Date.now() + this.SEARCH_CACHE_TTL,
+      hitCount: 0,
+      lastAccessed: Date.now(),
     });
   }
 
@@ -580,6 +943,7 @@ class ModCacheService {
           where: { modId: mod.id },
           update: {
             logoId: mod.logo.id,
+            modId: mod.logo.modId,
             title: mod.logo.title,
             description: mod.logo.description,
             thumbnailUrl: mod.logo.thumbnailUrl,
@@ -588,6 +952,7 @@ class ModCacheService {
           create: {
             modId: mod.id,
             logoId: mod.logo.id,
+            modId: mod.logo.modId,
             title: mod.logo.title,
             description: mod.logo.description,
             thumbnailUrl: mod.logo.thumbnailUrl,

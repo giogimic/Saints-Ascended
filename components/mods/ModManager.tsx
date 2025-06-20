@@ -60,8 +60,9 @@ const MOD_CATEGORIES = [
   "Custom Cosmetics",
 ];
 
-// Installed mods cache key
+// Cache keys for persistent storage
 const getInstalledModsCacheKey = (serverId: string) => `installed_mods_${serverId}`;
+const getLaunchOptionsCacheKey = (serverId: string) => `launch_options_${serverId}`;
 
 const ModManager: React.FC<ModManagerProps> = ({
   serverId,
@@ -87,6 +88,33 @@ const ModManager: React.FC<ModManagerProps> = ({
   const [backgroundFetchStatus, setBackgroundFetchStatus] = useState<any>(null);
   const [installedModsSearchQuery, setInstalledModsSearchQuery] = useState(""); // For searching installed mods
 
+  // Save launch options to localStorage
+  const saveLaunchOptionsToCache = useCallback((options: string) => {
+    try {
+      const cacheKey = getLaunchOptionsCacheKey(serverId);
+      localStorage.setItem(cacheKey, options);
+      addConsoleInfo(`💾 Cached launch options: ${options || '(empty)'}`);
+    } catch (error) {
+      console.error("Failed to cache launch options:", error);
+    }
+  }, [serverId]);
+
+  // Load launch options from localStorage
+  const loadLaunchOptionsFromCache = useCallback(() => {
+    try {
+      const cacheKey = getLaunchOptionsCacheKey(serverId);
+      const cachedOptions = localStorage.getItem(cacheKey);
+      if (cachedOptions !== null) {
+        setLaunchOptions(cachedOptions);
+        addConsoleInfo(`💾 Loaded launch options from cache: ${cachedOptions || '(empty)'}`);
+        return cachedOptions;
+      }
+    } catch (error) {
+      console.error("Failed to load launch options from cache:", error);
+    }
+    return null;
+  }, [serverId]);
+
   // Generate launch options based on enabled mods
   const generateModLaunchOptions = useCallback((modsArray: ModInfo[]) => {
     const enabledMods = modsArray.filter(mod => mod.enabled);
@@ -108,9 +136,16 @@ const ModManager: React.FC<ModManagerProps> = ({
         const cachedMods = JSON.parse(cachedData);
         if (Array.isArray(cachedMods) && cachedMods.length > 0) {
           setMods(cachedMods);
-          // Generate initial launch options from cached mods
-          const initialLaunchOptions = generateModLaunchOptions(cachedMods);
-          setLaunchOptions(initialLaunchOptions);
+          
+          // Only generate launch options if none are cached
+          const cachedLaunchOptions = loadLaunchOptionsFromCache();
+          if (cachedLaunchOptions === null) {
+            // Generate initial launch options from cached mods only if no cached options exist
+            const initialLaunchOptions = generateModLaunchOptions(cachedMods);
+            setLaunchOptions(initialLaunchOptions);
+            saveLaunchOptionsToCache(initialLaunchOptions);
+          }
+          
           addConsoleInfo(`💾 Loaded ${cachedMods.length} installed mods from cache (instant)`);
           return cachedMods;
         }
@@ -119,7 +154,7 @@ const ModManager: React.FC<ModManagerProps> = ({
       console.error("Failed to load mods from cache:", error);
     }
     return null;
-  }, [serverId, generateModLaunchOptions]);
+  }, [serverId, generateModLaunchOptions, loadLaunchOptionsFromCache, saveLaunchOptionsToCache]);
 
   // Save installed mods to cache
   const saveInstalledModsToCache = useCallback((modsToCache: ModInfo[]) => {
@@ -134,7 +169,10 @@ const ModManager: React.FC<ModManagerProps> = ({
 
   // Load mods on component mount with instant cache loading
   useEffect(() => {
-    // Instantly load from cache first
+    // Load cached launch options first
+    loadLaunchOptionsFromCache();
+    
+    // Instantly load mods from cache
     const cachedMods = loadInstalledModsFromCache();
     
     // Then load fresh data in background
@@ -144,17 +182,19 @@ const ModManager: React.FC<ModManagerProps> = ({
     
     // Strategy 1: Pre-fetch popular categories for better UX
     modCacheClient.prefetchPopularCategories();
-  }, [serverId, loadInstalledModsFromCache]);
+  }, [serverId, loadInstalledModsFromCache, loadLaunchOptionsFromCache]);
 
   // Update launch options whenever mods change
   const updateLaunchOptions = useCallback(async (modsArray: ModInfo[]) => {
     const newLaunchOptions = generateModLaunchOptions(modsArray);
     
-    // Only update if different to prevent unnecessary API calls
+    // Only update if different to prevent unnecessary operations
     if (newLaunchOptions !== launchOptions) {
       setLaunchOptions(newLaunchOptions);
       
-      // Save to server
+      // Save to both localStorage cache and server
+      saveLaunchOptionsToCache(newLaunchOptions);
+      
       try {
         const response = await fetch(`/api/servers/${serverId}/mods/storage`, {
           method: 'POST',
@@ -171,7 +211,7 @@ const ModManager: React.FC<ModManagerProps> = ({
         addConsoleError(`❌ Failed to save launch options: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }
-  }, [launchOptions, serverId, generateModLaunchOptions]);
+  }, [launchOptions, serverId, generateModLaunchOptions, saveLaunchOptionsToCache]);
 
   // Load mods from API - Enhanced with caching and auto-launch options
   const loadMods = async () => {
@@ -280,7 +320,10 @@ const ModManager: React.FC<ModManagerProps> = ({
     const newValue = event.target.value;
     setLaunchOptions(newValue);
 
-    // Save launch options
+    // Save to both localStorage cache and server for persistence
+    saveLaunchOptionsToCache(newValue);
+
+    // Save launch options to server
     try {
       const response = await fetch(`/api/servers/${serverId}/mods/storage`, {
         method: 'POST',
@@ -289,12 +332,15 @@ const ModManager: React.FC<ModManagerProps> = ({
       });
       if (response.ok) {
         toast.success("Launch options saved!");
+        addConsoleSuccess(`🚀 Manually saved launch options: ${newValue || '(empty)'}`);
       } else {
         toast.error("Failed to save launch options");
+        addConsoleError("❌ Failed to save launch options to server");
       }
     } catch (error) {
       console.error("Failed to save launch options:", error);
       toast.error("Failed to save launch options");
+      addConsoleError(`❌ Failed to save launch options: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 

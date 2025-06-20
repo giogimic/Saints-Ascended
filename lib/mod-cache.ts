@@ -329,16 +329,16 @@ class ModCacheService {
 
       if (query.trim()) {
         where.OR = [
-          { name: { contains: query, mode: 'insensitive' } },
-          { summary: { contains: query, mode: 'insensitive' } },
-          { searchKeywords: { contains: query.toLowerCase(), mode: 'insensitive' } },
+          { name: { contains: query } },
+          { summary: { contains: query } },
+          { searchKeywords: { contains: query.toLowerCase() } },
         ];
       }
 
       if (category) {
         where.categories = {
           some: {
-            name: { contains: category, mode: 'insensitive' }
+            name: { contains: category }
           }
         };
       }
@@ -465,11 +465,7 @@ class ModCacheService {
           resultCount,
           searchCount: { increment: 1 },
           lastSearched: new Date(),
-          avgResultCount: {
-            set: (prisma as any).raw(`
-              (avgResultCount * searchCount + ${resultCount}) / (searchCount + 1)
-            `),
-          },
+          avgResultCount: resultCount,
         },
         create: {
           searchTerm,

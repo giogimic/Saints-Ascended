@@ -1,9 +1,7 @@
 // lib/unified-mod-manager.ts
-// Unified Mod Manager - Handles all mod operations with comprehensive auto-fetch logic
+// Unified Mod Manager - Client-safe version for browser use
 
 import { CurseForgeAPI } from "./curseforge-api";
-import { installedModsStorage, InstalledModMetadata } from "./installed-mods-storage";
-import { modCacheClient } from "./mod-cache-client";
 import { addConsoleInfo, addConsoleSuccess, addConsoleWarning, addConsoleError } from "@/components/ui/Layout";
 
 export interface UnifiedModData {
@@ -41,7 +39,7 @@ class UnifiedModManager {
   private readonly individualModCache = new Map<string, { data: UnifiedModData; timestamp: number }>();
 
   /**
-   * Comprehensive mod data fetching: Cache → DB → CurseForge API → Store
+   * Comprehensive mod data fetching: Cache → API → Store
    */
   async fetchModData(modId: string, forceRefresh: boolean = false): Promise<UnifiedModData | null> {
     const cacheKey = `mod_${modId}`;
@@ -56,16 +54,7 @@ class UnifiedModManager {
         }
       }
 
-      // Step 2: Check installed mods storage (DB/JSON)
-      const installedMod = await installedModsStorage.getMod(modId);
-      if (installedMod) {
-        const unifiedData = this.convertToUnifiedData(installedMod);
-        this.individualModCache.set(cacheKey, { data: unifiedData, timestamp: Date.now() });
-        addConsoleInfo(`📦 Found mod ${modId} in installed storage`);
-        return unifiedData;
-      }
-
-      // Step 3: Fetch from CurseForge API
+      // Step 2: Fetch from CurseForge API
       addConsoleInfo(`🌐 Fetching mod ${modId} from CurseForge API`);
       const curseForgeData = await CurseForgeAPI.getModDetails(parseInt(modId, 10));
       
@@ -73,13 +62,10 @@ class UnifiedModManager {
         // Convert and store the data
         const unifiedData = this.convertFromCurseForgeData(curseForgeData);
         
-        // Store in installed mods storage for future use
-        await this.storeModData(unifiedData);
-        
         // Cache the result
         this.individualModCache.set(cacheKey, { data: unifiedData, timestamp: Date.now() });
         
-        addConsoleSuccess(`✅ Successfully fetched and stored mod ${modId}: ${curseForgeData.name}`);
+        addConsoleSuccess(`✅ Successfully fetched mod ${modId}: ${curseForgeData.name}`);
         return unifiedData;
       }
 
@@ -198,39 +184,27 @@ class UnifiedModManager {
     try {
       // Get current mod data
       const modData = await this.fetchModData(modId);
-      if (!modData) {
-        return {
-          success: false,
-          message: `Mod ${modId} not found`,
-          error: 'Mod not found'
-        };
-      }
+      const modName = modData?.name || `Mod ${modId}`;
 
-      // Update on server
+      // Update mod status via API
       const response = await fetch(`/api/servers/${serverId}/mods`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          modId, 
-          enabled 
+        body: JSON.stringify({
+          updates: [{
+            id: modId,
+            isEnabled: enabled,
+            loadOrder: modData?.loadOrder || 1
+          }]
         })
       });
 
       if (response.ok) {
-        // Update cached data
-        const updatedModData = { ...modData, enabled };
-        this.individualModCache.set(`mod_${modId}`, { 
-          data: updatedModData, 
-          timestamp: Date.now() 
-        });
-
-        const action = enabled ? 'enabled' : 'disabled';
-        addConsoleInfo(`🔄 ${action.charAt(0).toUpperCase() + action.slice(1)} mod: ${modData.name}`);
-        
+        addConsoleSuccess(`✅ Successfully ${enabled ? 'enabled' : 'disabled'} mod: ${modName} (ID: ${modId})`);
         return {
           success: true,
-          message: `${modData.name} ${action}`,
-          mod: updatedModData
+          message: `${enabled ? 'Enabled' : 'Disabled'} ${modName}`,
+          mod: modData || undefined
         };
       } else {
         const errorText = await response.text();
@@ -254,7 +228,7 @@ class UnifiedModManager {
   }
 
   /**
-   * Bulk add mods with comprehensive data fetching
+   * Bulk add mods with progress tracking
    */
   async bulkAddMods(modIds: string[], serverId: string): Promise<{
     successCount: number;
@@ -265,58 +239,48 @@ class UnifiedModManager {
     let successCount = 0;
     let errorCount = 0;
 
-    addConsoleInfo(`🔄 Starting bulk add of ${modIds.length} mods`);
+    addConsoleInfo(`🚀 Starting bulk add of ${modIds.length} mods...`);
 
     for (const modId of modIds) {
-      const result = await this.addMod(modId, serverId);
-      results.push(result);
-      
-      if (result.success) {
-        successCount++;
-      } else {
+      try {
+        const result = await this.addMod(modId, serverId);
+        results.push(result);
+        
+        if (result.success) {
+          successCount++;
+        } else {
+          errorCount++;
+        }
+      } catch (error) {
         errorCount++;
+        results.push({
+          success: false,
+          message: `Error adding mod ${modId}`,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
       }
     }
 
-    addConsoleInfo(`🎉 Bulk add completed: ${successCount} success, ${errorCount} failed`);
-    
-    return {
-      successCount,
-      errorCount,
-      results
-    };
+    addConsoleSuccess(`✅ Bulk add completed: ${successCount} successful, ${errorCount} failed`);
+    return { successCount, errorCount, results };
   }
 
   /**
-   * Get all mods for a server with comprehensive data
+   * Get all mods for a server via API
    */
   async getServerMods(serverId: string): Promise<UnifiedModData[]> {
     try {
       const response = await fetch(`/api/servers/${serverId}/mods`);
       
-      if (!response.ok) {
-        throw new Error(`Failed to fetch server mods: ${response.statusText}`);
+      if (response.ok) {
+        const mods = await response.json();
+        return Array.isArray(mods) ? mods.map(mod => this.convertToUnifiedData(mod)) : [];
+      } else {
+        addConsoleWarning(`⚠️ Failed to load server mods: ${response.statusText}`);
+        return [];
       }
-
-      const mods = await response.json();
-      
-      // Enhance mods with comprehensive data
-      const enhancedMods: UnifiedModData[] = [];
-      
-      for (const mod of mods) {
-        const enhancedMod = await this.fetchModData(mod.id);
-        if (enhancedMod) {
-          enhancedMods.push(enhancedMod);
-        } else {
-          // Fallback to basic mod data if fetch fails
-          enhancedMods.push(this.convertToUnifiedData(mod));
-        }
-      }
-
-      return enhancedMods;
-
     } catch (error) {
-      addConsoleError(`❌ Error fetching server mods: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      addConsoleError(`❌ Error loading server mods: ${error instanceof Error ? error.message : 'Unknown error'}`);
       return [];
     }
   }
@@ -335,7 +299,7 @@ class UnifiedModManager {
   }
 
   /**
-   * Clear cache for a specific mod or all mods
+   * Clear cache for specific mod or all mods
    */
   clearCache(modId?: string): void {
     if (modId) {
@@ -357,81 +321,58 @@ class UnifiedModManager {
     };
   }
 
-  // Private helper methods
-
-  private convertToUnifiedData(installedMod: InstalledModMetadata): UnifiedModData {
+  /**
+   * Convert server mod data to unified format
+   */
+  private convertToUnifiedData(mod: any): UnifiedModData {
     return {
-      id: installedMod.id,
-      name: installedMod.name,
-      description: installedMod.summary || "No description available",
-      version: installedMod.version || "Unknown",
-      workshopId: installedMod.id,
-      enabled: installedMod.isEnabled,
-      loadOrder: installedMod.loadOrder,
-      dependencies: [],
-      incompatibilities: [],
-      size: installedMod.fileSize,
-      lastUpdated: installedMod.lastUpdated,
-      downloadCount: installedMod.downloadCount,
-      thumbsUpCount: installedMod.thumbsUpCount,
-      logoUrl: installedMod.logoUrl,
-      author: installedMod.author,
-      category: installedMod.category,
-      tags: installedMod.tags,
-      websiteUrl: installedMod.websiteUrl,
-      fileSize: installedMod.fileSize
+      id: mod.id,
+      name: mod.name || `Mod ${mod.id}`,
+      description: mod.description || mod.summary || '',
+      version: mod.version || '1.0.0',
+      workshopId: mod.workshopId || mod.id,
+      enabled: mod.enabled || mod.isEnabled || false,
+      loadOrder: mod.loadOrder || 1,
+      dependencies: mod.dependencies || [],
+      incompatibilities: mod.incompatibilities || [],
+      size: mod.size || mod.fileSize,
+      lastUpdated: new Date(mod.lastUpdated || Date.now()),
+      downloadCount: mod.downloadCount,
+      thumbsUpCount: mod.thumbsUpCount,
+      logoUrl: mod.logoUrl,
+      author: mod.author,
+      category: mod.category,
+      tags: mod.tags || [],
+      websiteUrl: mod.websiteUrl,
+      fileSize: mod.fileSize
     };
   }
 
+  /**
+   * Convert CurseForge data to unified format
+   */
   private convertFromCurseForgeData(curseForgeData: any): UnifiedModData {
     return {
       id: curseForgeData.id.toString(),
       name: curseForgeData.name,
-      description: curseForgeData.summary || "No description available",
-      version: "Latest",
+      description: curseForgeData.summary || '',
+      version: curseForgeData.latestFiles?.[0]?.displayName || '1.0.0',
       workshopId: curseForgeData.id.toString(),
-      enabled: true,
-      loadOrder: 0, // Will be set by the server
+      enabled: true, // Default to enabled when adding
+      loadOrder: 1, // Default load order
       dependencies: [],
       incompatibilities: [],
-      size: curseForgeData.downloadCount,
+      size: curseForgeData.latestFiles?.[0]?.fileLength,
       lastUpdated: new Date(curseForgeData.dateModified),
       downloadCount: curseForgeData.downloadCount,
       thumbsUpCount: curseForgeData.thumbsUpCount,
-      logoUrl: curseForgeData.logo?.thumbnailUrl,
+      logoUrl: curseForgeData.logo?.url,
       author: curseForgeData.authors?.[0]?.name,
       category: curseForgeData.categories?.[0]?.name,
       tags: curseForgeData.categories?.map((cat: any) => cat.name) || [],
       websiteUrl: curseForgeData.links?.websiteUrl,
       fileSize: curseForgeData.latestFiles?.[0]?.fileLength
     };
-  }
-
-  private async storeModData(modData: UnifiedModData): Promise<void> {
-    try {
-      const installedModData: InstalledModMetadata = {
-        id: modData.id,
-        name: modData.name,
-        summary: modData.description,
-        downloadCount: modData.downloadCount,
-        thumbsUpCount: modData.thumbsUpCount,
-        logoUrl: modData.logoUrl,
-        author: modData.author,
-        lastUpdated: modData.lastUpdated,
-        installedAt: new Date(),
-        version: modData.version,
-        fileSize: modData.fileSize,
-        category: modData.category,
-        tags: modData.tags,
-        websiteUrl: modData.websiteUrl,
-        isEnabled: modData.enabled,
-        loadOrder: modData.loadOrder
-      };
-
-      await installedModsStorage.saveMod(installedModData);
-    } catch (error) {
-      addConsoleWarning(`⚠️ Failed to store mod data for ${modData.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
   }
 }
 

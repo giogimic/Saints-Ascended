@@ -103,9 +103,12 @@ export function generateLaunchArgs(launchOptions: LaunchOptionsConfig): string[]
   // Add enabled launch options as flags
   Object.entries(launchOptions).forEach(([key, value]) => {
     if (key === 'mods') {
-      // Handle mods separately
+      // Handle mods separately - only add if there are enabled mods
       if (Array.isArray(value) && value.length > 0) {
-        args.push(`-mods=${value.join(',')}`);
+        const enabledModIds = value.filter(id => id && id.toString().trim() !== '');
+        if (enabledModIds.length > 0) {
+          args.push(`-mods=${enabledModIds.join(',')}`);
+        }
       }
     } else if (key === 'clusterID' && launchOptions.clusterEnabled && value) {
       // Handle cluster ID when cluster is enabled
@@ -119,6 +122,58 @@ export function generateLaunchArgs(launchOptions: LaunchOptionsConfig): string[]
     }
   });
   
+  return args;
+}
+
+/**
+ * Merge launch options from multiple sources
+ * Priority: modLaunchOptionsString > booleanLaunchOptions.mods
+ */
+export function mergeLaunchOptions(
+  booleanLaunchOptions: LaunchOptionsConfig,
+  modLaunchOptionsString: string
+): string[] {
+  const booleanArgs = generateLaunchArgs(booleanLaunchOptions);
+  
+  // If we have a mod launch options string, parse it and use those mods
+  if (modLaunchOptionsString && modLaunchOptionsString.trim()) {
+    const modArgs = parseModLaunchOptionsString(modLaunchOptionsString);
+    
+    // Remove any -mods= from boolean args if we have mod args
+    const filteredBooleanArgs = booleanArgs.filter(arg => !arg.startsWith('-mods='));
+    
+    return [...filteredBooleanArgs, ...modArgs];
+  }
+  
+  // Otherwise use the boolean launch options as-is
+  return booleanArgs;
+}
+
+/**
+ * Parse mod launch options string into individual arguments
+ * Handles formats like:
+ * - "-mods=123,456,789"
+ * - "-mods=123,456,789 -other-param"
+ * - "-mods=123,456,789 -USEALLAVAILABLECORES"
+ */
+function parseModLaunchOptionsString(launchOptionsString: string): string[] {
+  if (!launchOptionsString || !launchOptionsString.trim()) {
+    return [];
+  }
+
+  const args: string[] = [];
+  const trimmedString = launchOptionsString.trim();
+
+  // Split by spaces to get individual arguments
+  const parts = trimmedString.split(/\s+/);
+
+  for (const part of parts) {
+    const trimmedPart = part.trim();
+    if (trimmedPart) {
+      args.push(trimmedPart);
+    }
+  }
+
   return args;
 }
 

@@ -4,11 +4,14 @@ import {
   findServerById,
   loadLaunchOptions,
   generateLaunchArgs,
+  mergeLaunchOptions,
 } from "@/lib/server-storage";
+import { serverSettingsStorage } from "@/lib/server-settings-storage";
 import { getGlobalSteamCmdPath } from "@/lib/global-settings";
 import { exec, spawn } from "child_process";
 import { promisify } from "util";
 import { join } from "path";
+import { existsSync } from "fs";
 import {
   withErrorHandler,
   withAllowedMethods,
@@ -60,13 +63,26 @@ async function startServer(serverId: string, res: NextApiResponse) {
       throw new NotFoundError(`Server not found: ${serverId}`);
     }
 
-    // Load persistent launch options
-    const launchOptions = await loadLaunchOptions(serverId);
+    // Validate server executable path
+    if (!server.executablePath || !existsSync(server.executablePath)) {
+      throw new ValidationError(`Server executable not found: ${server.executablePath}`);
+    }
 
-    // Generate launch arguments
-    const launchArgs = generateLaunchArgs(launchOptions);
+    // Validate server directory
+    if (!server.serverDirectory || !existsSync(server.serverDirectory)) {
+      throw new ValidationError(`Server directory not found: ${server.serverDirectory}`);
+    }
 
-    // Base server arguments
+    // Load persistent boolean launch options
+    const booleanLaunchOptions = await loadLaunchOptions(serverId);
+
+    // Load mod launch options string from server settings
+    const modLaunchOptionsString = await serverSettingsStorage.getSetting(serverId, 'launchOptions') || '';
+
+    // Merge all launch options (boolean options + mod options string)
+    const allLaunchArgs = mergeLaunchOptions(booleanLaunchOptions, modLaunchOptionsString);
+
+    // Base server arguments (map and query parameters)
     const baseArgs = [
       server.map,
       `?listen`,
@@ -83,8 +99,23 @@ async function startServer(serverId: string, res: NextApiResponse) {
       baseArgs.push(`?ServerPassword=${server.serverPassword}`);
     }
 
-    // Combine base args with launch options
-    const allArgs = [...baseArgs, ...launchArgs];
+    // Add common ARK server parameters for better performance and functionality
+    const commonArgs = [
+      `-ForceAllowCaveFlyers`,
+      `-EnableIdlePlayerKick`,
+      `-NoTransferFromFiltering`,
+      `-servergamelog`,
+      `-servergamelogincludetribelogs`,
+      `-ServerRCONOutputTribeLogs`,
+      `-NotifyAdminCommandsInChat`,
+      `-nosteamclient`,
+      `-game`,
+      `-server`,
+      `-log`
+    ];
+
+    // Combine all arguments: base + common + merged launch options
+    const allArgs = [...baseArgs, ...commonArgs, ...allLaunchArgs];
 
     console.log(`Starting server ${serverId} with args:`, allArgs);
 
@@ -105,6 +136,12 @@ async function startServer(serverId: string, res: NextApiResponse) {
         serverId,
         launchArgs: allArgs,
         pid: serverProcess.pid,
+        booleanOptions: generateLaunchArgs(booleanLaunchOptions),
+        modOptions: modLaunchOptionsString,
+        mergedOptions: allLaunchArgs,
+        commonArgs: commonArgs,
+        executablePath: server.executablePath,
+        serverDirectory: server.serverDirectory,
       },
     });
   } catch (error) {

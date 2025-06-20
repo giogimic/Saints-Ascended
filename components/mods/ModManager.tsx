@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/Layout";
 import { useModal } from "@/context/ModalContext";
 import { ErrorHandler } from "@/lib/error-handler";
+import { unifiedModManager, UnifiedModData } from "@/lib/unified-mod-manager";
 
 interface ModManagerProps {
   serverId: string;
@@ -232,39 +233,53 @@ const ModManager: React.FC<ModManagerProps> = ({
     loadBackgroundFetchStatus();
   }, [serverId]);
 
-  // Load mods from API - Enhanced with caching and auto-launch options
+  // Load mods with unified manager for comprehensive data
   const loadMods = async (cachedMods: ModInfo[] = []) => {
-    setIsLoadingMods(true);
     try {
-      const response = await fetch(`/api/servers/${serverId}/mods`);
-      if (response.ok) {
-      const data = await response.json();
-        // Handle both direct array response and object with mods property
-        const modsArray = Array.isArray(data) ? data : (data.mods || []);
-        
-        // Only update state if data has changed (prevent unnecessary re-renders)
-        const currentModsString = JSON.stringify(cachedMods);
-        const newModsString = JSON.stringify(modsArray);
-        
-        if (currentModsString !== newModsString) {
-        setMods(modsArray);
-          saveInstalledModsToCache(modsArray); // Cache the fresh data
-          updateLaunchOptions(modsArray); // Auto-update launch options
-          addConsoleInfo(`🔄 Refreshed ${modsArray.length} installed mods from server`);
-          
-        if (onModsUpdate) {
-          onModsUpdate(modsArray);
-          }
-        } else {
-          addConsoleInfo(`✅ Installed mods are up to date (${modsArray.length} mods)`);
-        }
+      // Use unified mod manager to get comprehensive mod data with auto-fetch
+      const enhancedMods = await unifiedModManager.getServerMods(serverId);
+      
+      // Convert UnifiedModData to ModInfo for compatibility
+      const convertedMods: ModInfo[] = enhancedMods.map(mod => ({
+        id: mod.id,
+        name: mod.name,
+        description: mod.description,
+        version: mod.version,
+        workshopId: mod.workshopId,
+        enabled: mod.enabled,
+        loadOrder: mod.loadOrder,
+        dependencies: mod.dependencies,
+        incompatibilities: mod.incompatibilities,
+        size: mod.size,
+        lastUpdated: mod.lastUpdated
+      }));
+
+      setMods(convertedMods);
+      saveInstalledModsToCache(convertedMods);
+      
+      // Update launch options with comprehensive data
+      const launchOptions = unifiedModManager.generateLaunchOptions(enhancedMods);
+      setLaunchOptions(launchOptions);
+      saveLaunchOptionsToCache(launchOptions);
+      
+      addConsoleInfo(`🔄 Refreshed ${convertedMods.length} installed mods with comprehensive data`);
+      
+      if (onModsUpdate) {
+        onModsUpdate(convertedMods);
       }
+      
+      return convertedMods;
     } catch (error) {
       console.error("Failed to load mods:", error);
-      toast.error("Failed to load mods");
-      addConsoleError(`❌ Failed to load installed mods: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setIsLoadingMods(false);
+      addConsoleError(`❌ Failed to load mods: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+      // Fallback to cached mods if available
+      if (cachedMods.length > 0) {
+        setMods(cachedMods);
+        addConsoleWarning(`⚠️ Using cached mods as fallback`);
+      }
+      
+      return cachedMods;
     }
   };
 
@@ -350,7 +365,7 @@ const ModManager: React.FC<ModManagerProps> = ({
     }
   };
 
-  // Enhanced manual mod adding with bulk support
+  // Enhanced manual mod adding with unified manager
   const handleAddManualMod = async () => {
     if (!manualModId.trim()) {
       toast.error("Please enter mod ID(s)");
@@ -371,97 +386,22 @@ const ModManager: React.FC<ModManagerProps> = ({
     addConsoleInfo(`🔄 Adding ${modIds.length} mod(s): ${modIds.join(', ')}`);
 
     try {
-      let successCount = 0;
-      let errorCount = 0;
-
-      for (const modId of modIds) {
-        try {
-          // First try to fetch mod info from CurseForge
-          let modData: any = null;
-          try {
-            const searchResponse = await fetch(`/api/curseforge/search?query=${modId}&pageSize=1`);
-            if (searchResponse.ok) {
-              const searchData = await searchResponse.json();
-              if (searchData.data && searchData.data.length > 0) {
-                const foundMod = searchData.data.find((mod: any) => mod.id.toString() === modId);
-                if (foundMod) {
-                  modData = foundMod;
-                  addConsoleInfo(`✅ Found mod info for ID ${modId}: ${foundMod.name}`);
-                }
-              }
-            }
-          } catch (searchError) {
-            console.warn(`Failed to fetch mod info for ${modId}:`, searchError);
-            addConsoleWarning(`⚠️ Could not fetch mod info for ID ${modId}, using basic info`);
-          }
-
-          // Create mod object
-          const newMod = {
-            id: modId,
-            name: modData?.name || `Mod ${modId}`,
-            description: modData?.summary || "Manually added mod",
-            version: "Unknown",
-            workshopId: modId,
-        enabled: true,
-            loadOrder: mods.length + successCount,
-            dependencies: [],
-            incompatibilities: [],
-            size: modData?.downloadCount ? `${Math.floor(modData.downloadCount / 1000)}K downloads` : undefined,
-            lastUpdated: new Date()
-          };
-
-          // Add to server
-          const response = await fetch(`/api/servers/${serverId}/mods`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newMod)
-          });
-
-          if (response.ok) {
-            successCount++;
-            addConsoleInfo(`✅ Successfully added mod: ${newMod.name} (ID: ${modId})`);
-            // Fire-and-forget request to fetch full details in the background
-            fetch(`/api/servers/${serverId}/mods/fetch-details`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ modId }),
-            })
-            .then(res => {
-              if (res.ok) {
-                addConsoleInfo(`[BG] Fetched details for mod ${modId}`);
-              } else {
-                addConsoleWarning(`[BG] Failed to fetch details for mod ${modId}`);
-              }
-            })
-            .catch(err => {
-              addConsoleError(`[BG] Error fetching details for mod ${modId}: ${err.message}`);
-            });
-          } else {
-            errorCount++;
-            const errorText = await response.text();
-            console.error(`Failed to add mod ${modId}:`, errorText);
-            addConsoleError(`❌ Failed to add mod ID ${modId}: ${errorText}`);
-          }
-        } catch (error) {
-          errorCount++;
-          console.error(`Error adding mod ${modId}:`, error);
-          addConsoleError(`❌ Error adding mod ID ${modId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-      }
-
-      // Reload mods and show results
+      // Use unified mod manager for bulk operations with comprehensive data fetching
+      const result = await unifiedModManager.bulkAddMods(modIds, serverId);
+      
+      // Reload mods to get updated list
       await loadMods();
       
-      if (successCount > 0) {
-        toast.success(`Successfully added ${successCount} mod${successCount > 1 ? 's' : ''}`);
-        addConsoleInfo(`🎉 Bulk add completed: ${successCount} success, ${errorCount} failed`);
+      if (result.successCount > 0) {
+        toast.success(`Successfully added ${result.successCount} mod${result.successCount > 1 ? 's' : ''}`);
+        addConsoleSuccess(`🎉 Bulk add completed: ${result.successCount} success, ${result.errorCount} failed`);
       }
-      if (errorCount > 0) {
-        toast.error(`Failed to add ${errorCount} mod${errorCount > 1 ? 's' : ''}`);
+      if (result.errorCount > 0) {
+        toast.error(`Failed to add ${result.errorCount} mod${result.errorCount > 1 ? 's' : ''}`);
       }
 
       // Reset form and close modal
-    setManualModId("");
+      setManualModId("");
       setShowAddModModal(false);
       
     } catch (error) {
@@ -529,51 +469,28 @@ const ModManager: React.FC<ModManagerProps> = ({
     }
   };
 
-  // Add mod with instant cache update and launch options update
+  // Add mod with unified manager and comprehensive data fetching
   const addMod = async (modData: CurseForgeModData) => {
     try {
-      const newMod: ModInfo = {
-        id: modData.id.toString(),
-        name: modData.name,
-        description: modData.summary,
-        version: "Latest",
-        workshopId: modData.id.toString(),
-        enabled: true,
-        loadOrder: mods.length,
-        dependencies: [],
-        incompatibilities: [],
-        size: modData.downloadCount || undefined, // Keep as number for ModInfo type
-        lastUpdated: new Date(modData.dateModified)
-      };
-
-      // Optimistically update UI and cache first
-      const updatedMods = [...mods, newMod];
-      setMods(updatedMods);
-      saveInstalledModsToCache(updatedMods);
-      updateLaunchOptions(updatedMods); // Auto-update launch options
-
-      const response = await fetch(`/api/servers/${serverId}/mods`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newMod)
-      });
-
-      if (response.ok) {
+      // Use unified mod manager for comprehensive data fetching and storage
+      const result = await unifiedModManager.addMod(modData.id.toString(), serverId);
+      
+      if (result.success) {
         toast.success(`Added ${modData.name}`);
         addConsoleSuccess(`✅ Added mod: ${modData.name} (ID: ${modData.id})`);
         
         // Close search modal after successful add
         setShowSearchModal(false);
         
+        // Reload mods to get updated list with comprehensive data
+        await loadMods();
+        
         if (onModsUpdate) {
+          const updatedMods = await unifiedModManager.getServerMods(serverId);
           onModsUpdate(updatedMods);
         }
       } else {
-        // Revert optimistic update on failure
-        setMods(mods);
-        saveInstalledModsToCache(mods);
-        updateLaunchOptions(mods);
-        throw new Error('Failed to add mod to server');
+        throw new Error(result.error || 'Failed to add mod');
       }
     } catch (error) {
       console.error("Failed to add mod:", error);
@@ -692,87 +609,65 @@ const ModManager: React.FC<ModManagerProps> = ({
     }));
   };
 
-  // Remove mod with cache and launch options update
+  // Remove mod with unified manager and proper cleanup
   const removeMod = async (modId: string) => {
-    const modToRemove = mods.find(m => m.id === modId);
-    if (!modToRemove) return;
-
     try {
-      // Optimistically update UI first
-      const updatedMods = mods.filter(m => m.id !== modId);
-      setMods(updatedMods);
-      saveInstalledModsToCache(updatedMods);
-      updateLaunchOptions(updatedMods); // Auto-update launch options
-
-      const response = await fetch(`/api/servers/${serverId}/mods`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ modId })
-      });
-
-      if (response.ok) {
-        toast.success(`Removed ${modToRemove.name}`);
-        addConsoleSuccess(`✅ Removed mod: ${modToRemove.name} (ID: ${modId})`);
-        
-        if (onModsUpdate) {
-          onModsUpdate(updatedMods);
-        }
-        } else {
-        // Revert optimistic update on failure
-        setMods(mods);
-        saveInstalledModsToCache(mods);
-        updateLaunchOptions(mods);
-        throw new Error('Failed to remove mod from server');
-      }
-    } catch (error) {
-      console.error("Failed to remove mod:", error);
-      toast.error(`Failed to remove ${modToRemove.name}`);
-      addConsoleError(`❌ Failed to remove mod ${modToRemove.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  };
-
-  // Toggle mod enabled/disabled with cache and launch options update
-  const toggleMod = async (modId: string) => {
-    const mod = mods.find(m => m.id === modId);
-    if (!mod) return;
-
-    try {
-      // Optimistically update UI first
-      const updatedMods = mods.map(m => 
-        m.id === modId ? { ...m, enabled: !m.enabled } : m
-      );
-      setMods(updatedMods);
-      saveInstalledModsToCache(updatedMods);
-      updateLaunchOptions(updatedMods); // Auto-update launch options
+      // Use unified mod manager for removal with proper cleanup
+      const result = await unifiedModManager.removeMod(modId, serverId);
       
-      const response = await fetch(`/api/servers/${serverId}/mods`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          modId, 
-          enabled: !mod.enabled 
-        })
-      });
-
-      if (response.ok) {
-        const action = !mod.enabled ? 'enabled' : 'disabled';
-        toast.success(`${mod.name} ${action}`);
-        addConsoleInfo(`🔄 ${action.charAt(0).toUpperCase() + action.slice(1)} mod: ${mod.name}`);
+      if (result.success) {
+        toast.success(`Removed ${result.mod?.name || `Mod ${modId}`}`);
+        addConsoleSuccess(`✅ Removed mod: ${result.mod?.name || `Mod ${modId}`} (ID: ${modId})`);
+        
+        // Reload mods to get updated list
+        await loadMods();
         
         if (onModsUpdate) {
+          const updatedMods = await unifiedModManager.getServerMods(serverId);
           onModsUpdate(updatedMods);
         }
       } else {
-        // Revert optimistic update on failure
-        setMods(mods);
-        saveInstalledModsToCache(mods);
-        updateLaunchOptions(mods);
-        throw new Error('Failed to toggle mod on server');
+        throw new Error(result.error || 'Failed to remove mod');
+      }
+    } catch (error) {
+      console.error("Failed to remove mod:", error);
+      toast.error(`Failed to remove mod ${modId}`);
+      addConsoleError(`❌ Failed to remove mod ${modId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  // Toggle mod enabled/disabled with unified manager
+  const toggleMod = async (modId: string) => {
+    try {
+      // Find current mod to get current state
+      const currentMod = mods.find(m => m.id === modId);
+      if (!currentMod) {
+        toast.error(`Mod ${modId} not found`);
+        return;
+      }
+
+      // Use unified mod manager for toggle with proper state management
+      const result = await unifiedModManager.toggleMod(modId, serverId, !currentMod.enabled);
+      
+      if (result.success) {
+        const action = !currentMod.enabled ? 'enabled' : 'disabled';
+        toast.success(`${currentMod.name} ${action}`);
+        addConsoleInfo(`🔄 ${action.charAt(0).toUpperCase() + action.slice(1)} mod: ${currentMod.name}`);
+        
+        // Reload mods to get updated list
+        await loadMods();
+        
+        if (onModsUpdate) {
+          const updatedMods = await unifiedModManager.getServerMods(serverId);
+          onModsUpdate(updatedMods);
+        }
+      } else {
+        throw new Error(result.error || 'Failed to toggle mod');
       }
     } catch (error) {
       console.error("Failed to toggle mod:", error);
-      toast.error(`Failed to toggle ${mod.name}`);
-      addConsoleError(`❌ Failed to toggle mod ${mod.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`Failed to toggle mod ${modId}`);
+      addConsoleError(`❌ Failed to toggle mod ${modId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 

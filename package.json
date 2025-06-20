@@ -5,7 +5,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma migrate deploy && next build",
+    "build": "prisma generate && next build",
+    "build:with-db": "prisma generate && prisma migrate deploy && next build",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest",
@@ -14,6 +15,7 @@
     "verify:api": "node scripts/verify-api-key.js",
     "type-check": "tsc --noEmit",
     "verify": "node scripts/verify-installation.js",
+    "setup": "node scripts/setup-env.js",
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",
     "db:push": "npx cross-env DATABASE_URL=\"file:./prisma/data/mods.db\" prisma db push",

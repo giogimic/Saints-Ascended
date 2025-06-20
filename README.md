@@ -40,6 +40,62 @@ Saints Ascended is a comprehensive server management tool designed specifically 
    - Open your browser to `http://localhost:3000`
    - Begin managing your ARK servers!
 
+### Server Deployment
+
+For production server deployment, use one of these methods:
+
+#### **Option 1: Automated Deployment (Recommended)**
+```bash
+# On Linux/Mac
+chmod +x scripts/deploy.sh
+./scripts/deploy.sh
+
+# On Windows
+scripts\deploy.bat
+```
+
+#### **Option 2: Manual Deployment**
+```bash
+# 1. Set environment variables
+export DATABASE_URL="file:./prisma/data/mods.db"
+
+# 2. Install dependencies
+npm install
+
+# 3. Generate Prisma client
+npx prisma generate
+
+# 4. Build the application
+npm run build
+
+# 5. Set up database
+npx prisma db push
+
+# 6. Start the application
+npm start
+```
+
+#### **Option 3: Using Bun (Faster)**
+```bash
+# 1. Set environment variables
+set DATABASE_URL=file:./prisma/data/mods.db
+
+# 2. Install dependencies
+bun install
+
+# 3. Generate Prisma client
+bun prisma generate
+
+# 4. Build the application
+bun run build
+
+# 5. Set up database
+bun prisma db push
+
+# 6. Start the application
+bun start
+```
+
 ### For Players
 
 Saints Ascended is primarily designed for server administrators, but players can also use it to:

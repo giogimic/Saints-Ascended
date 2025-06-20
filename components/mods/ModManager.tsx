@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { ModInfo } from "../../types/server";
+import { CurseForgeModData } from "../../types/curseforge";
 import {
   MagnifyingGlassIcon,
   PuzzlePieceIcon,
@@ -15,6 +16,7 @@ import { toast } from 'react-hot-toast';
 import { modCacheClient } from "@/lib/mod-cache-client";
 import { addConsoleError } from "@/components/ui/Layout";
 import { useModal } from "@/context/ModalContext";
+import { ErrorHandler } from "@/lib/error-handler";
 
 interface ModManagerProps {
   serverId: string;
@@ -22,29 +24,6 @@ interface ModManagerProps {
   searchQuery?: string;
   showAddModModal?: boolean;
   setShowAddModModal?: (show: boolean) => void;
-}
-
-interface CurseForgeModData {
-  id: number;
-  name: string;
-  summary: string;
-  logo?: {
-    url: string;
-  };
-  screenshots?: Array<{
-    url: string;
-  }>;
-  authors: Array<{
-      name: string;
-  }>;
-  downloadCount: number;
-  dateCreated: string;
-  dateModified: string;
-  gamePopularityRank?: number;
-  categories: Array<{
-    id: number;
-    name: string;
-  }>;
 }
 
 interface DisplayMod {
@@ -696,13 +675,211 @@ const ModManager: React.FC<ModManagerProps> = ({
     </div>
   );
 
-  const renderCategoryMods = (category: string) => {
-    // This function would fetch and display mods for a given category.
-    // For now, it's a placeholder.
+  // Category Mods Component - handles loading and displaying mods for a specific category
+  const CategoryModsDisplay: React.FC<{ category: string }> = ({ category }) => {
+    const [categoryMods, setCategoryMods] = useState<CurseForgeModData[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [cacheStatus, setCacheStatus] = useState<'cache' | 'api' | 'unknown'>('unknown');
+
+    // Load mods for the selected category using existing cache flow
+    useEffect(() => {
+      const loadCategoryMods = async () => {
+        if (category === 'Installed') return; // Skip for installed mods
+
+        setIsLoading(true);
+        setError(null);
+        
+        try {
+          // First try the optimized search endpoint (uses cache/db flow)
+          const response = await fetch(`/api/curseforge/search-optimized?category=${encodeURIComponent(category)}`);
+          
+          if (!response.ok) {
+            throw new Error(`Failed to fetch mods for ${category}: ${response.status} ${response.statusText}`);
+          }
+          
+          const data = await response.json();
+          
+          if (!data.success) {
+            throw new Error(data.error || `Failed to load ${category} mods`);
+          }
+          
+          setCategoryMods(data.data || []);
+          setCacheStatus(data.source === 'cache' ? 'cache' : 'api');
+          
+          // Log success to system console
+          addConsoleError(`✅ Loaded ${data.data?.length || 0} mods for category "${category}" from ${data.source || 'unknown source'}`);
+          
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : `Failed to load ${category} mods`;
+          setError(errorMessage);
+          setCategoryMods([]);
+          
+          // Enhanced error handling for system console
+          const errorDetails = {
+            category,
+            error: errorMessage,
+            timestamp: new Date().toISOString(),
+            userAction: `Loading ${category} mods`
+          };
+          
+          // Log to system console with context
+          addConsoleError(`❌ Mod Loading Error: ${errorMessage}`);
+          addConsoleError(`📍 Context: Category="${category}", Time=${errorDetails.timestamp}`);
+          
+          // Use the error handler for proper logging and categorization
+          ErrorHandler.handleError(err, {
+            component: 'ModManager',
+            action: 'loadCategoryMods',
+            timestamp: new Date()
+          }, false); // Don't show toast, we handle it in UI
+          
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      loadCategoryMods();
+    }, [category]);
+
+    // Loading state
+    if (isLoading) {
+      return (
+        <div className="text-center p-8 border-2 border-dashed border-matrix-500/30">
+          <div className="loading loading-spinner loading-lg text-matrix-500 mx-auto mb-4"></div>
+          <p className="text-matrix-600">Loading {category} mods...</p>
+          <p className="text-xs text-matrix-700">Checking cache and fetching fresh data</p>
+        </div>
+      );
+    }
+
+    // Error state
+    if (error) {
+      return (
+        <div className="text-center p-8 border-2 border-dashed border-red-500/30 bg-red-900/10">
+          <ExclamationTriangleIcon className="mx-auto h-10 w-10 text-red-500 mb-4" />
+          <h4 className="font-bold text-red-400 mb-2">Failed to Load {category} Mods</h4>
+          <p className="text-sm text-red-300 mb-4">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="btn-cyber-xs bg-red-600 hover:bg-red-500"
+          >
+            Retry
+          </button>
+          <div className="mt-4 text-xs text-matrix-700">
+            <p>💡 Try checking your CurseForge API key permissions</p>
+            <p>📊 Cache Status: {cacheStatus}</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Empty state
+    if (categoryMods.length === 0) {
+      return (
+        <div className="text-center p-8 border-2 border-dashed border-matrix-500/30">
+          <PuzzlePieceIcon className="mx-auto h-10 w-10 text-matrix-600 mb-4" />
+          <h4 className="font-bold text-matrix-500">No {category} Mods Found</h4>
+          <p className="text-sm text-matrix-600">No mods available in this category</p>
+          <div className="mt-4 text-xs text-matrix-700">
+            <p>📊 Source: {cacheStatus === 'cache' ? 'Cache' : 'Live API'}</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Success state - display mods
     return (
-      <div className="text-center p-8 border-2 border-dashed border-matrix-500/30">
-        <p className="text-matrix-600">Mods for category: <span className="text-matrix-400">{category}</span></p>
-        <p className="text-xs text-matrix-700">Display logic to be implemented.</p>
+      <div className="space-y-4">
+        {/* Category header with cache status */}
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-bold text-matrix-400">
+            {category} Mods ({categoryMods.length})
+          </h3>
+          <div className="text-xs text-matrix-600 flex items-center gap-2">
+            <span className={`px-2 py-1 rounded ${cacheStatus === 'cache' ? 'bg-green-900/30 text-green-400' : 'bg-blue-900/30 text-blue-400'}`}>
+              {cacheStatus === 'cache' ? '💾 Cached' : '🌐 Live'}
+            </span>
+          </div>
+        </div>
+
+        {/* Mod grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {categoryMods.map((mod) => (
+            <div
+              key={mod.id}
+              className="bg-cyber-bg/50 border border-matrix-500/20 p-4 hover:bg-matrix-900/50 transition-colors"
+            >
+              <div className="flex items-start gap-3">
+                {/* Mod logo */}
+                <div className="flex-shrink-0">
+                  {mod.logo?.thumbnailUrl ? (
+                    <img
+                      src={mod.logo.thumbnailUrl}
+                      alt={mod.name}
+                      className="w-12 h-12 rounded object-cover border border-matrix-500/30"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 bg-matrix-800/50 rounded flex items-center justify-center border border-matrix-500/30">
+                      <PuzzlePieceIcon className="h-6 w-6 text-matrix-600" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Mod info */}
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-bold text-matrix-400 text-sm truncate">
+                    {mod.name}
+                  </h4>
+                  <p className="text-xs text-matrix-600 line-clamp-2 mt-1">
+                    {mod.summary}
+                  </p>
+                  
+                  {/* Mod stats */}
+                  <div className="flex items-center gap-3 mt-2 text-xs text-matrix-700">
+                    <span>⬇️ {mod.downloadCount?.toLocaleString() || '0'}</span>
+                    {mod.thumbsUpCount && mod.thumbsUpCount > 0 && (
+                      <span>👍 {mod.thumbsUpCount.toLocaleString()}</span>
+                    )}
+                    {mod.dateModified && (
+                      <span>📅 {new Date(mod.dateModified).toLocaleDateString()}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={() => addMod(mod)}
+                  className="flex-1 bg-matrix-600 text-white px-3 py-1 text-xs hover:bg-matrix-500 transition-colors"
+                  title="Add Mod"
+                >
+                  <PlusIcon className="h-4 w-4 inline mr-1" />
+                  Add
+                </button>
+                {mod.links?.websiteUrl && (
+                  <button
+                    onClick={() => window.open(mod.links.websiteUrl, '_blank')}
+                    className="bg-matrix-800 text-matrix-400 px-3 py-1 text-xs hover:bg-matrix-700 transition-colors"
+                    title="View on CurseForge"
+                  >
+                    🔗
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Load more button (if needed) */}
+        {categoryMods.length >= 20 && (
+          <div className="text-center mt-6">
+            <button className="btn-cyber-xs">
+              Load More {category} Mods
+            </button>
+          </div>
+        )}
       </div>
     );
   };
@@ -795,7 +972,7 @@ const ModManager: React.FC<ModManagerProps> = ({
           <div className="md:col-span-3">
             {selectedCategory === 'Installed' 
               ? renderModList() 
-              : renderCategoryMods(selectedCategory)
+              : <CategoryModsDisplay category={selectedCategory} />
             }
           </div>
         </div>

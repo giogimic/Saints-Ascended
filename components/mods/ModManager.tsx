@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { ModInfo } from "../../types/server";
 import { CurseForgeModData } from "../../types/curseforge";
@@ -10,6 +10,8 @@ import {
   CheckIcon,
   XMarkIcon,
   ExclamationTriangleIcon,
+  ArrowDownTrayIcon,
+  EyeIcon,
 } from "@heroicons/react/24/outline";
 import { clsx } from "clsx";
 import { toast } from 'react-hot-toast';
@@ -53,6 +55,9 @@ const MOD_CATEGORIES = [
   "Custom Cosmetics",
 ];
 
+// Installed mods cache key
+const getInstalledModsCacheKey = (serverId: string) => `installed_mods_${serverId}`;
+
 const ModManager: React.FC<ModManagerProps> = ({
   serverId,
   onModsUpdate,
@@ -63,6 +68,7 @@ const ModManager: React.FC<ModManagerProps> = ({
   const { openModal } = useModal();
   // State management
   const [mods, setMods] = useState<ModInfo[]>([]);
+  const [isLoadingMods, setIsLoadingMods] = useState(false); // Track loading state for installed mods
   const [selectedCategory, setSelectedCategory] = useState("Installed");
   const [searchResults, setSearchResults] = useState<CurseForgeModData[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -76,32 +82,82 @@ const ModManager: React.FC<ModManagerProps> = ({
   const [backgroundFetchStatus, setBackgroundFetchStatus] = useState<any>(null);
   const [installedModsSearchQuery, setInstalledModsSearchQuery] = useState(""); // For searching installed mods
 
-  // Load mods on component mount
+  // Instant cache loading for installed mods
+  const loadInstalledModsFromCache = useCallback(() => {
+    try {
+      const cacheKey = getInstalledModsCacheKey(serverId);
+      const cachedData = localStorage.getItem(cacheKey);
+      if (cachedData) {
+        const cachedMods = JSON.parse(cachedData);
+        if (Array.isArray(cachedMods) && cachedMods.length > 0) {
+          setMods(cachedMods);
+          addConsoleError(`💾 Loaded ${cachedMods.length} installed mods from cache (instant)`);
+          return cachedMods;
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load mods from cache:", error);
+    }
+    return null;
+  }, [serverId]);
+
+  // Save installed mods to cache
+  const saveInstalledModsToCache = useCallback((modsToCache: ModInfo[]) => {
+    try {
+      const cacheKey = getInstalledModsCacheKey(serverId);
+      localStorage.setItem(cacheKey, JSON.stringify(modsToCache));
+      addConsoleError(`💾 Cached ${modsToCache.length} installed mods for instant loading`);
+    } catch (error) {
+      console.error("Failed to cache mods:", error);
+    }
+  }, [serverId]);
+
+  // Load mods on component mount with instant cache loading
   useEffect(() => {
+    // Instantly load from cache first
+    const cachedMods = loadInstalledModsFromCache();
+    
+    // Then load fresh data in background
     loadMods();
     loadLaunchOptions();
     loadBackgroundFetchStatus();
     
     // Strategy 1: Pre-fetch popular categories for better UX
     modCacheClient.prefetchPopularCategories();
-  }, [serverId]);
+  }, [serverId, loadInstalledModsFromCache]);
 
-  // Load mods from API - Fix: Handle both array and object responses
+  // Load mods from API - Enhanced with caching
   const loadMods = async () => {
+    setIsLoadingMods(true);
     try {
       const response = await fetch(`/api/servers/${serverId}/mods`);
       if (response.ok) {
-      const data = await response.json();
+        const data = await response.json();
         // Handle both direct array response and object with mods property
         const modsArray = Array.isArray(data) ? data : (data.mods || []);
-        setMods(modsArray);
-        if (onModsUpdate) {
-          onModsUpdate(modsArray);
+        
+        // Only update state if data has changed (prevent unnecessary re-renders)
+        const currentModsString = JSON.stringify(mods);
+        const newModsString = JSON.stringify(modsArray);
+        
+        if (currentModsString !== newModsString) {
+          setMods(modsArray);
+          saveInstalledModsToCache(modsArray); // Cache the fresh data
+          addConsoleError(`🔄 Refreshed ${modsArray.length} installed mods from server`);
+          
+          if (onModsUpdate) {
+            onModsUpdate(modsArray);
+          }
+        } else {
+          addConsoleError(`✅ Installed mods are up to date (${modsArray.length} mods)`);
         }
       }
     } catch (error) {
       console.error("Failed to load mods:", error);
       toast.error("Failed to load mods");
+      addConsoleError(`❌ Failed to load installed mods: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsLoadingMods(false);
     }
   };
 
@@ -201,16 +257,18 @@ const ModManager: React.FC<ModManagerProps> = ({
       return;
     }
 
-    // Parse multiple mod IDs if comma-separated
+    // Parse multiple mod IDs - support both comma-separated and line-separated
     const modIds = manualModId
-      .split(',')
+      .split(/[,\n\r]+/) // Split by comma, newline, or carriage return
       .map(id => id.trim())
-      .filter(id => id && /^\d+$/.test(id));
+      .filter(id => id && /^\d+$/.test(id)); // Only numeric IDs
 
     if (modIds.length === 0) {
-      toast.error("Please enter valid mod IDs");
+      toast.error("Please enter valid numeric mod IDs");
       return;
     }
+
+    addConsoleError(`🔄 Adding ${modIds.length} mod(s): ${modIds.join(', ')}`);
 
     try {
       let successCount = 0;
@@ -218,35 +276,36 @@ const ModManager: React.FC<ModManagerProps> = ({
 
       for (let i = 0; i < modIds.length; i++) {
         const modId = modIds[i];
-        const displayName = `Mod ${modId}`;
         
         try {
           // First try to fetch mod info from CurseForge
           let modData: any = null;
           try {
-            const searchResponse = await fetch(`/api/curseforge/search?query=${modId}&searchFilter=1`);
+            const searchResponse = await fetch(`/api/curseforge/search?query=${modId}&pageSize=1`);
             if (searchResponse.ok) {
               const searchData = await searchResponse.json();
               if (searchData.data && searchData.data.length > 0) {
                 const foundMod = searchData.data.find((mod: any) => mod.id.toString() === modId);
                 if (foundMod) {
                   modData = foundMod;
+                  addConsoleError(`✅ Found mod info for ID ${modId}: ${foundMod.name}`);
                 }
               }
             }
           } catch (searchError) {
             console.warn(`Failed to fetch mod info for ${modId}:`, searchError);
+            addConsoleError(`⚠️ Could not fetch mod info for ID ${modId}, using basic info`);
           }
 
           // Create mod object
           const newMod = {
             id: modId,
-            name: modData?.name || displayName || `Mod ${modId}`,
+            name: modData?.name || `Mod ${modId}`,
             description: modData?.summary || "Manually added mod",
             version: "Unknown",
             workshopId: modId,
-        enabled: true,
-            loadOrder: mods.length,
+            enabled: true,
+            loadOrder: mods.length + i,
             dependencies: [],
             incompatibilities: [],
             size: modData?.downloadCount ? `${Math.floor(modData.downloadCount / 1000)}K downloads` : undefined,
@@ -262,13 +321,17 @@ const ModManager: React.FC<ModManagerProps> = ({
 
           if (response.ok) {
             successCount++;
-    } else {
+            addConsoleError(`✅ Successfully added mod: ${newMod.name} (ID: ${modId})`);
+          } else {
             errorCount++;
-            console.error(`Failed to add mod ${modId}:`, await response.text());
+            const errorText = await response.text();
+            console.error(`Failed to add mod ${modId}:`, errorText);
+            addConsoleError(`❌ Failed to add mod ID ${modId}: ${errorText}`);
           }
         } catch (error) {
           errorCount++;
           console.error(`Error adding mod ${modId}:`, error);
+          addConsoleError(`❌ Error adding mod ID ${modId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
 
@@ -277,30 +340,27 @@ const ModManager: React.FC<ModManagerProps> = ({
       
       if (successCount > 0) {
         toast.success(`Successfully added ${successCount} mod${successCount > 1 ? 's' : ''}`);
+        addConsoleError(`🎉 Bulk add completed: ${successCount} success, ${errorCount} failed`);
       }
       if (errorCount > 0) {
         toast.error(`Failed to add ${errorCount} mod${errorCount > 1 ? 's' : ''}`);
       }
 
-      // Reset form
-    setManualModId("");
-    
-    if (externalSetShowAddModal) {
-      externalSetShowAddModal(false);
-    } else {
+      // Reset form and close modal
+      setManualModId("");
       setShowAddModModal(false);
-      }
+      
     } catch (error) {
       console.error("Failed to add mods:", error);
       toast.error("Failed to add mod(s)");
+      addConsoleError(`❌ Bulk add failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
-  // Perform search with category context
+  // Perform search with category context - searches CurseForge API for unique searches not found in DB
   const performSearch = async (query: string) => {
     if (!query.trim()) {
-      // If empty search, load category mods
-      loadModsForCategory(selectedCategory);
+      setSearchError("Please enter a search term");
       return;
     }
 
@@ -308,32 +368,16 @@ const ModManager: React.FC<ModManagerProps> = ({
     setSearchError(null);
 
     try {
-      // Use optimized search with category context
+      // Use the regular search endpoint which checks cache first, then hits API for unique searches
       const params = new URLSearchParams({
         query: query.trim(),
-        gameId: "1122",
-        categoryId: "",
-        sortField: "popularity",
+        sortBy: "popularity",
         sortOrder: "desc",
-        pageIndex: "1",
         pageSize: "20",
+        forceRefresh: "false" // Allow cache first, but will hit API if not cached
       });
 
-      // Add category-specific search context
-      const categorySearchMap: Record<string, string> = {
-        "QoL": "quality of life utility",
-        "RPG": "rpg progression level",
-        "Maps": "map level world",
-        "Popular": "",
-        "Overhauls": "overhaul total conversion",
-        "General": "utility building decoration",
-        "Custom Cosmetics": "cosmetic decoration skin"
-      };
-
-      const categoryContext = categorySearchMap[selectedCategory] || "";
-      if (categoryContext) {
-        params.set("query", `${query.trim()} ${categoryContext}`);
-      }
+      addConsoleError(`🔍 Searching for "${query.trim()}" - checking cache first, then API if needed`);
 
       const response = await fetch(`/api/curseforge/search?${params}`);
       
@@ -346,22 +390,35 @@ const ModManager: React.FC<ModManagerProps> = ({
       
       if (data.data) {
         setSearchResults(data.data);
+        addConsoleError(`✅ Found ${data.data.length} mods for "${query.trim()}" from ${data.source || 'unknown source'}`);
       } else {
-        throw new Error(data.error || "Failed to search mods");
+        throw new Error(data.error || "No results found");
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to search mods";
       console.error("Search error:", error);
-      setSearchError(error instanceof Error ? error.message : "Failed to search mods");
+      setSearchError(errorMessage);
       setSearchResults([]);
+      
+      // Enhanced error handling for system console
+      addConsoleError(`❌ Search Error: ${errorMessage}`);
+      addConsoleError(`📍 Context: Query="${query.trim()}", Time=${new Date().toISOString()}`);
+      
+      // Use the error handler for proper logging and categorization
+      ErrorHandler.handleError(error, {
+        component: 'ModManager',
+        action: 'performSearch',
+        timestamp: new Date()
+      }, false); // Don't show toast, we handle it in UI
     } finally {
       setIsSearching(false);
     }
   };
 
-  // Add mod from search results
+  // Add mod with instant cache update
   const addMod = async (modData: CurseForgeModData) => {
     try {
-      const newMod = {
+      const newMod: ModInfo = {
         id: modData.id.toString(),
         name: modData.name,
         description: modData.summary,
@@ -371,9 +428,14 @@ const ModManager: React.FC<ModManagerProps> = ({
         loadOrder: mods.length,
         dependencies: [],
         incompatibilities: [],
-        size: `${Math.floor(modData.downloadCount / 1000)}K downloads`,
-        lastUpdated: new Date()
+        size: modData.downloadCount || undefined, // Keep as number for ModInfo type
+        lastUpdated: new Date(modData.dateModified)
       };
+
+      // Optimistically update UI and cache first
+      const updatedMods = [...mods, newMod];
+      setMods(updatedMods);
+      saveInstalledModsToCache(updatedMods);
 
       const response = await fetch(`/api/servers/${serverId}/mods`, {
         method: 'POST',
@@ -382,14 +444,26 @@ const ModManager: React.FC<ModManagerProps> = ({
       });
 
       if (response.ok) {
-        await loadMods();
         toast.success(`Added ${modData.name}`);
+        addConsoleError(`✅ Added mod: ${modData.name} (ID: ${modData.id})`);
+        setShowSearchModal(false); // Close search modal after successful add
+        if (onModsUpdate) {
+          onModsUpdate(updatedMods);
+        }
       } else {
-        throw new Error('Failed to add mod');
+        // Revert optimistic update on failure
+        setMods(mods);
+        saveInstalledModsToCache(mods);
+        toast.error(`Failed to add ${modData.name}`);
+        addConsoleError(`❌ Failed to add mod: ${modData.name}`);
       }
     } catch (error) {
-      console.error("Failed to add mod:", error);
+      // Revert optimistic update on error
+      setMods(mods);
+      saveInstalledModsToCache(mods);
+      console.error("Error adding mod:", error);
       toast.error("Failed to add mod");
+      addConsoleError(`❌ Error adding mod: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -418,114 +492,69 @@ const ModManager: React.FC<ModManagerProps> = ({
   // Load mods for non-installed categories from CurseForge API
   // Strategy 1: Use client-side caching with batching and TTL
   const loadModsForCategory = async (category: string) => {
-    if (category === "Installed") return;
+    if (category === "Installed") return; // Skip for installed mods - they're cached locally
 
     setIsSearching(true);
     setSearchError(null);
 
     try {
-      // Map category names to CurseForge search parameters
-      const categorySearchMap: Record<string, { query?: string; categoryId?: number }> = {
-        "QoL": { query: "quality of life" },
-        "RPG": { query: "rpg progression" },
-        "Maps": { categoryId: 17 }, // Maps category ID in CurseForge
-        "Popular": { query: "" }, // Empty query returns popular mods
-        "Overhauls": { query: "overhaul total conversion" },
-        "General": { query: "utility building" },
-        "Custom Cosmetics": { query: "cosmetic decoration" }
-      };
-
-      const searchParams = categorySearchMap[category] || { query: category.toLowerCase() };
-      
+      // Use the optimized search endpoint which handles caching
       const params = new URLSearchParams({
-        query: searchParams.query || "",
+        category: category,
         sortBy: "popularity",
         sortOrder: "desc",
         pageSize: "20"
       });
 
-      if (searchParams.categoryId) {
-        params.append("categoryId", searchParams.categoryId.toString());
-      }
-
-      // Strategy 1: Use client-side cache with batching
-      const data = await modCacheClient.searchWithBatching(category, params);
-      setSearchResults(data);
+      const response = await fetch(`/api/curseforge/search-optimized?${params}`);
       
+      if (!response.ok) {
+        throw new Error(`Failed to load ${category} mods: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setSearchResults(data.data || []);
+        addConsoleError(`✅ Loaded ${data.data?.length || 0} mods for "${category}" from ${data.source || 'API'}`);
+      } else {
+        throw new Error(data.error || `Failed to load ${category} mods`);
+      }
     } catch (error) {
-      console.error(`Error loading ${category} mods:`, error);
-      const errorMessage = error instanceof Error ? error.message : `Failed to load ${category} mods`;
-      setSearchError(errorMessage);
-      addConsoleError(`Mod loading error: ${errorMessage}`);
-      setSearchResults([]);
+      console.error(`Error loading mods for ${category}:`, error);
+      setSearchError(error instanceof Error ? error.message : `Failed to load ${category} mods`);
+      addConsoleError(`❌ Failed to load ${category} mods: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsSearching(false);
     }
   };
 
-  // Load category mods when category changes
-  useEffect(() => {
-    loadModsForCategory(selectedCategory);
-  }, [selectedCategory]);
-
-  // Strategy 2: Optionally batch load multiple categories on mount
+  // Load multiple categories for better performance
   useEffect(() => {
     const loadMultipleCategories = async () => {
-      try {
-        // Load popular categories in a single batch request
-        const response = await fetch('/api/curseforge/search-optimized?categories=Popular,QoL,Maps');
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success) {
-            // Pre-populate client cache with batch results
-            Object.entries(data.data).forEach(([category, mods]) => {
-              const categorySearchMap: Record<string, { query?: string; categoryId?: number }> = {
-                "QoL": { query: "quality of life" },
-                "Popular": { query: "" },
-                "Maps": { categoryId: 17 }
-              };
-              
-              const searchParams = categorySearchMap[category];
-              if (searchParams) {
-                const params = new URLSearchParams({
-                  query: searchParams.query || "",
-                  sortBy: "popularity",
-                  sortOrder: "desc",
-                  pageSize: "20"
-                });
-                if (searchParams.categoryId) {
-                  params.append("categoryId", searchParams.categoryId.toString());
-                }
-                
-                modCacheClient.setCache(category, params, mods as any[], 10 * 60 * 1000); // 10 minutes TTL
-              }
-            });
-          }
-        }
-      } catch (error) {
-        console.log('Strategy 2 batch loading failed, falling back to individual requests:', error);
+      if (selectedCategory !== "Installed") {
+        await loadModsForCategory(selectedCategory);
       }
     };
-    
-    // Only load batch on initial mount
+
     loadMultipleCategories();
-  }, []);
+  }, [selectedCategory]);
 
   // For search results, convert CurseForge data for display
   const getDisplayMods = (): DisplayMod[] => {
     if (selectedCategory === "Installed") {
       // Convert ModInfo to DisplayMod format
       return (getFilteredMods() as ModInfo[]).map(mod => ({
-                id: mod.id,
+        id: mod.id,
         name: mod.name,
         description: mod.description || '',
         version: mod.version || '1.0.0',
         workshopId: mod.workshopId || mod.id,
         enabled: mod.enabled,
-                loadOrder: mod.loadOrder,
+        loadOrder: mod.loadOrder,
         dependencies: mod.dependencies || [],
         incompatibilities: mod.incompatibilities || [],
-        size: typeof mod.size === 'string' ? mod.size : 'Unknown',
+        size: typeof mod.size === 'number' ? `${Math.floor(mod.size / 1000)}K downloads` : 'Unknown',
         lastUpdated: mod.lastUpdated || new Date(),
       }));
     }
@@ -542,88 +571,117 @@ const ModManager: React.FC<ModManagerProps> = ({
       loadOrder: 0,
       dependencies: [],
       incompatibilities: [],
-      size: "Unknown",
+      size: mod.downloadCount ? `${Math.floor(mod.downloadCount / 1000)}K downloads` : "Unknown",
       lastUpdated: new Date(mod.dateModified),
       _curseforgeData: mod // Store original data for adding
     }));
   };
 
-  // Enhanced mod removal with proper API call
+  // Remove mod with instant cache update
   const removeMod = async (modId: string) => {
     try {
-      const response = await fetch(`/api/servers/${serverId}/mods`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ modId }),
+      // Optimistically update UI and cache first
+      const updatedMods = mods.filter(mod => mod.id !== modId);
+      const modToRemove = mods.find(mod => mod.id === modId);
+      setMods(updatedMods);
+      saveInstalledModsToCache(updatedMods);
+
+      const response = await fetch(`/api/servers/${serverId}/mods/${modId}`, {
+        method: 'DELETE'
       });
 
       if (response.ok) {
-        // Remove from local state
-        const updatedMods = mods.filter(mod => mod.id !== modId);
-          setMods(updatedMods);
+        toast.success(`Removed ${modToRemove?.name || 'mod'}`);
+        addConsoleError(`🗑️ Removed mod: ${modToRemove?.name || modId}`);
         if (onModsUpdate) {
           onModsUpdate(updatedMods);
         }
-        toast.success("Mod removed successfully");
-        } else {
-        throw new Error('Failed to remove mod');
+      } else {
+        // Revert optimistic update on failure
+        setMods(mods);
+        saveInstalledModsToCache(mods);
+        toast.error("Failed to remove mod");
+        addConsoleError(`❌ Failed to remove mod: ${modToRemove?.name || modId}`);
       }
     } catch (error) {
-      console.error("Failed to remove mod:", error);
+      // Revert optimistic update on error
+      setMods(mods);
+      saveInstalledModsToCache(mods);
+      console.error("Error removing mod:", error);
       toast.error("Failed to remove mod");
+      addConsoleError(`❌ Error removing mod: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
-  // Update load order
+  // Update load order with instant cache update
   const updateLoadOrder = async (modId: string, newLoadOrder: number) => {
     try {
+      // Optimistically update UI and cache first
       const updatedMods = mods.map(mod => 
         mod.id === modId ? { ...mod, loadOrder: newLoadOrder } : mod
-      );
+      ).sort((a, b) => a.loadOrder - b.loadOrder);
       
-      const response = await fetch(`/api/servers/${serverId}/mods`, {
-        method: 'PUT',
+      setMods(updatedMods);
+      saveInstalledModsToCache(updatedMods);
+
+      const response = await fetch(`/api/servers/${serverId}/mods/${modId}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedMods)
+        body: JSON.stringify({ loadOrder: newLoadOrder })
       });
 
       if (response.ok) {
-        setMods(updatedMods);
         if (onModsUpdate) {
           onModsUpdate(updatedMods);
         }
+      } else {
+        // Revert optimistic update on failure
+        loadMods(); // Reload from server to get correct state
+        toast.error("Failed to update load order");
       }
     } catch (error) {
-      console.error("Failed to update load order:", error);
+      // Revert optimistic update on error
+      loadMods(); // Reload from server to get correct state
+      console.error("Error updating load order:", error);
       toast.error("Failed to update load order");
     }
   };
 
-  // Toggle mod enabled/disabled
+  // Toggle mod enabled/disabled with instant cache update
   const toggleMod = async (modId: string) => {
     try {
+      // Optimistically update UI and cache first
       const updatedMods = mods.map(mod => 
         mod.id === modId ? { ...mod, enabled: !mod.enabled } : mod
       );
       
-      const response = await fetch(`/api/servers/${serverId}/mods`, {
-        method: 'PUT',
+      const modToToggle = updatedMods.find(mod => mod.id === modId);
+      setMods(updatedMods);
+      saveInstalledModsToCache(updatedMods);
+
+      const response = await fetch(`/api/servers/${serverId}/mods/${modId}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedMods)
+        body: JSON.stringify({ enabled: modToToggle?.enabled })
       });
 
       if (response.ok) {
-        setMods(updatedMods);
+        toast.success(`${modToToggle?.enabled ? 'Enabled' : 'Disabled'} ${modToToggle?.name}`);
         if (onModsUpdate) {
-        onModsUpdate(updatedMods);
+          onModsUpdate(updatedMods);
         }
-        toast.success("Mod updated");
+      } else {
+        // Revert optimistic update on failure
+        setMods(mods);
+        saveInstalledModsToCache(mods);
+        toast.error("Failed to toggle mod");
       }
     } catch (error) {
-      console.error("Failed to toggle mod:", error);
-      toast.error("Failed to update mod");
+      // Revert optimistic update on error
+      setMods(mods);
+      saveInstalledModsToCache(mods);
+      console.error("Error toggling mod:", error);
+      toast.error("Failed to toggle mod");
     }
   };
 
@@ -638,14 +696,38 @@ const ModManager: React.FC<ModManagerProps> = ({
 
   const renderFilters = () => (
     <div className="space-y-4">
-      <h3 className="font-bold text-matrix-400 uppercase tracking-wider">Filters</h3>
-      <input
-        type="text"
-        placeholder="Search installed mods..."
-        value={installedModsSearchQuery}
-        onChange={(e) => setInstalledModsSearchQuery(e.target.value)}
-        className="w-full bg-cyber-bg border-2 border-matrix-500/50 focus:border-matrix-500 p-2 text-matrix-400 font-mono"
-      />
+      <h3 className="font-bold text-matrix-400 uppercase tracking-wider">Actions</h3>
+      
+      {/* Search Mods Button */}
+      <button
+        onClick={() => setShowSearchModal(true)}
+        className="w-full bg-matrix-600 text-white px-3 py-2 text-sm hover:bg-matrix-500 transition-colors flex items-center justify-center gap-2"
+        title="Search CurseForge for mods"
+      >
+        <MagnifyingGlassIcon className="h-4 w-4" />
+        Search Mods
+      </button>
+
+      {/* Add Mods Button */}
+      <button
+        onClick={() => setShowAddModModal(true)}
+        className="w-full bg-matrix-500 text-black px-3 py-2 text-sm hover:bg-matrix-400 transition-colors flex items-center justify-center gap-2 font-bold"
+        title="Add mods by ID"
+      >
+        <PlusIcon className="h-4 w-4" />
+        Add Mods by ID
+      </button>
+
+      <div className="border-t border-matrix-500/30 pt-4">
+        <h4 className="font-bold text-matrix-400 uppercase tracking-wider text-xs mb-2">Filter Installed</h4>
+        <input
+          type="text"
+          placeholder="Search installed mods..."
+          value={installedModsSearchQuery}
+          onChange={(e) => setInstalledModsSearchQuery(e.target.value)}
+          className="w-full bg-cyber-bg border-2 border-matrix-500/50 focus:border-matrix-500 p-2 text-matrix-400 font-mono text-sm"
+        />
+      </div>
     </div>
   );
 
@@ -927,13 +1009,6 @@ const ModManager: React.FC<ModManagerProps> = ({
               </p>
             </div>
           </div>
-          <button
-            onClick={handleAddModClick}
-            className="flex items-center gap-2 bg-matrix-500 text-black px-4 py-2 font-bold uppercase tracking-wider hover:bg-matrix-400 transition-colors text-sm"
-          >
-            <PlusIcon className="w-5 h-5" />
-            Add Mods
-          </button>
         </div>
 
         {/* Tab Navigation */}
@@ -976,6 +1051,169 @@ const ModManager: React.FC<ModManagerProps> = ({
             }
           </div>
         </div>
+
+        {/* Search Modal */}
+        {showSearchModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-cyber-panel border-2 border-matrix-500/30 shadow-matrix-glow w-full max-w-4xl mx-4 max-h-[80vh] overflow-hidden">
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xl font-bold text-matrix-400 uppercase tracking-wider">Search CurseForge Mods</h3>
+                  <button
+                    onClick={() => setShowSearchModal(false)}
+                    className="text-matrix-600 hover:text-matrix-400 transition-colors"
+                    aria-label="Close search modal"
+                  >
+                    <XMarkIcon className="h-6 w-6" />
+                  </button>
+                </div>
+
+                <form onSubmit={(e) => { e.preventDefault(); performSearch(searchModalQuery); }} className="mb-4">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={searchModalQuery}
+                      onChange={(e) => setSearchModalQuery(e.target.value)}
+                      placeholder="Search for mods... (e.g., 'quality of life', 'map', 'building')"
+                      className="flex-1 bg-cyber-bg border-2 border-matrix-500/50 focus:border-matrix-500 p-3 text-matrix-400 font-mono"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isSearching || !searchModalQuery.trim()}
+                      className="bg-matrix-600 text-white px-6 py-3 hover:bg-matrix-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isSearching ? 'Searching...' : 'Search'}
+                    </button>
+                  </div>
+                </form>
+
+                {/* Search Error */}
+                {searchError && (
+                  <div className="mb-4 p-3 bg-red-900/20 border border-red-500/30 text-red-400">
+                    <ExclamationTriangleIcon className="h-5 w-5 inline mr-2" />
+                    {searchError}
+                  </div>
+                )}
+
+                {/* Search Results */}
+                <div className="h-[50vh] overflow-y-auto pr-2">
+                  {isSearching ? (
+                    <div className="text-center py-10">
+                      <div className="loading loading-spinner loading-lg text-matrix-500 mx-auto mb-4"></div>
+                      <p className="text-matrix-600">Searching CurseForge...</p>
+                    </div>
+                  ) : searchResults.length === 0 && searchModalQuery ? (
+                    <div className="text-center text-matrix-600 py-10">
+                      <p>No mods found. Try a different search term.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {searchResults.map((mod: CurseForgeModData) => (
+                        <div
+                          key={mod.id}
+                          className="bg-cyber-bg/50 border border-matrix-500/20 p-4 hover:bg-matrix-900/50 transition-colors"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="flex-shrink-0">
+                              {mod.logo?.thumbnailUrl ? (
+                                <img
+                                  src={mod.logo.thumbnailUrl}
+                                  alt={mod.name}
+                                  className="w-12 h-12 rounded object-cover border border-matrix-500/30"
+                                />
+                              ) : (
+                                <div className="w-12 h-12 bg-matrix-800/50 rounded flex items-center justify-center border border-matrix-500/30">
+                                  <PuzzlePieceIcon className="h-6 w-6 text-matrix-600" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-bold text-matrix-400 text-sm truncate">{mod.name}</h4>
+                              <p className="text-xs text-matrix-600 line-clamp-2 mt-1">{mod.summary}</p>
+                              <div className="flex items-center gap-3 mt-2 text-xs text-matrix-700">
+                                <span>⬇️ {mod.downloadCount?.toLocaleString() || '0'}</span>
+                                {mod.thumbsUpCount && mod.thumbsUpCount > 0 && (
+                                  <span>👍 {mod.thumbsUpCount.toLocaleString()}</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => addMod(mod)}
+                            className="w-full mt-3 bg-matrix-600 text-white px-3 py-2 text-xs hover:bg-matrix-500 transition-colors"
+                            title="Add Mod"
+                          >
+                            <PlusIcon className="h-4 w-4 inline mr-1" />
+                            Add Mod
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Mods by ID Modal */}
+        {showAddModModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-cyber-panel border-2 border-matrix-500/30 shadow-matrix-glow w-full max-w-md mx-4">
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xl font-bold text-matrix-400 uppercase tracking-wider">Add Mods by ID</h3>
+                  <button
+                    onClick={() => {
+                      setShowAddModModal(false);
+                      setManualModId("");
+                    }}
+                    className="text-matrix-600 hover:text-matrix-400 transition-colors"
+                    aria-label="Close add mods modal"
+                  >
+                    <XMarkIcon className="h-6 w-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-bold text-matrix-400 mb-2">
+                      CurseForge Mod IDs
+                    </label>
+                    <textarea
+                      value={manualModId}
+                      onChange={(e) => setManualModId(e.target.value)}
+                      placeholder="Enter mod IDs separated by commas or line breaks:&#10;&#10;12345,67890,112233&#10;&#10;Or one per line:&#10;12345&#10;67890&#10;112233"
+                      className="w-full h-32 bg-cyber-bg border-2 border-matrix-500/50 focus:border-matrix-500 p-3 text-matrix-400 font-mono text-sm resize-none"
+                    />
+                    <p className="text-xs text-matrix-600 mt-1">
+                      💡 You can paste multiple mod IDs separated by commas or line breaks
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setShowAddModModal(false);
+                        setManualModId("");
+                      }}
+                      className="flex-1 bg-matrix-800 text-matrix-400 px-4 py-2 hover:bg-matrix-700 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleAddManualMod}
+                      disabled={!manualModId.trim()}
+                      className="flex-1 bg-matrix-600 text-white px-4 py-2 hover:bg-matrix-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold"
+                    >
+                      Add Mods
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

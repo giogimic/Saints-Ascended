@@ -1,0 +1,260 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Mod {
+  id                Int      @id
+  gameId            Int
+  name              String
+  slug              String
+  summary           String?
+  status            Int
+  downloadCount     Int      @default(0)
+  isFeatured        Boolean  @default(false)
+  primaryCategoryId Int
+  classId           Int
+  dateCreated       DateTime
+  dateModified      DateTime
+  dateReleased      DateTime?
+  allowModDistribution Boolean @default(true)
+  gamePopularityRank Int?
+  isAvailable       Boolean  @default(true)
+  thumbsUpCount     Int      @default(0)
+  
+  // Relations
+  links             ModLinks?
+  categories        ModCategory[]
+  authors           ModAuthor[]
+  logo              ModLogo?
+  screenshots       ModScreenshot[]
+  latestFiles       ModFile[]
+  latestFilesIndexes ModFileIndex[]
+  
+  // Metadata
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  lastFetched       DateTime @default(now())
+  
+  @@map("mods")
+}
+
+model ModLinks {
+  id          Int      @id @default(autoincrement())
+  modId       Int      @unique
+  websiteUrl  String?
+  wikiUrl     String?
+  issuesUrl   String?
+  sourceUrl   String?
+  
+  mod         Mod      @relation(fields: [modId], references: [id], onDelete: Cascade)
+  
+  @@map("mod_links")
+}
+
+model ModCategory {
+  id                 Int      @id @default(autoincrement())
+  modId              Int
+  categoryId         Int
+  gameId             Int
+  name               String
+  slug               String
+  url                String?
+  iconUrl            String?
+  dateModified       DateTime
+  isClass            Boolean  @default(false)
+  classId            Int?
+  parentCategoryId   Int?
+  displayIndex       Int?
+  
+  mod                Mod      @relation(fields: [modId], references: [id], onDelete: Cascade)
+  
+  @@map("mod_categories")
+}
+
+model ModAuthor {
+  id     Int      @id @default(autoincrement())
+  modId  Int
+  authorId Int
+  name   String
+  url    String?
+  
+  mod    Mod      @relation(fields: [modId], references: [id], onDelete: Cascade)
+  
+  @@map("mod_authors")
+}
+
+model ModLogo {
+  id          Int      @id @default(autoincrement())
+  modId       Int      @unique
+  logoId      Int
+  title       String?
+  description String?
+  thumbnailUrl String?
+  url         String?
+  
+  mod         Mod      @relation(fields: [modId], references: [id], onDelete: Cascade)
+  
+  @@map("mod_logos")
+}
+
+model ModScreenshot {
+  id          Int      @id @default(autoincrement())
+  modId       Int
+  screenshotId Int
+  title       String?
+  description String?
+  thumbnailUrl String?
+  url         String?
+  
+  mod         Mod      @relation(fields: [modId], references: [id], onDelete: Cascade)
+  
+  @@map("mod_screenshots")
+}
+
+model ModFile {
+  id                    Int      @id @default(autoincrement())
+  modId                 Int
+  fileId                Int
+  gameId                Int
+  isAvailable           Boolean  @default(true)
+  displayName           String
+  fileName              String
+  releaseType           Int
+  fileStatus            Int
+  fileDate              DateTime
+  fileLength            BigInt
+  downloadCount         Int      @default(0)
+  fileSizeOnDisk        BigInt?
+  downloadUrl           String?
+  isServerPack          Boolean  @default(false)
+  serverPackFileId      Int?
+  isEarlyAccessContent  Boolean  @default(false)
+  earlyAccessEndDate    DateTime?
+  fileFingerprint       BigInt?
+  
+  // Relations
+  hashes                ModFileHash[]
+  gameVersions          ModFileGameVersion[]
+  sortableGameVersions  ModFileSortableGameVersion[]
+  dependencies          ModFileDependency[]
+  modules               ModFileModule[]
+  
+  mod                   Mod      @relation(fields: [modId], references: [id], onDelete: Cascade)
+  
+  @@map("mod_files")
+}
+
+model ModFileHash {
+  id       Int      @id @default(autoincrement())
+  fileId   Int
+  value    String
+  algo     Int
+  
+  file     ModFile  @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  
+  @@map("mod_file_hashes")
+}
+
+model ModFileGameVersion {
+  id       Int      @id @default(autoincrement())
+  fileId   Int
+  version  String
+  
+  file     ModFile  @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  
+  @@map("mod_file_game_versions")
+}
+
+model ModFileSortableGameVersion {
+  id                    Int      @id @default(autoincrement())
+  fileId                Int
+  gameVersionName       String
+  gameVersionPadded     String
+  gameVersion           String
+  gameVersionReleaseDate DateTime
+  gameVersionTypeId     Int
+  modLoader             Int?
+  
+  file                  ModFile  @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  
+  @@map("mod_file_sortable_game_versions")
+}
+
+model ModFileDependency {
+  id           Int      @id @default(autoincrement())
+  fileId       Int
+  modId        Int
+  relationType Int
+  
+  file         ModFile  @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  
+  @@map("mod_file_dependencies")
+}
+
+model ModFileModule {
+  id          Int      @id @default(autoincrement())
+  fileId      Int
+  name        String
+  fingerprint BigInt
+  
+  file        ModFile  @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  
+  @@map("mod_file_modules")
+}
+
+model ModFileIndex {
+  id                    Int      @id @default(autoincrement())
+  modId                 Int
+  gameVersion           String
+  fileId                Int
+  filename              String
+  releaseType           Int
+  gameVersionTypeId     Int
+  modLoader             Int?
+  
+  mod                   Mod      @relation(fields: [modId], references: [id], onDelete: Cascade)
+  
+  @@map("mod_file_indexes")
+}
+
+model ModCache {
+  id        Int      @id @default(autoincrement())
+  query     String   @unique
+  results   String   // JSON string of mod IDs
+  timestamp DateTime @default(now())
+  expiresAt DateTime
+  
+  @@map("mod_cache")
+}
+
+model InstalledMod {
+  id            String   @id
+  name          String
+  summary       String?
+  downloadCount Int?
+  thumbsUpCount Int?
+  logoUrl       String?
+  author        String?
+  lastUpdated   DateTime @default(now())
+  installedAt   DateTime @default(now())
+  version       String?
+  fileSize      Int?
+  category      String?
+  tags          String?  // JSON string of tags
+  websiteUrl    String?
+  isEnabled     Boolean  @default(true)
+  loadOrder     Int      @default(1)
+  
+  @@map("installed_mods")
+}

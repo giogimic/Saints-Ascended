@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && prisma migrate deploy && next build",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest",
@@ -14,7 +14,14 @@
     "verify:api": "node scripts/verify-api-key.js",
     "type-check": "tsc --noEmit",
     "verify": "node scripts/verify-installation.js",
-    "postinstall": "node scripts/postinstall.js"
+    "postinstall": "prisma generate",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio",
+    "db:seed": "node prisma/seed.js",
+    "db:reset": "prisma migrate reset"
   },
   "dependencies": {
     "@headlessui/react": "2.2.0",

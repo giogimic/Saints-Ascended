@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "./database";
 import { CurseForgeModData } from "../types/curseforge";
 
 // In-memory cache for mods
@@ -20,7 +20,6 @@ interface SearchCacheEntry {
 }
 
 class ModCacheService {
-  private prisma!: PrismaClient;
   private modCache: Map<number, ModCacheEntry> = new Map();
   private searchCache: Map<string, SearchCacheEntry> = new Map();
   private inMemoryCache: Map<string, any> = new Map();
@@ -35,7 +34,6 @@ class ModCacheService {
 
   constructor() {
     try {
-      this.prisma = new PrismaClient();
       this.dbAvailable = true;
       console.log("Prisma database connection initialized");
     } catch (error) {
@@ -57,7 +55,7 @@ class ModCacheService {
         return this.inMemoryCache.get(`mod_${modId}`) || null;
       }
 
-      const mod = await this.prisma.mod.findUnique({
+      const mod = await prisma.mod.findUnique({
         where: { id: modId },
         include: {
           links: true,
@@ -120,7 +118,7 @@ class ModCacheService {
       const searchKeywords = this.generateSearchKeywords(mod);
 
       // Store in database with enhanced fields
-      await (this.prisma.mod as any).upsert({
+      await (prisma.mod as any).upsert({
         where: { id: mod.id },
         update: {
           name: mod.name,
@@ -203,13 +201,13 @@ class ModCacheService {
 
     // Check database cache
     try {
-      const dbCache = await this.prisma.modCache.findUnique({
+      const dbCache = await prisma.modCache.findUnique({
         where: { query: cacheKey },
       });
 
       if (dbCache && new Date() < dbCache.expiresAt) {
         // Update hit count and last accessed
-        await (this.prisma.modCache as any).update({
+        await (prisma.modCache as any).update({
           where: { id: dbCache.id },
           data: {
             hitCount: { increment: 1 },
@@ -217,16 +215,13 @@ class ModCacheService {
           },
         });
 
+        // Parse and return results
         const modIds = JSON.parse(dbCache.results) as number[];
+        const totalCount = (dbCache as any).totalCount || modIds.length;
+
+        // Get mods from cache or database
         const mods = await this.getModsByIds(modIds);
-
-        // Store in memory cache
-        this.setSearchInMemoryCache(cacheKey, mods, dbCache.totalCount);
-
-        return {
-          data: mods,
-          totalCount: dbCache.totalCount,
-        };
+        return { data: mods, totalCount };
       }
     } catch (error) {
       console.error("Error checking database cache:", error);
@@ -289,7 +284,7 @@ class ModCacheService {
     try {
       if (this.dbAvailable) {
         const modIds = results.map((mod) => mod.id);
-        await (this.prisma.modCache as any).upsert({
+        await (prisma.modCache as any).upsert({
           where: { query: cacheKey },
           update: {
             results: JSON.stringify(modIds),
@@ -367,10 +362,10 @@ class ModCacheService {
       }
 
       // Get total count
-      const totalCount = await this.prisma.mod.count({ where });
+      const totalCount = await prisma.mod.count({ where });
 
       // Get mods
-      const mods = await this.prisma.mod.findMany({
+      const mods = await prisma.mod.findMany({
         where,
         orderBy,
         skip,
@@ -459,7 +454,7 @@ class ModCacheService {
     try {
       if (!this.dbAvailable) return;
 
-      await (this.prisma as any).modSearchAnalytics.upsert({
+      await (prisma as any).modSearchAnalytics.upsert({
         where: {
           searchTerm_category: {
             searchTerm,
@@ -471,7 +466,7 @@ class ModCacheService {
           searchCount: { increment: 1 },
           lastSearched: new Date(),
           avgResultCount: {
-            set: (this.prisma as any).raw(`
+            set: (prisma as any).raw(`
               (avgResultCount * searchCount + ${resultCount}) / (searchCount + 1)
             `),
           },
@@ -498,7 +493,7 @@ class ModCacheService {
       if (!this.dbAvailable) return;
 
       // Update last accessed time
-      await this.prisma.mod.update({
+      await (prisma.mod as any).update({
         where: { id: modId },
         data: { lastUpdated: new Date() },
       });
@@ -514,11 +509,9 @@ class ModCacheService {
     try {
       if (!this.dbAvailable) return;
 
-      const popularityScore = this.calculatePopularityScore(mod);
-
       // Update for each category
       for (const category of mod.categories) {
-        await this.prisma.popularMods.upsert({
+        await (prisma as any).popularMods.upsert({
           where: {
             category_modId: {
               category: category.name,
@@ -526,20 +519,14 @@ class ModCacheService {
             },
           },
           update: {
-            name: mod.name,
-            downloadCount: mod.downloadCount,
-            thumbsUpCount: mod.thumbsUpCount,
-            popularityScore,
+            popularityScore: this.calculatePopularityScore(mod),
             lastUpdated: new Date(),
           },
           create: {
             category: category.name,
             modId: mod.id,
             name: mod.name,
-            downloadCount: mod.downloadCount,
-            thumbsUpCount: mod.thumbsUpCount,
-            popularityScore,
-            rank: 0, // Will be calculated separately
+            popularityScore: this.calculatePopularityScore(mod),
             lastUpdated: new Date(),
           },
         });
@@ -556,13 +543,13 @@ class ModCacheService {
     try {
       if (!this.dbAvailable) return [];
 
-      const popularMods = await this.prisma.popularMods.findMany({
+      const popularMods = await (prisma as any).popularMods.findMany({
         where: { category },
         orderBy: { popularityScore: 'desc' },
         take: limit,
       });
 
-      const modIds = popularMods.map(pm => pm.modId);
+      const modIds = popularMods.map((pm: any) => pm.modId);
       return await this.getModsByIds(modIds);
     } catch (error) {
       console.error("Error getting popular mods:", error);
@@ -580,13 +567,13 @@ class ModCacheService {
       const now = new Date();
 
       // Clear expired mod cache entries
-      await this.prisma.modCache.deleteMany({
+      await prisma.modCache.deleteMany({
         where: { expiresAt: { lt: now } },
       });
 
       // Clear old search analytics (older than 30 days)
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      await this.prisma.modSearchAnalytics.deleteMany({
+      await (prisma as any).modSearchAnalytics.deleteMany({
         where: { lastSearched: { lt: thirtyDaysAgo } },
       });
 
@@ -856,7 +843,7 @@ class ModCacheService {
     try {
       // Store links
       if (mod.links) {
-        await this.prisma.modLinks.upsert({
+        await prisma.modLinks.upsert({
           where: { modId: mod.id },
           update: {
             websiteUrl: mod.links.websiteUrl,
@@ -876,12 +863,12 @@ class ModCacheService {
 
       // Store categories
       if (mod.categories.length > 0) {
-        await this.prisma.modCategory.deleteMany({
+        await prisma.modCategory.deleteMany({
           where: { modId: mod.id },
         });
 
         for (const category of mod.categories) {
-          await this.prisma.modCategory.create({
+          await prisma.modCategory.create({
             data: {
               modId: mod.id,
               categoryId: category.id,
@@ -902,12 +889,12 @@ class ModCacheService {
 
       // Store authors
       if (mod.authors.length > 0) {
-        await this.prisma.modAuthor.deleteMany({
+        await prisma.modAuthor.deleteMany({
           where: { modId: mod.id },
         });
 
         for (const author of mod.authors) {
-          await this.prisma.modAuthor.create({
+          await prisma.modAuthor.create({
             data: {
               modId: mod.id,
               authorId: author.id,
@@ -920,7 +907,7 @@ class ModCacheService {
 
       // Store logo
       if (mod.logo) {
-        await this.prisma.modLogo.upsert({
+        await prisma.modLogo.upsert({
           where: { modId: mod.id },
           update: {
             logoId: mod.logo.id,
@@ -943,12 +930,12 @@ class ModCacheService {
 
       // Store screenshots
       if (mod.screenshots.length > 0) {
-        await this.prisma.modScreenshot.deleteMany({
+        await prisma.modScreenshot.deleteMany({
           where: { modId: mod.id },
         });
 
         for (const screenshot of mod.screenshots) {
-          await this.prisma.modScreenshot.create({
+          await prisma.modScreenshot.create({
             data: {
               modId: mod.id,
               screenshotId: screenshot.id,
@@ -963,12 +950,12 @@ class ModCacheService {
 
       // Store latest files
       if (mod.latestFiles.length > 0) {
-        await this.prisma.modFile.deleteMany({
+        await prisma.modFile.deleteMany({
           where: { modId: mod.id },
         });
 
         for (const file of mod.latestFiles) {
-          const dbFile = await this.prisma.modFile.create({
+          const dbFile = await prisma.modFile.create({
             data: {
               modId: mod.id,
               fileId: file.id,
@@ -995,7 +982,7 @@ class ModCacheService {
 
           // Store file hashes
           for (const hash of file.hashes) {
-            await this.prisma.modFileHash.create({
+            await prisma.modFileHash.create({
               data: {
                 fileId: dbFile.id,
                 value: hash.value,
@@ -1006,7 +993,7 @@ class ModCacheService {
 
           // Store game versions
           for (const version of file.gameVersions) {
-            await this.prisma.modFileGameVersion.create({
+            await prisma.modFileGameVersion.create({
               data: {
                 fileId: dbFile.id,
                 version,
@@ -1016,7 +1003,7 @@ class ModCacheService {
 
           // Store sortable game versions
           for (const sgv of file.sortableGameVersions) {
-            await this.prisma.modFileSortableGameVersion.create({
+            await prisma.modFileSortableGameVersion.create({
               data: {
                 fileId: dbFile.id,
                 gameVersionName: sgv.gameVersionName,
@@ -1033,7 +1020,7 @@ class ModCacheService {
 
           // Store dependencies
           for (const dep of file.dependencies) {
-            await this.prisma.modFileDependency.create({
+            await prisma.modFileDependency.create({
               data: {
                 fileId: dbFile.id,
                 modId: dep.modId,
@@ -1044,7 +1031,7 @@ class ModCacheService {
 
           // Store modules
           for (const modModule of file.modules) {
-            await this.prisma.modFileModule.create({
+            await prisma.modFileModule.create({
               data: {
                 fileId: dbFile.id,
                 name: modModule.name,
@@ -1057,12 +1044,12 @@ class ModCacheService {
 
       // Store latest files indexes
       if (mod.latestFilesIndexes.length > 0) {
-        await this.prisma.modFileIndex.deleteMany({
+        await prisma.modFileIndex.deleteMany({
           where: { modId: mod.id },
         });
 
         for (const index of mod.latestFilesIndexes) {
-          await this.prisma.modFileIndex.create({
+          await prisma.modFileIndex.create({
             data: {
               modId: mod.id,
               gameVersion: index.gameVersion,
@@ -1082,7 +1069,7 @@ class ModCacheService {
 
   async disconnect(): Promise<void> {
     if (this.dbAvailable) {
-      await this.prisma.$disconnect();
+      await prisma.$disconnect();
     }
   }
 }

@@ -26,11 +26,9 @@ export default async function handler(
         }
 
         // Get all installed mods for the server
-        const mods = await installedModsStorage.getAllMods();
-        const stats = await installedModsStorage.getStats();
+        const mods = await installedModsStorage.loadMods(serverId);
         return res.status(200).json({
           data: mods,
-          stats: stats,
         });
 
       case "POST":
@@ -58,11 +56,23 @@ export default async function handler(
 
         if (curseForgeData) {
           // Convert CurseForge data to installed mod metadata
-          modMetadata = installedModsStorage.convertCurseForgeToInstalledMod(
-            curseForgeData,
-            isEnabled,
-            loadOrder
+          await installedModsStorage.updateModFromCurseForge(
+            serverId,
+            modId,
+            curseForgeData
           );
+          
+          // Get the updated mod
+          modMetadata = await installedModsStorage.getMod(serverId, modId) || {
+            id: modId,
+            name: curseForgeData.name,
+            lastUpdated: new Date(),
+            installedAt: new Date(),
+            isEnabled,
+            loadOrder,
+            serverId: serverId,
+            modId: modId,
+          };
         } else {
           // Create basic mod metadata
           modMetadata = {

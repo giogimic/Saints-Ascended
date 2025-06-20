@@ -16,7 +16,12 @@ import {
 import { clsx } from "clsx";
 import { toast } from 'react-hot-toast';
 import { modCacheClient } from "@/lib/mod-cache-client";
-import { addConsoleError } from "@/components/ui/Layout";
+import { 
+  addConsoleInfo, 
+  addConsoleSuccess, 
+  addConsoleWarning, 
+  addConsoleError 
+} from "@/components/ui/Layout";
 import { useModal } from "@/context/ModalContext";
 import { ErrorHandler } from "@/lib/error-handler";
 
@@ -91,7 +96,7 @@ const ModManager: React.FC<ModManagerProps> = ({
         const cachedMods = JSON.parse(cachedData);
         if (Array.isArray(cachedMods) && cachedMods.length > 0) {
           setMods(cachedMods);
-          addConsoleError(`💾 Loaded ${cachedMods.length} installed mods from cache (instant)`);
+          addConsoleInfo(`💾 Loaded ${cachedMods.length} installed mods from cache (instant)`);
           return cachedMods;
         }
       }
@@ -106,7 +111,7 @@ const ModManager: React.FC<ModManagerProps> = ({
     try {
       const cacheKey = getInstalledModsCacheKey(serverId);
       localStorage.setItem(cacheKey, JSON.stringify(modsToCache));
-      addConsoleError(`💾 Cached ${modsToCache.length} installed mods for instant loading`);
+      addConsoleInfo(`💾 Cached ${modsToCache.length} installed mods for instant loading`);
     } catch (error) {
       console.error("Failed to cache mods:", error);
     }
@@ -143,13 +148,13 @@ const ModManager: React.FC<ModManagerProps> = ({
         if (currentModsString !== newModsString) {
           setMods(modsArray);
           saveInstalledModsToCache(modsArray); // Cache the fresh data
-          addConsoleError(`🔄 Refreshed ${modsArray.length} installed mods from server`);
+          addConsoleInfo(`🔄 Refreshed ${modsArray.length} installed mods from server`);
           
           if (onModsUpdate) {
             onModsUpdate(modsArray);
           }
         } else {
-          addConsoleError(`✅ Installed mods are up to date (${modsArray.length} mods)`);
+          addConsoleInfo(`✅ Installed mods are up to date (${modsArray.length} mods)`);
         }
       }
     } catch (error) {
@@ -268,7 +273,7 @@ const ModManager: React.FC<ModManagerProps> = ({
       return;
     }
 
-    addConsoleError(`🔄 Adding ${modIds.length} mod(s): ${modIds.join(', ')}`);
+    addConsoleInfo(`🔄 Adding ${modIds.length} mod(s): ${modIds.join(', ')}`);
 
     try {
       let successCount = 0;
@@ -288,13 +293,13 @@ const ModManager: React.FC<ModManagerProps> = ({
                 const foundMod = searchData.data.find((mod: any) => mod.id.toString() === modId);
                 if (foundMod) {
                   modData = foundMod;
-                  addConsoleError(`✅ Found mod info for ID ${modId}: ${foundMod.name}`);
+                  addConsoleInfo(`✅ Found mod info for ID ${modId}: ${foundMod.name}`);
                 }
               }
             }
           } catch (searchError) {
             console.warn(`Failed to fetch mod info for ${modId}:`, searchError);
-            addConsoleError(`⚠️ Could not fetch mod info for ID ${modId}, using basic info`);
+            addConsoleWarning(`⚠️ Could not fetch mod info for ID ${modId}, using basic info`);
           }
 
           // Create mod object
@@ -321,7 +326,7 @@ const ModManager: React.FC<ModManagerProps> = ({
 
           if (response.ok) {
             successCount++;
-            addConsoleError(`✅ Successfully added mod: ${newMod.name} (ID: ${modId})`);
+            addConsoleInfo(`✅ Successfully added mod: ${newMod.name} (ID: ${modId})`);
           } else {
             errorCount++;
             const errorText = await response.text();
@@ -340,7 +345,7 @@ const ModManager: React.FC<ModManagerProps> = ({
       
       if (successCount > 0) {
         toast.success(`Successfully added ${successCount} mod${successCount > 1 ? 's' : ''}`);
-        addConsoleError(`🎉 Bulk add completed: ${successCount} success, ${errorCount} failed`);
+        addConsoleInfo(`🎉 Bulk add completed: ${successCount} success, ${errorCount} failed`);
       }
       if (errorCount > 0) {
         toast.error(`Failed to add ${errorCount} mod${errorCount > 1 ? 's' : ''}`);
@@ -377,7 +382,7 @@ const ModManager: React.FC<ModManagerProps> = ({
         forceRefresh: "false" // Allow cache first, but will hit API if not cached
       });
 
-      addConsoleError(`🔍 Searching for "${query.trim()}" - checking cache first, then API if needed`);
+      addConsoleInfo(`🔍 Searching for "${query.trim()}" - checking cache first, then API if needed`);
 
       const response = await fetch(`/api/curseforge/search?${params}`);
       
@@ -390,7 +395,7 @@ const ModManager: React.FC<ModManagerProps> = ({
       
       if (data.data) {
         setSearchResults(data.data);
-        addConsoleError(`✅ Found ${data.data.length} mods for "${query.trim()}" from ${data.source || 'unknown source'}`);
+        addConsoleInfo(`✅ Found ${data.data.length} mods for "${query.trim()}" from ${data.source || 'unknown source'}`);
       } else {
         throw new Error(data.error || "No results found");
       }
@@ -445,7 +450,7 @@ const ModManager: React.FC<ModManagerProps> = ({
 
       if (response.ok) {
         toast.success(`Added ${modData.name}`);
-        addConsoleError(`✅ Added mod: ${modData.name} (ID: ${modData.id})`);
+        addConsoleInfo(`✅ Added mod: ${modData.name} (ID: ${modData.id})`);
         setShowSearchModal(false); // Close search modal after successful add
         if (onModsUpdate) {
           onModsUpdate(updatedMods);
@@ -516,7 +521,7 @@ const ModManager: React.FC<ModManagerProps> = ({
       
       if (data.success) {
         setSearchResults(data.data || []);
-        addConsoleError(`✅ Loaded ${data.data?.length || 0} mods for "${category}" from ${data.source || 'API'}`);
+        addConsoleInfo(`✅ Loaded ${data.data?.length || 0} mods for "${category}" from ${data.source || 'API'}`);
       } else {
         throw new Error(data.error || `Failed to load ${category} mods`);
       }
@@ -592,7 +597,7 @@ const ModManager: React.FC<ModManagerProps> = ({
 
       if (response.ok) {
         toast.success(`Removed ${modToRemove?.name || 'mod'}`);
-        addConsoleError(`🗑️ Removed mod: ${modToRemove?.name || modId}`);
+        addConsoleInfo(`🗑️ Removed mod: ${modToRemove?.name || modId}`);
         if (onModsUpdate) {
           onModsUpdate(updatedMods);
         }
@@ -790,7 +795,7 @@ const ModManager: React.FC<ModManagerProps> = ({
           setCacheStatus(data.source === 'cache' ? 'cache' : 'api');
           
           // Log success to system console
-          addConsoleError(`✅ Loaded ${data.data?.length || 0} mods for category "${category}" from ${data.source || 'unknown source'}`);
+          addConsoleInfo(`✅ Loaded ${data.data?.length || 0} mods for category "${category}" from ${data.source || 'unknown source'}`);
           
         } catch (err) {
           const errorMessage = err instanceof Error ? err.message : `Failed to load ${category} mods`;

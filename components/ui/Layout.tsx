@@ -21,12 +21,44 @@ interface LayoutProps {
   };
 }
 
-// Global error handler for console
-export const addConsoleError = (error: string) => {
+// Global console logging system with different log levels
+export const addConsoleInfo = (message: string) => {
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('console-error', { detail: error }));
+    window.dispatchEvent(new CustomEvent('console-message', { 
+      detail: { message, type: 'info' }
+    }));
   }
 };
+
+export const addConsoleSuccess = (message: string) => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('console-message', { 
+      detail: { message, type: 'success' }
+    }));
+  }
+};
+
+export const addConsoleWarning = (message: string) => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('console-message', { 
+      detail: { message, type: 'warning' }
+    }));
+  }
+};
+
+export const addConsoleError = (message: string) => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('console-message', { 
+      detail: { message, type: 'error' }
+    }));
+  }
+};
+
+interface ConsoleMessage {
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  timestamp: string;
+}
 
 export function Layout({ 
   children, 
@@ -43,17 +75,24 @@ export function Layout({
   }
 }: LayoutProps) {
   const [consoleOpen, setConsoleOpen] = useState(true);
-  const [consoleErrors, setConsoleErrors] = useState<string[]>([]);
+  const [consoleMessages, setConsoleMessages] = useState<ConsoleMessage[]>([]);
 
-  // Listen for global errors
+  // Listen for console messages
   React.useEffect(() => {
-    const handleConsoleError = (event: CustomEvent) => {
-      setConsoleErrors(prev => [...prev, event.detail]);
+    const handleConsoleMessage = (event: CustomEvent) => {
+      const { message, type } = event.detail;
+      const newMessage: ConsoleMessage = {
+        message,
+        type,
+        timestamp: new Date().toLocaleTimeString()
+      };
+      setConsoleMessages(prev => [...prev, newMessage]);
     };
 
-    window.addEventListener('console-error', handleConsoleError as EventListener);
-    return () => window.removeEventListener('console-error', handleConsoleError as EventListener);
+    window.addEventListener('console-message', handleConsoleMessage as EventListener);
+    return () => window.removeEventListener('console-message', handleConsoleMessage as EventListener);
   }, []);
+
   return (
     <CyberLayout>
       <div className="flex min-h-screen">
@@ -84,7 +123,7 @@ export function Layout({
         <TerminalWindow 
           isOpen={consoleOpen}
           onClose={() => setConsoleOpen(false)}
-          errors={consoleErrors}
+          messages={consoleMessages}
         />
       </div>
     </CyberLayout>

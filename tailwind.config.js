@@ -6,6 +6,7 @@ module.exports = {
     "./layouts/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
+  darkMode: 'class',
   theme: {
     container: {
       center: true,
@@ -40,7 +41,7 @@ module.exports = {
           "sans-serif",
         ],
         mono: ["JetBrains Mono", "ui-monospace", "monospace"],
-        display: ["Orbitron", "Inter", "sans-serif"],
+        display: ["Inter", "sans-serif"],
       },
       fontSize: {
         xxs: ["0.625rem", { lineHeight: "0.875rem" }],
@@ -84,7 +85,7 @@ module.exports = {
         xl: "0.75rem",
         "2xl": "1rem",
         "3xl": "1.5rem",
-        tech: "0.25rem",
+        tech: "0.75rem",
       },
       animation: {
         "fade-in": "fadeIn 0.5s ease-in-out",
@@ -96,6 +97,9 @@ module.exports = {
         float: "float 3s ease-in-out infinite",
         shimmer: "shimmer 2s linear infinite",
         "pulse-border": "pulseBorder 1.5s ease-in-out infinite",
+        "pipboy-scan": "pipboyScan 3s linear infinite",
+        "pipboy-glow": "pipboyGlow 4s ease-in-out infinite alternate",
+        "pipboy-scanline": "scanline 8s linear infinite",
       },
       keyframes: {
         fadeIn: {
@@ -107,14 +111,16 @@ module.exports = {
           "100%": { transform: "translateY(0)", opacity: "1" },
         },
         glow: {
-          "0%": { filter: "brightness(1) drop-shadow(0 0 8px currentColor)" },
-          "100%": {
-            filter: "brightness(1.2) drop-shadow(0 0 16px currentColor)",
-          },
+          "0%": { filter: "brightness(1) drop-shadow(0 0 5px currentColor)" },
+          "100%": { filter: "brightness(1.2) drop-shadow(0 0 10px currentColor)" },
         },
         scan: {
           "0%": { transform: "translateY(-100%)" },
           "100%": { transform: "translateY(100%)" },
+        },
+        scanline: {
+          "0%": { backgroundPosition: "0% 0%" },
+          "100%": { backgroundPosition: "0% 100%" },
         },
         float: {
           "0%, 100%": { transform: "translateY(0)" },
@@ -128,25 +134,54 @@ module.exports = {
           "0%, 100%": { borderColor: "oklch(var(--p) / 0.3)" },
           "50%": { borderColor: "oklch(var(--p))" },
         },
+        pipboyScan: {
+          "0%": { 
+            transform: "translateY(-100%)",
+            opacity: "0.8"
+          },
+          "50%": {
+            opacity: "1"
+          },
+          "100%": { 
+            transform: "translateY(100%)",
+            opacity: "0.8"
+          },
+        },
+        pipboyGlow: {
+          "0%": { 
+            boxShadow: "0 0 20px rgba(0, 255, 0, 0.3), inset 0 0 20px rgba(0, 255, 0, 0.1)"
+          },
+          "100%": { 
+            boxShadow: "0 0 40px rgba(0, 255, 0, 0.6), inset 0 0 40px rgba(0, 255, 0, 0.2)"
+          },
+        },
       },
       boxShadow: {
-        "glow-sm": "0 0 8px currentColor",
-        glow: "0 0 16px currentColor",
-        "glow-lg": "0 0 24px currentColor",
+        "glow-sm": "0 0 4px currentColor",
+        glow: "0 0 8px currentColor",
+        "glow-lg": "0 0 16px currentColor",
         "glow-xl": "0 0 32px currentColor",
-        "inner-glow": "inset 0 0 12px currentColor",
+        "inner-glow": "inset 0 0 8px currentColor",
         tech: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
         "tech-lg":
           "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+        modern: "0 4px 12px -4px rgba(0, 0, 0, 0.4), 0 2px 8px -2px rgba(0, 0, 0, 0.3)",
+        "modern-lg": "0 8px 24px -8px rgba(0, 0, 0, 0.5), 0 4px 16px -4px rgba(0, 0, 0, 0.4)",
+        "pipboy-glow": "0 0 20px rgba(0, 255, 0, 0.4), inset 0 0 20px rgba(0, 255, 0, 0.1)",
+        "pipboy-glow-lg": "0 0 40px rgba(0, 255, 0, 0.6), inset 0 0 40px rgba(0, 255, 0, 0.2)",
+        "pipboy-glow-xl": "0 0 60px rgba(0, 255, 0, 0.8), inset 0 0 60px rgba(0, 255, 0, 0.3)",
       },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
         "gradient-conic":
           "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
-        "tech-grid":
-          "linear-gradient(rgba(0, 255, 65, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 65, 0.1) 1px, transparent 1px)",
-        "tech-dots":
-          "radial-gradient(circle, rgba(0, 255, 65, 0.15) 1px, transparent 1px)",
+        "modern-gradient": "linear-gradient(135deg, var(--tw-gradient-stops))",
+        "mesh-gradient": "radial-gradient(circle at 25% 25%, var(--tw-gradient-stops))",
+        "pipboy-gradient": "linear-gradient(135deg, #000000 0%, #001a00 25%, #003300 50%, #004d00 75%, #006600 100%)",
+        "pipboy-gradient-radial": "radial-gradient(circle at center, #003300 0%, #001a00 50%, #000000 100%)",
+        "pipboy-gradient-diagonal": "linear-gradient(45deg, #000000 0%, #001a00 20%, #003300 40%, #004d00 60%, #006600 80%, #008000 100%)",
+        "pipboy-scan": "linear-gradient(90deg, transparent 0%, rgba(0, 255, 0, 0.1) 50%, transparent 100%)",
+        "scanline-pattern": "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 255, 0, 0.1) 2px, rgba(0, 255, 0, 0.1) 4px)",
       },
       backdropBlur: {
         xs: "2px",
@@ -162,77 +197,59 @@ module.exports = {
   daisyui: {
     themes: [
       {
-        tromper: {
-          primary: "#00ff41",
-          "primary-focus": "#00cc33",
-          "primary-content": "#000000",
+        pipboy: {
+          // Classic Pip-Boy Theme - Back to Basics
+          primary: "#00ff00",          // Bright Pip-Boy green
+          "primary-focus": "#33ff33",   // Lighter green for focus
+          "primary-content": "#000000",   // Black text on green
 
-          secondary: "#0066ff",
-          "secondary-focus": "#0052cc",
-          "secondary-content": "#ffffff",
+          secondary: "#00dd00",       // Slightly darker green
+          "secondary-focus": "#00bb00",
+          "secondary-content": "#000000",
 
-          accent: "#00ffff",
-          "accent-focus": "#00cccc",
+          accent: "#00ff00",
+          "accent-focus": "#33ff33",
           "accent-content": "#000000",
 
-          neutral: "#0f0f0f",
-          "neutral-focus": "#050505",
-          "neutral-content": "#ffffff",
+          // Neutral colors - pure black for high contrast
+          neutral: "#000000",
+          "neutral-focus": "#1c1c1c", // very dark grey
+          "neutral-content": "#00ff00", // Green text
 
+          // Background layers - solid black for true Pip-Boy feel
           "base-100": "#000000",
-          "base-200": "#050505",
-          "base-300": "#0a0a0a",
-          "base-content": "#ffffff",
+          "base-200": "#080808",
+          "base-300": "#101010",
+          "base-content": "#00ff00",
 
-          info: "#00aaff",
+          // Status colors
+          info: "#00ff00",
           "info-content": "#000000",
-          success: "#00ff41",
+          success: "#00ff00",
           "success-content": "#000000",
-          warning: "#ffaa00",
+          warning: "#00dd00",
           "warning-content": "#000000",
-          error: "#ff0066",
-          "error-content": "#ffffff",
+          error: "#ff0000",
+          "error-content": "#000000",
 
-          "--rounded-box": "0.25rem",
-          "--rounded-btn": "0.25rem",
-          "--rounded-badge": "0.25rem",
-          "--animation-btn": "0.25s",
-          "--animation-input": "0.2s",
+          // Component styling - Sharp and functional
+          "--rounded-box": "0rem",
+          "--rounded-btn": "0rem",
+          "--rounded-badge": "0rem",
+          "--animation-btn": "0.1s",
+          "--animation-input": "0.1s",
           "--btn-text-case": "uppercase",
-          "--btn-focus-scale": "0.98",
-          "--border-btn": "1px",
-          "--tab-border": "1px",
-          "--tab-radius": "0.25rem",
-
-          "--heading-font-weight": "700",
-          "--body-font-weight": "400",
-          "--label-font-weight": "500",
-
-          "--padding-card": "1.5rem",
-          "--padding-btn": "0.75rem 1.5rem",
-          "--gap-default": "0.5rem",
-
-          "--input-height": "3rem",
-          "--navbar-height": "4rem",
-          "--sidebar-width": "16rem",
-          "--modal-backdrop": "rgba(0, 0, 0, 0.8)",
-
-          "--transition-fast": "150ms ease",
-          "--transition-base": "200ms ease",
-          "--transition-slow": "300ms ease",
-
-          "--z-dropdown": "1000",
-          "--z-sticky": "1020",
-          "--z-fixed": "1030",
-          "--z-modal-backdrop": "1040",
-          "--z-modal": "1050",
-          "--z-popover": "1060",
-          "--z-tooltip": "1070",
+          "--navbar-padding": "0.5rem",
+          "--tab-radius": "0rem",
         },
       },
     ],
-    base: false,
+    darkTheme: "pipboy",
+    base: true,
     styled: true,
     utils: true,
+    rtl: false,
+    prefix: "",
+    logs: false,
   },
 };

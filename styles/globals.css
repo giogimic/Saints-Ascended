@@ -1,398 +1,710 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&display=swap");
-
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Base styles for the dark theme */
-body {
-  font-family:
-    "Inter",
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
-  background: oklch(var(--b1));
-  color: oklch(var(--bc));
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* Classic Pip-Boy Theme - Global Styles */
+:root {
+  --pipboy-green: #00ff00;
+  --pipboy-black: #000000;
 }
 
-/* Typography Scale */
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
+/* Base HTML and Body - Classic Pip-Boy Black */
+body {
+  background-color: var(--pipboy-black);
+  color: var(--pipboy-green);
+  font-family: 'JetBrains Mono', monospace;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Scanline Overlay for authentic feel */
+body::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 255, 0, 0.08) 2px,
+    rgba(0, 255, 0, 0.08) 4px
+  );
+  pointer-events: none;
+  z-index: 10000;
+  animation: scanline 10s linear infinite;
+}
+
+@keyframes scanline {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 0 100vh;
+  }
+}
+
+@keyframes jitter {
+  0%, 100% { transform: translate(0, 0) skewX(0); }
+  25% { transform: translate(0.5px, -0.5px) skewX(-0.25deg); }
+  50% { transform: translate(-0.5px, 0.5px) skewX(0.25deg); }
+  75% { transform: translate(0.5px, 0.5px) skewX(-0.25deg); }
+}
+
+@keyframes text-flicker {
+  0% {
+    text-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
+    opacity: 1;
+  }
+  50% {
+    text-shadow: 0 0 8px rgba(0, 255, 0, 0.8), 0 0 2px rgba(255, 255, 255, 0.5);
+    opacity: 0.95;
+  }
+  100% {
+    text-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
+    opacity: 1;
+  }
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
+}
+
+/* --- Component Overrides --- */
+
+/* Fix for Input Fields */
+.input,
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="number"],
+input[type="url"],
+input[type="tel"],
+input[type="search"],
+textarea,
+.textarea,
+.select {
+  background-color: transparent !important;
+  border: 1px solid var(--pipboy-green) !important;
+  color: var(--pipboy-green) !important;
+  border-radius: 0 !important;
+  transition: all 0.2s ease-in-out;
+}
+
+.input::placeholder,
+textarea::placeholder {
+  color: rgba(0, 255, 0, 0.4) !important;
+}
+
+.input:focus,
+textarea:focus,
+.select:focus {
+  outline: none !important;
+  box-shadow: 0 0 8px rgba(0, 255, 0, 0.7), inset 0 0 5px rgba(0, 255, 0, 0.3) !important;
+  border-color: var(--pipboy-green) !important;
+}
+
+/* General Card and Container Styling */
+.card, .box, .server-card, .stat-card {
+  background-color: var(--pipboy-black) !important;
+  border: 1px solid var(--pipboy-green) !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 1rem;
+}
+
+/* Button Styling */
+.btn {
+  border-radius: 0 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-primary {
+  background-color: var(--pipboy-green) !important;
+  color: var(--pipboy-black) !important;
+  border: 1px solid var(--pipboy-green) !important;
+}
+
+.btn-primary:hover {
+  background-color: var(--pipboy-black) !important;
+  color: var(--pipboy-green) !important;
+}
+
+.btn-ghost {
+  background-color: transparent !important;
+  color: var(--pipboy-green) !important;
+  border: 1px solid var(--pipboy-green) !important;
+}
+
+.btn-ghost:hover {
+  background-color: var(--pipboy-green) !important;
+  color: var(--pipboy-black) !important;
+}
+
+/* Table Styling */
+.table {
+  width: 100%;
+}
+.table th, .table td {
+  border-bottom: 1px solid var(--pipboy-green);
+  padding: 0.75rem 1rem;
+  color: var(--pipboy-green);
+}
+.table th {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* Sidebar & Header */
+.sidebar {
+  background-color: var(--pipboy-black) !important;
+  border-right: 1px solid var(--pipboy-green);
+}
+
+.header {
+  background-color: var(--pipboy-black) !important;
+  border-bottom: 1px solid var(--pipboy-green);
+}
+
+/* Modern Pip-Boy Reimagined Theme - Global Styles */
+:root {
+  --pipboy-green: #00ff00;
+  --pipboy-green-dark: #00cc00;
+  --pipboy-green-darker: #009900;
+  --pipboy-black: #000000;
+  --pipboy-black-green: #001a00;
+  --pipboy-dark-green: #003300;
+  --pipboy-medium-green: #004d00;
+  --pipboy-light-green: #006600;
+  --pipboy-bright-green: #008000;
+}
+
+/* Base HTML and Body - Modern Pip-Boy Gradient */
+html {
+  scroll-behavior: smooth;
+  background: linear-gradient(135deg, 
+    var(--pipboy-black) 0%, 
+    var(--pipboy-black-green) 25%, 
+    var(--pipboy-dark-green) 50%, 
+    var(--pipboy-medium-green) 75%, 
+    var(--pipboy-light-green) 100%
+  );
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  background: transparent;
+  color: var(--pipboy-green);
+  line-height: 1.6;
+  letter-spacing: 0.025em;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* Modern Pip-Boy Background Effects */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    radial-gradient(circle at 20% 20%, rgba(0, 255, 0, 0.03) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(0, 255, 0, 0.02) 0%, transparent 50%),
+    radial-gradient(circle at 40% 60%, rgba(0, 255, 0, 0.01) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Dark mode fallbacks and enhancements */
+.dark {
+  color-scheme: dark;
+}
+
+.dark body {
+  background: transparent;
+}
+
+/* Modern Pip-Boy Typography */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--pipboy-green);
   font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -0.025em;
-  color: oklch(var(--bc));
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 8px rgba(0, 255, 0, 0.3);
 }
 
 h1 {
-  font-size: 2rem;
-}
-h2 {
-  font-size: 1.625rem;
-}
-h3 {
-  font-size: 1.375rem;
-}
-h4 {
-  font-size: 1.125rem;
-}
-h5 {
-  font-size: 1rem;
-}
-h6 {
-  font-size: 0.875rem;
-}
-
-@media (min-width: 768px) {
-  h1 {
-    font-size: 2.5rem;
-  }
-  h2 {
-    font-size: 2rem;
-  }
-  h3 {
-    font-size: 1.625rem;
-  }
-  h4 {
-    font-size: 1.375rem;
-  }
-  h5 {
-    font-size: 1.125rem;
-  }
-  h6 {
-    font-size: 1rem;
-  }
-}
-
-/* Button System */
-.btn {
-  font-family: "JetBrains Mono", "Courier New", monospace;
-  font-size: 0.875rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
+  font-size: 2.5rem;
+  font-weight: 700;
   text-transform: uppercase;
-  border-radius: 0.5rem;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  letter-spacing: 0.1em;
+}
+
+h2 {
+  font-size: 2rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Modern Pip-Boy Links */
+a {
+  color: var(--pipboy-green);
+  text-decoration: none;
+  transition: all 0.2s ease;
+  text-shadow: 0 0 4px rgba(0, 255, 0, 0.2);
+}
+
+a:hover {
+  color: var(--pipboy-bright-green);
+  text-shadow: 0 0 8px rgba(0, 255, 0, 0.5);
+  transform: translateY(-1px);
+}
+
+/* Modern Pip-Boy Buttons */
+.btn {
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  border: 2px solid var(--pipboy-green);
+  background: transparent;
+  color: var(--pipboy-green);
+  transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
-  border: 1px solid oklch(var(--p) / 0.2);
-  background: linear-gradient(135deg, oklch(var(--b2)), oklch(var(--b3)));
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.2);
+}
+
+.btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(0, 255, 0, 0.1), transparent);
+  transition: left 0.5s ease;
+}
+
+.btn:hover::before {
+  left: 100%;
 }
 
 .btn:hover {
-  transform: translateY(-1px);
-  border-color: oklch(var(--p) / 0.5);
-  box-shadow: 0 0 15px oklch(var(--p) / 0.3);
+  background: var(--pipboy-green);
+  color: var(--pipboy-black);
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.4);
+  transform: translateY(-2px);
 }
 
 .btn:active {
   transform: translateY(0);
+  box-shadow: 0 0 15px rgba(0, 255, 0, 0.3);
 }
 
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
-/* Primary Button */
-.btn-primary {
-  background: linear-gradient(135deg, oklch(var(--p)), oklch(var(--pf)));
-  border: 1px solid oklch(var(--p));
-  color: oklch(var(--pc));
-  text-shadow: 0 0 5px oklch(var(--pc) / 0.5);
-}
-
-.btn-primary:hover {
-  background: linear-gradient(135deg, oklch(var(--pf)), oklch(var(--p)));
-  box-shadow: 0 0 20px oklch(var(--p) / 0.4);
-}
-
-/* Success Button */
-.btn-success {
-  background: linear-gradient(135deg, oklch(var(--su)), oklch(var(--suf)));
-  border: 1px solid oklch(var(--su));
-  color: oklch(var(--suc));
-  text-shadow: 0 0 5px oklch(var(--suc) / 0.5);
-}
-
-.btn-success:hover {
-  background: linear-gradient(135deg, oklch(var(--suf)), oklch(var(--su)));
-  box-shadow: 0 0 20px oklch(var(--su) / 0.4);
-}
-
-/* Error Button */
-.btn-error {
-  background: linear-gradient(135deg, oklch(var(--er)), oklch(var(--erf)));
-  border: 1px solid oklch(var(--er));
-  color: oklch(var(--erc));
-  text-shadow: 0 0 5px oklch(var(--erc) / 0.5);
-}
-
-.btn-error:hover {
-  background: linear-gradient(135deg, oklch(var(--erf)), oklch(var(--er)));
-  box-shadow: 0 0 20px oklch(var(--er) / 0.4);
-}
-
-/* Warning Button */
-.btn-warning {
-  background: linear-gradient(135deg, oklch(var(--wa)), oklch(var(--waf)));
-  border: 1px solid oklch(var(--wa));
-  color: oklch(var(--wac));
-  text-shadow: 0 0 5px oklch(var(--wac) / 0.5);
-}
-
-.btn-warning:hover {
-  background: linear-gradient(135deg, oklch(var(--waf)), oklch(var(--wa)));
-  box-shadow: 0 0 20px oklch(var(--wa) / 0.4);
-}
-
-/* Ghost Button */
-.btn-ghost {
-  background: transparent;
-  border: 1px solid oklch(var(--bc) / 0.2);
-  color: oklch(var(--bc));
-}
-
-.btn-ghost:hover {
-  background: oklch(var(--b2));
-  border-color: oklch(var(--bc) / 0.4);
-  box-shadow: 0 0 15px oklch(var(--bc) / 0.1);
-}
-
-/* Outline Button */
-.btn-outline {
-  background: transparent;
-  border: 1px solid oklch(var(--p));
-  color: oklch(var(--p));
-}
-
-.btn-outline:hover {
-  background: oklch(var(--p));
-  color: oklch(var(--pc));
-  box-shadow: 0 0 15px oklch(var(--p) / 0.3);
-}
-
-/* Button Sizes */
-.btn-xs {
-  font-size: 0.75rem;
-  padding: 0.375rem 0.75rem;
-  min-height: 1.5rem;
-}
-
-.btn-sm {
-  font-size: 0.8125rem;
-  padding: 0.5rem 1rem;
-  min-height: 2rem;
-}
-
-.btn-md {
-  font-size: 0.875rem;
-  padding: 0.75rem 1.5rem;
-  min-height: 3rem;
-}
-
-.btn-lg {
-  font-size: 1rem;
-  padding: 1rem 2rem;
-  min-height: 4rem;
-}
-
-/* Card System */
+/* Modern Pip-Boy Cards */
 .card {
-  background: oklch(var(--b1));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 0.5rem;
-  padding: 1.5rem;
-  box-shadow: 0 4px 6px -1px oklch(var(--b3) / 0.1);
-  transition: all 0.2s ease;
+  background: linear-gradient(135deg, 
+    rgba(0, 0, 0, 0.9) 0%, 
+    rgba(0, 26, 0, 0.8) 50%, 
+    rgba(0, 51, 0, 0.7) 100%
+  );
+  border: 2px solid var(--pipboy-green);
+  box-shadow: 
+    0 0 20px rgba(0, 255, 0, 0.2),
+    inset 0 0 20px rgba(0, 255, 0, 0.05);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--pipboy-green), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.card:hover::before {
+  opacity: 1;
 }
 
 .card:hover {
-  border-color: oklch(var(--p) / 0.3);
-  box-shadow: 0 0 20px oklch(var(--p) / 0.1);
+  box-shadow: 
+    0 0 30px rgba(0, 255, 0, 0.3),
+    inset 0 0 30px rgba(0, 255, 0, 0.1);
   transform: translateY(-2px);
 }
 
-/* Input System */
-.input,
-.select,
-.textarea {
-  background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
-  color: oklch(var(--bc));
-  border-radius: 0.5rem;
+/* Modern Pip-Boy Form Elements */
+input, textarea, select {
+  background: rgba(0, 0, 0, 0.8);
+  border: 2px solid var(--pipboy-green);
+  color: var(--pipboy-green);
   padding: 0.75rem 1rem;
-  transition: all 0.2s ease;
+  border-radius: 0.25rem;
+  transition: all 0.3s ease;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.05em;
 }
 
-.input:focus,
-.select:focus,
-.textarea:focus {
+input:focus, textarea:focus, select:focus {
   outline: none;
-  border-color: oklch(var(--p));
-  box-shadow: 0 0 0 2px oklch(var(--p) / 0.2);
+  border-color: var(--pipboy-bright-green);
+  box-shadow: 0 0 15px rgba(0, 255, 0, 0.3);
+  background: rgba(0, 26, 0, 0.9);
 }
 
-/* Modal System */
-.modal-box {
-  background: oklch(var(--b1));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 0.75rem;
-  box-shadow: 0 20px 25px -5px oklch(var(--b3) / 0.1);
+input::placeholder, textarea::placeholder {
+  color: rgba(0, 255, 0, 0.5);
+  font-style: italic;
 }
 
-/* Dropdown System */
-.dropdown-content {
-  background: oklch(var(--b1));
-  border: 1px solid oklch(var(--b3));
+/* Modern Pip-Boy Tables */
+table {
+  background: rgba(0, 0, 0, 0.8);
+  border: 2px solid var(--pipboy-green);
   border-radius: 0.5rem;
-  box-shadow: 0 10px 15px -3px oklch(var(--b3) / 0.1);
+  overflow: hidden;
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
 }
 
-/* Loading Spinner */
+th {
+  background: linear-gradient(135deg, var(--pipboy-dark-green), var(--pipboy-medium-green));
+  color: var(--pipboy-green);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 1rem;
+  border-bottom: 2px solid var(--pipboy-green);
+}
+
+td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(0, 255, 0, 0.2);
+  color: var(--pipboy-green);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9rem;
+}
+
+tr:hover {
+  background: rgba(0, 255, 0, 0.05);
+}
+
+/* Modern Pip-Boy Navigation */
+.navbar {
+  background: linear-gradient(135deg, 
+    rgba(0, 0, 0, 0.95) 0%, 
+    rgba(0, 26, 0, 0.9) 100%
+  );
+  border-bottom: 2px solid var(--pipboy-green);
+  -webkit-backdrop-filter: blur(15px);
+  backdrop-filter: blur(15px);
+  box-shadow: 0 0 30px rgba(0, 255, 0, 0.2);
+}
+
+.navbar-brand {
+  color: var(--pipboy-green);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  text-shadow: 0 0 10px rgba(0, 255, 0, 0.4);
+}
+
+/* Modern Pip-Boy Sidebar */
+.sidebar {
+  background: linear-gradient(180deg, 
+    rgba(0, 0, 0, 0.95) 0%, 
+    rgba(0, 26, 0, 0.9) 50%, 
+    rgba(0, 51, 0, 0.85) 100%
+  );
+  border-right: 2px solid var(--pipboy-green);
+  -webkit-backdrop-filter: blur(15px);
+  backdrop-filter: blur(15px);
+  box-shadow: 5px 0 30px rgba(0, 255, 0, 0.2);
+}
+
+.sidebar-item {
+  color: var(--pipboy-green);
+  padding: 0.75rem 1rem;
+  margin: 0.25rem 0;
+  border-radius: 0.25rem;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(0, 255, 0, 0.1), transparent);
+  transition: left 0.5s ease;
+}
+
+.sidebar-item:hover::before {
+  left: 100%;
+}
+
+.sidebar-item:hover {
+  background: rgba(0, 255, 0, 0.1);
+  color: var(--pipboy-bright-green);
+  transform: translateX(5px);
+  box-shadow: 0 0 15px rgba(0, 255, 0, 0.3);
+}
+
+.sidebar-item.active {
+  background: linear-gradient(135deg, var(--pipboy-dark-green), var(--pipboy-medium-green));
+  color: var(--pipboy-black);
+  font-weight: 600;
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.4);
+}
+
+/* Modern Pip-Boy Status Indicators */
+.status-online {
+  color: var(--pipboy-green);
+  text-shadow: 0 0 8px rgba(0, 255, 0, 0.5);
+  animation: pipboy-glow 2s ease-in-out infinite alternate;
+}
+
+.status-offline {
+  color: #ff0000;
+  text-shadow: 0 0 8px rgba(255, 0, 0, 0.5);
+}
+
+.status-warning {
+  color: var(--pipboy-green-dark);
+  text-shadow: 0 0 8px rgba(0, 204, 0, 0.5);
+}
+
+/* Modern Pip-Boy Loading States */
 .loading {
-  border-color: oklch(var(--p));
+  position: relative;
+  overflow: hidden;
 }
 
-/* Scrollbar */
+.loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(0, 255, 0, 0.1), transparent);
+  animation: pipboy-scan 2s linear infinite;
+}
+
+/* Modern Pip-Boy Scrollbars */
 ::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: oklch(var(--b2));
+  background: rgba(0, 0, 0, 0.8);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: oklch(var(--p));
+  background: linear-gradient(180deg, var(--pipboy-green), var(--pipboy-green-dark));
   border-radius: 4px;
-  border: 2px solid oklch(var(--b2));
+  border: 1px solid rgba(0, 255, 0, 0.3);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(var(--pf));
+  background: linear-gradient(180deg, var(--pipboy-bright-green), var(--pipboy-green));
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
 }
 
-/* Focus States */
-*:focus {
-  outline: 2px solid oklch(var(--p));
-  outline-offset: 2px;
-}
-
-*:focus:not(:focus-visible) {
-  outline: none;
-}
-
-*:focus-visible {
-  outline: 2px solid oklch(var(--p));
-  outline-offset: 2px;
-}
-
-/* Selection */
+/* Modern Pip-Boy Selection */
 ::selection {
-  background: oklch(var(--p) / 0.3);
-  color: oklch(var(--pc));
+  background: var(--pipboy-green);
+  color: var(--pipboy-black);
 }
 
-/* Animations */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+::-moz-selection {
+  background: var(--pipboy-green);
+  color: var(--pipboy-black);
 }
 
-@keyframes slideIn {
-  from {
-    transform: translateY(-10px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+/* Modern Pip-Boy Focus States */
+*:focus {
+  outline: 2px solid var(--pipboy-green);
+  outline-offset: 2px;
 }
 
-@keyframes pulse-glow {
-  0%,
+/* Modern Pip-Boy Animations */
+@keyframes pipboy-glow {
+  0% {
+    text-shadow: 0 0 8px rgba(0, 255, 0, 0.3);
+  }
   100% {
-    box-shadow: 0 0 5px oklch(var(--p) / 0.5);
-  }
-  50% {
-    box-shadow: 0 0 20px oklch(var(--p) / 0.8);
+    text-shadow: 0 0 16px rgba(0, 255, 0, 0.6);
   }
 }
 
-.animate-fade-in {
-  animation: fadeIn 0.3s ease-out;
+@keyframes pipboy-scan {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
 }
 
-.animate-slide-in {
-  animation: slideIn 0.3s ease-out;
+/* Modern Pip-Boy Utility Classes */
+.pipboy-gradient {
+  background: linear-gradient(135deg, 
+    var(--pipboy-black) 0%, 
+    var(--pipboy-black-green) 25%, 
+    var(--pipboy-dark-green) 50%, 
+    var(--pipboy-medium-green) 75%, 
+    var(--pipboy-light-green) 100%
+  );
 }
 
-.animate-pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
+.pipboy-gradient-radial {
+  background: radial-gradient(circle at center, 
+    var(--pipboy-dark-green) 0%, 
+    var(--pipboy-black-green) 50%, 
+    var(--pipboy-black) 100%
+  );
 }
 
-/* Tech Effects */
-.glow {
-  box-shadow: 0 0 10px oklch(var(--p) / 0.5);
+.pipboy-glow {
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.4), inset 0 0 20px rgba(0, 255, 0, 0.1);
 }
 
-.glow-strong {
-  box-shadow: 0 0 20px oklch(var(--p) / 0.8);
+.pipboy-glow-lg {
+  box-shadow: 0 0 40px rgba(0, 255, 0, 0.6), inset 0 0 40px rgba(0, 255, 0, 0.2);
 }
 
-/* Responsive Design */
+.pipboy-text-glow {
+  text-shadow: 0 0 8px rgba(0, 255, 0, 0.5);
+}
+
+.pipboy-border-glow {
+  border: 2px solid var(--pipboy-green);
+  box-shadow: 0 0 15px rgba(0, 255, 0, 0.3);
+}
+
+/* Modern Pip-Boy Responsive Design */
 @media (max-width: 768px) {
-  h1 {
-    font-size: 1.625rem;
+  html {
+    background: linear-gradient(180deg, 
+      var(--pipboy-black) 0%, 
+      var(--pipboy-black-green) 50%, 
+      var(--pipboy-dark-green) 100%
+    );
   }
-  h2 {
-    font-size: 1.375rem;
-  }
-  h3 {
-    font-size: 1.125rem;
-  }
-  h4 {
-    font-size: 1rem;
-  }
-
-  .btn {
-    font-size: 0.75rem;
-    padding: 0.5rem 1rem;
-  }
-
+  
   .card {
-    padding: 1rem;
+    margin: 0.5rem;
+    border-radius: 0.25rem;
+  }
+  
+  h1 {
+    font-size: 2rem;
+  }
+  
+  h2 {
+    font-size: 1.5rem;
   }
 }
 
-/* Print Styles */
+/* Modern Pip-Boy Print Styles */
 @media print {
-  .no-print {
-    display: none !important;
-  }
-
   body {
-    background: white !important;
-    color: black !important;
+    background: white;
+    color: black;
   }
+  
+  .card, .navbar, .sidebar {
+    background: white;
+    border: 1px solid #ccc;
+    box-shadow: none;
+  }
+}
+
+/* Modern Pip-Boy High Contrast Mode */
+@media (prefers-contrast: high) {
+  :root {
+    --pipboy-green: #00ff00;
+    --pipboy-black: #000000;
+  }
+  
+  .card {
+    border-width: 3px;
+  }
+  
+  .btn {
+    border-width: 3px;
+  }
+}
+
+/* Modern Pip-Boy Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  .btn::before,
+  .sidebar-item::before,
+  .loading::after {
+    display: none;
+  }
+}
+
+/* --- Distorted Hover States --- */
+
+.btn:hover,
+.sidebar a:hover,
+.server-card:hover,
+.stat-card:hover {
+  animation: jitter 0.2s ease-in-out 2; /* Runs twice for a brief but noticeable effect */
+}
+
+/* For text elements inside hovered components */
+.btn:hover span,
+.sidebar a:hover span,
+.card:hover h1,
+.card:hover h2,
+.card:hover .h1,
+.card:hover .h2,
+a:hover {
+  animation: text-flicker 0.3s ease-in-out 2;
 }

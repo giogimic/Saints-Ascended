@@ -1,38 +1,50 @@
-// Simplified theme management for single dark theme
+// Pip-Boy theme management with dark mode support
 export const AVAILABLE_THEMES = [
   {
-    name: "tromper",
-    label: "Dark Theme",
-    description: "Ultra-dark tech theme with neon green accents",
+    name: "pipboy",
+    label: "Pip-Boy Theme",
+    description: "Classic Fallout Pip-Boy green-on-black aesthetic",
   },
 ];
 
 const THEME_STORAGE_KEY = "ark-server-manager-theme";
-const DEFAULT_THEME = "tromper";
+const DEFAULT_THEME = "pipboy";
 
 export const getStoredTheme = (): string => {
-  return DEFAULT_THEME; // Always return the dark theme
+  if (typeof window === "undefined") return DEFAULT_THEME;
+  
+  try {
+    return localStorage.getItem(THEME_STORAGE_KEY) || DEFAULT_THEME;
+  } catch {
+    return DEFAULT_THEME;
+  }
 };
 
 export const setTheme = (themeName: string = DEFAULT_THEME): void => {
   if (typeof window === "undefined") return;
 
-  // Always use the dark theme
-  const theme = DEFAULT_THEME;
-
-  // Apply theme to HTML element
+  const theme = themeName || DEFAULT_THEME;
   const html = document.documentElement;
+  
+  // Apply DaisyUI theme
   html.setAttribute("data-theme", theme);
-
-  // Store theme preference (always dark)
-  localStorage.setItem(THEME_STORAGE_KEY, theme);
+  
+  // Add dark class for Tailwind dark mode
+  html.classList.add("dark");
+  
+  // Store theme preference
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch {
+    // Handle localStorage errors gracefully
+  }
 };
 
 export const initializeTheme = (): void => {
   if (typeof window === "undefined") return;
 
-  // Set the dark theme immediately
-  setTheme(DEFAULT_THEME);
+  const storedTheme = getStoredTheme();
+  setTheme(storedTheme);
 };
 
 // Always return true since we only have dark theme
@@ -40,7 +52,7 @@ export const isDarkTheme = (themeName: string = DEFAULT_THEME): boolean => {
   return true;
 };
 
-// Always return Custom since we only have our custom theme
+// Always return Pip-Boy since we only have our Pip-Boy theme
 export const getThemeCategory = (themeName: string = DEFAULT_THEME): string => {
-  return "Custom";
+  return "Pip-Boy";
 };

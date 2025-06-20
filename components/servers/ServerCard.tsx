@@ -53,16 +53,18 @@ export function ServerCard({
           icon: CheckCircleIcon,
           color: 'text-success',
           bgColor: 'bg-success/10',
-          borderColor: 'border-success/20',
-          text: 'Online'
+          borderColor: 'border-success/30',
+          text: 'Online',
+          dotColor: 'bg-success'
         };
       case 'offline':
         return {
           icon: XCircleIcon,
           color: 'text-error',
           bgColor: 'bg-error/10',
-          borderColor: 'border-error/20',
-          text: 'Offline'
+          borderColor: 'border-error/30',
+          text: 'Offline',
+          dotColor: 'bg-error'
         };
       case 'starting':
       case 'stopping':
@@ -70,16 +72,18 @@ export function ServerCard({
           icon: ClockIcon,
           color: 'text-warning',
           bgColor: 'bg-warning/10',
-          borderColor: 'border-warning/20',
-          text: status === 'starting' ? 'Starting' : 'Stopping'
+          borderColor: 'border-warning/30',
+          text: status === 'starting' ? 'Starting' : 'Stopping',
+          dotColor: 'bg-warning'
         };
       default:
         return {
           icon: ExclamationTriangleIcon,
           color: 'text-warning',
           bgColor: 'bg-warning/10',
-          borderColor: 'border-warning/20',
-          text: 'Unknown'
+          borderColor: 'border-warning/30',
+          text: 'Unknown',
+          dotColor: 'bg-warning'
         };
     }
   };
@@ -90,31 +94,34 @@ export function ServerCard({
   return (
     <Card 
       variant="elevated" 
-      className="group hover:scale-[1.02] transition-all duration-200"
+      className="group hover:scale-[1.02] transition-all duration-200 relative overflow-hidden"
     >
+      {/* Status indicator line */}
+      <div className={cn('absolute top-0 left-0 right-0 h-1', statusConfig.dotColor)} />
+      
       <CardHeader>
         <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-primary to-primary/60 rounded-xl flex items-center justify-center shadow-lg">
-              <ServerIcon className="h-6 w-6 text-primary-content" />
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-modern-gradient from-primary to-secondary rounded-xl flex items-center justify-center shadow-lg">
+              <ServerIcon className="h-6 w-6 text-white drop-shadow-sm" />
             </div>
-            <div>
-              <CardTitle size="md" className="text-base-content">
+            <div className="flex-1 min-w-0">
+              <CardTitle size="md" className="text-base-content mb-1">
                 {server.name}
               </CardTitle>
-              <p className="text-sm text-base-content/60 font-mono">
+              <p className="text-sm text-base-content/60 font-mono truncate">
                 {server.executablePath}:{server.port}
               </p>
             </div>
           </div>
           
           <div className={cn(
-            'flex items-center gap-2 px-3 py-1 rounded-full border',
+            'flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-sm',
             statusConfig.bgColor,
             statusConfig.borderColor
           )}>
-            <StatusIcon className={cn('h-4 w-4', statusConfig.color)} />
-            <span className={cn('text-xs font-semibold', statusConfig.color)}>
+            <div className={cn('w-2 h-2 rounded-full', statusConfig.dotColor)} />
+            <span className={cn('text-xs font-medium', statusConfig.color)}>
               {statusConfig.text}
             </span>
           </div>
@@ -123,21 +130,25 @@ export function ServerCard({
 
       <CardContent>
         <div className="grid grid-cols-2 gap-4">
-          <div className="flex items-center gap-3 p-3 bg-base-300/50 rounded-lg">
-            <UsersIcon className="h-5 w-5 text-accent" />
-            <div>
-              <p className="text-xs text-base-content/60 font-medium">Players</p>
+          <div className="flex items-center gap-3 p-4 bg-accent/5 rounded-xl border border-accent/10">
+            <div className="w-10 h-10 bg-accent/10 rounded-lg flex items-center justify-center">
+              <UsersIcon className="h-5 w-5 text-accent" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-base-content/60 font-medium mb-1">Players</p>
               <p className="text-lg font-bold text-accent">
                 {status.players.current}/{status.players.max}
               </p>
             </div>
           </div>
           
-          <div className="flex items-center gap-3 p-3 bg-base-300/50 rounded-lg">
-            <MapIcon className="h-5 w-5 text-primary" />
-            <div>
-              <p className="text-xs text-base-content/60 font-medium">Map</p>
-              <p className="text-lg font-bold text-base-content">
+          <div className="flex items-center gap-3 p-4 bg-primary/5 rounded-xl border border-primary/10">
+            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+              <MapIcon className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-base-content/60 font-medium mb-1">Map</p>
+              <p className="text-sm font-semibold text-base-content truncate">
                 {server.map || 'The Island'}
               </p>
             </div>
@@ -146,38 +157,38 @@ export function ServerCard({
       </CardContent>
 
       <CardFooter>
-        <div className="flex gap-2 w-full">
+        <div className="flex gap-3 w-full">
           {status.status === 'offline' ? (
             <button
               onClick={() => handleServerAction('start')}
               disabled={isLoading || actionLoading === 'start'}
-              className="btn btn-success btn-sm flex-1"
+              className="btn btn-success btn-sm flex-1 shadow-sm"
             >
               {actionLoading === 'start' ? (
                 <div className="loading loading-spinner loading-xs"></div>
               ) : (
                 <PlayIcon className="h-4 w-4" />
               )}
-              Start
+              Start Server
             </button>
           ) : (
             <button
               onClick={() => handleServerAction('stop')}
               disabled={isLoading || actionLoading === 'stop'}
-              className="btn btn-error btn-sm flex-1"
+              className="btn btn-error btn-sm flex-1 shadow-sm"
             >
               {actionLoading === 'stop' ? (
                 <div className="loading loading-spinner loading-xs"></div>
               ) : (
                 <StopIcon className="h-4 w-4" />
               )}
-              Stop
+              Stop Server
             </button>
           )}
 
           <button
             onClick={() => onEditServer(server.id)}
-            className="btn btn-ghost btn-sm btn-square"
+            className="btn btn-ghost btn-sm px-3 hover:bg-base-content/5"
             title="Edit Server"
           >
             <PencilIcon className="h-4 w-4" />
@@ -185,7 +196,7 @@ export function ServerCard({
 
           <button
             onClick={() => onDeleteServer(server.id)}
-            className="btn btn-ghost btn-sm btn-square text-error hover:bg-error/10"
+            className="btn btn-ghost btn-sm px-3 text-error hover:bg-error/10 hover:text-error"
             title="Delete Server"
           >
             <TrashIcon className="h-4 w-4" />

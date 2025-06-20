@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, ReactNode } from "react";
-import { initializeTheme } from "@/lib/theme-manager";
+import React, { createContext, useContext, useEffect } from 'react';
+import { initializeTheme, getStoredTheme } from '@/lib/theme-manager';
 
 interface ThemeContextType {
   theme: string;
@@ -9,16 +9,16 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 interface ThemeProviderProps {
-  children: ReactNode;
+  children: React.ReactNode;
 }
 
 export function ThemeProvider({ children }: ThemeProviderProps) {
-  // Always use the dark theme
-  const theme = "tromper";
+  // Use the stored theme or default to pipboy
+  const theme = "pipboy";
 
-  // No-op setTheme function for compatibility
+  // No-op setTheme function for compatibility - we only support dark theme
   const setTheme = (newTheme: string) => {
-    // Do nothing - we only support the dark theme
+    // Do nothing - we only support the Pip-Boy theme
   };
 
   // Initialize theme on mount
@@ -36,7 +36,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
 export function useTheme() {
   const context = useContext(ThemeContext);
   if (context === undefined) {
-    throw new Error("useTheme must be used within a ThemeProvider");
+    throw new Error('useTheme must be used within a ThemeProvider');
   }
   return context;
 }

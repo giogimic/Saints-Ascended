@@ -19,10 +19,10 @@ export function Card({
   const baseClasses = 'rounded-xl transition-all duration-200';
   
   const variantClasses = {
-    default: 'bg-base-200 border border-base-content/10 shadow-sm',
-    elevated: 'bg-base-200 border border-base-content/10 shadow-lg hover:shadow-xl',
-    outlined: 'bg-transparent border-2 border-primary/20 shadow-none',
-    glass: 'bg-base-200/50 backdrop-blur-md border border-base-content/10 shadow-lg'
+    default: 'bg-base-200 border border-base-content/8 shadow-modern',
+    elevated: 'bg-base-200 border border-base-content/8 shadow-modern hover:shadow-modern-lg hover:border-base-content/12',
+    outlined: 'bg-transparent border-2 border-primary/30 shadow-none hover:border-primary/50',
+    glass: 'bg-base-200/60 border border-base-content/8 shadow-modern backdrop-blur-md'
   };
   
   const paddingClasses = {
@@ -38,6 +38,7 @@ export function Card({
         baseClasses,
         variantClasses[variant],
         paddingClasses[padding],
+        onClick && 'cursor-pointer hover:scale-[1.01]',
         className
       )}
       onClick={onClick}
@@ -54,7 +55,7 @@ interface CardHeaderProps {
 
 export function CardHeader({ children, className }: CardHeaderProps) {
   return (
-    <div className={cn('mb-4', className)}>
+    <div className={cn('mb-6', className)}>
       {children}
     </div>
   );
@@ -75,7 +76,7 @@ export function CardTitle({ children, className, size = 'md' }: CardTitleProps) 
 
   return (
     <h3 className={cn(
-      'text-base-content',
+      'text-base-content tracking-tight',
       sizeClasses[size],
       className
     )}>
@@ -91,7 +92,7 @@ interface CardDescriptionProps {
 
 export function CardDescription({ children, className }: CardDescriptionProps) {
   return (
-    <p className={cn('text-base-content/60 text-sm mt-1', className)}>
+    <p className={cn('text-base-content/70 text-sm mt-2 leading-relaxed', className)}>
       {children}
     </p>
   );
@@ -117,7 +118,7 @@ interface CardFooterProps {
 
 export function CardFooter({ children, className }: CardFooterProps) {
   return (
-    <div className={cn('flex items-center justify-between pt-4 border-t border-base-content/10', className)}>
+    <div className={cn('flex items-center justify-between pt-6 border-t border-base-content/8', className)}>
       {children}
     </div>
   );

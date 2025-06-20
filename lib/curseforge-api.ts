@@ -305,7 +305,7 @@ export class CurseForgeAPI {
         if (curseforgeLine) {
           const fileKey = curseforgeLine.split("=")[1]?.trim() || "";
           // Remove quotes if present
-          const cleanKey = fileKey.replace(/^["']|["']$/g, "");
+          const cleanKey = fileKey.replace(/^\"|'|\"$/g, "");
 
           if (cleanKey && cleanKey.length >= 32) {
             log(LOG_LEVEL.INFO, "Using API key from .env.local file");

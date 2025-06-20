@@ -4,6 +4,7 @@ import {
   InstalledModMetadata,
 } from "@/lib/installed-mods-storage";
 import { CurseForgeAPI } from "@/lib/curseforge-api";
+import { serverSettingsStorage } from "@/lib/server-settings-storage";
 
 export default async function handler(
   req: NextApiRequest,
@@ -18,6 +19,12 @@ export default async function handler(
   try {
     switch (req.method) {
       case "GET":
+        const { setting } = req.query;
+        if (setting === 'launchOptions') {
+          const launchOptions = await serverSettingsStorage.getSetting(serverId, 'launchOptions');
+          return res.status(200).json({ data: { launchOptions } });
+        }
+
         // Get all installed mods for the server
         const mods = await installedModsStorage.getAllMods();
         const stats = await installedModsStorage.getStats();
@@ -27,14 +34,22 @@ export default async function handler(
         });
 
       case "POST":
-        // Add or update a mod
         const {
           modId,
           curseForgeData,
           isEnabled = true,
           loadOrder = 1,
+          launchOptions,
         } = req.body;
 
+        // Handle saving launch options
+        if (typeof launchOptions === 'string') {
+          await serverSettingsStorage.saveSetting(serverId, 'launchOptions', launchOptions);
+          return res.status(200).json({
+            message: "Launch options saved successfully",
+          });
+        }
+        
         if (!modId) {
           return res.status(400).json({ error: "Mod ID is required" });
         }

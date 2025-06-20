@@ -127,6 +127,35 @@ const ModManager: React.FC<ModManagerProps> = ({
     return `-mods=${modIds}`;
   }, []);
 
+  // Update launch options and persist to server and cache
+  const updateLaunchOptions = useCallback(async (modsArray: ModInfo[]) => {
+    const newLaunchOptions = generateModLaunchOptions(modsArray);
+    
+    // Only update if different to prevent unnecessary operations
+    if (newLaunchOptions !== launchOptions) {
+      setLaunchOptions(newLaunchOptions);
+      
+      // Save to both localStorage cache and server
+      saveLaunchOptionsToCache(newLaunchOptions);
+      
+      try {
+        const response = await fetch(`/api/servers/${serverId}/mods/storage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ launchOptions: newLaunchOptions })
+        });
+        if (response.ok) {
+          addConsoleInfo(`🚀 Updated mod launch options: ${newLaunchOptions || '(empty)'}`);
+        } else {
+          addConsoleWarning("⚠️ Failed to save launch options to server");
+        }
+      } catch (error) {
+        console.error("Failed to save launch options:", error);
+        addConsoleError(`❌ Failed to save launch options: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+  }, [launchOptions, serverId, generateModLaunchOptions, saveLaunchOptionsToCache]);
+
   // Instant cache loading for installed mods with launch options update
   const loadInstalledModsFromCache = useCallback(() => {
     try {
@@ -167,74 +196,64 @@ const ModManager: React.FC<ModManagerProps> = ({
     }
   }, [serverId]);
 
-  // Load mods on component mount with instant cache loading
+  // Load launch options from server
+  const loadLaunchOptions = async () => {
+    try {
+      const response = await fetch(`/api/servers/${serverId}/mods/storage?setting=launchOptions`);
+      if (response.ok) {
+        const data = await response.json();
+        const serverLaunchOptions = data.data?.launchOptions;
+
+        if (serverLaunchOptions) {
+          setLaunchOptions(serverLaunchOptions);
+          saveLaunchOptionsToCache(serverLaunchOptions); // Also cache it
+          addConsoleInfo(`🚀 Loaded launch options from server`);
+        } else {
+          // If no options on server, check cache
+          const cachedOptions = loadLaunchOptionsFromCache();
+          if (cachedOptions === null) {
+            // if nothing on server or cache, generate from mods
+            const initialLaunchOptions = generateModLaunchOptions(mods);
+            setLaunchOptions(initialLaunchOptions);
+          }
+        }
+      }
+    } catch (error) {
+      addConsoleWarning(`Could not load launch options from server: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  // Effect to load initial data
   useEffect(() => {
-    // Load cached launch options first
-    loadLaunchOptionsFromCache();
-    
-    // Instantly load mods from cache
     const cachedMods = loadInstalledModsFromCache();
-    
-    // Then load fresh data in background
-    loadMods();
+    // Pass cached mods to loadMods to avoid re-fetching what we have
+    loadMods(cachedMods || []); 
     loadLaunchOptions();
     loadBackgroundFetchStatus();
-    
-    // Strategy 1: Pre-fetch popular categories for better UX
-    modCacheClient.prefetchPopularCategories();
-  }, [serverId, loadInstalledModsFromCache, loadLaunchOptionsFromCache]);
-
-  // Update launch options whenever mods change
-  const updateLaunchOptions = useCallback(async (modsArray: ModInfo[]) => {
-    const newLaunchOptions = generateModLaunchOptions(modsArray);
-    
-    // Only update if different to prevent unnecessary operations
-    if (newLaunchOptions !== launchOptions) {
-      setLaunchOptions(newLaunchOptions);
-      
-      // Save to both localStorage cache and server
-      saveLaunchOptionsToCache(newLaunchOptions);
-      
-      try {
-        const response = await fetch(`/api/servers/${serverId}/mods/storage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ launchOptions: newLaunchOptions })
-        });
-        if (response.ok) {
-          addConsoleInfo(`🚀 Updated mod launch options: ${newLaunchOptions || '(empty)'}`);
-        } else {
-          addConsoleWarning("⚠️ Failed to save launch options to server");
-        }
-      } catch (error) {
-        console.error("Failed to save launch options:", error);
-        addConsoleError(`❌ Failed to save launch options: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    }
-  }, [launchOptions, serverId, generateModLaunchOptions, saveLaunchOptionsToCache]);
+  }, [serverId]);
 
   // Load mods from API - Enhanced with caching and auto-launch options
-  const loadMods = async () => {
+  const loadMods = async (cachedMods: ModInfo[] = []) => {
     setIsLoadingMods(true);
     try {
       const response = await fetch(`/api/servers/${serverId}/mods`);
       if (response.ok) {
-        const data = await response.json();
+      const data = await response.json();
         // Handle both direct array response and object with mods property
         const modsArray = Array.isArray(data) ? data : (data.mods || []);
         
         // Only update state if data has changed (prevent unnecessary re-renders)
-        const currentModsString = JSON.stringify(mods);
+        const currentModsString = JSON.stringify(cachedMods);
         const newModsString = JSON.stringify(modsArray);
         
         if (currentModsString !== newModsString) {
-          setMods(modsArray);
+        setMods(modsArray);
           saveInstalledModsToCache(modsArray); // Cache the fresh data
           updateLaunchOptions(modsArray); // Auto-update launch options
           addConsoleInfo(`🔄 Refreshed ${modsArray.length} installed mods from server`);
           
-          if (onModsUpdate) {
-            onModsUpdate(modsArray);
+        if (onModsUpdate) {
+          onModsUpdate(modsArray);
           }
         } else {
           addConsoleInfo(`✅ Installed mods are up to date (${modsArray.length} mods)`);
@@ -246,19 +265,6 @@ const ModManager: React.FC<ModManagerProps> = ({
       addConsoleError(`❌ Failed to load installed mods: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoadingMods(false);
-    }
-  };
-
-  // Load launch options
-  const loadLaunchOptions = async () => {
-    try {
-      const response = await fetch(`/api/servers/${serverId}/mods/storage`);
-      if (response.ok) {
-        const data = await response.json();
-        setLaunchOptions(data.launchOptions || "");
-      }
-    } catch (error) {
-      console.error("Failed to load launch options:", error);
     }
   };
 
@@ -398,7 +404,7 @@ const ModManager: React.FC<ModManagerProps> = ({
             description: modData?.summary || "Manually added mod",
             version: "Unknown",
             workshopId: modId,
-            enabled: true,
+        enabled: true,
             loadOrder: mods.length + i,
             dependencies: [],
             incompatibilities: [],
@@ -416,7 +422,7 @@ const ModManager: React.FC<ModManagerProps> = ({
           if (response.ok) {
             successCount++;
             addConsoleInfo(`✅ Successfully added mod: ${newMod.name} (ID: ${modId})`);
-          } else {
+    } else {
             errorCount++;
             const errorText = await response.text();
             console.error(`Failed to add mod ${modId}:`, errorText);
@@ -441,7 +447,7 @@ const ModManager: React.FC<ModManagerProps> = ({
       }
 
       // Reset form and close modal
-      setManualModId("");
+    setManualModId("");
       setShowAddModModal(false);
       
     } catch (error) {
@@ -640,13 +646,13 @@ const ModManager: React.FC<ModManagerProps> = ({
     if (selectedCategory === "Installed") {
       // Convert ModInfo to DisplayMod format
       return (getFilteredMods() as ModInfo[]).map(mod => ({
-        id: mod.id,
+                id: mod.id,
         name: mod.name,
         description: mod.description || '',
         version: mod.version || '1.0.0',
         workshopId: mod.workshopId || mod.id,
         enabled: mod.enabled,
-        loadOrder: mod.loadOrder,
+                loadOrder: mod.loadOrder,
         dependencies: mod.dependencies || [],
         incompatibilities: mod.incompatibilities || [],
         size: typeof mod.size === 'number' ? `${Math.floor(mod.size / 1000)}K downloads` : 'Unknown',
@@ -697,7 +703,7 @@ const ModManager: React.FC<ModManagerProps> = ({
         if (onModsUpdate) {
           onModsUpdate(updatedMods);
         }
-      } else {
+        } else {
         // Revert optimistic update on failure
         setMods(mods);
         saveInstalledModsToCache(mods);
@@ -724,7 +730,7 @@ const ModManager: React.FC<ModManagerProps> = ({
       setMods(updatedMods);
       saveInstalledModsToCache(updatedMods);
       updateLaunchOptions(updatedMods); // Auto-update launch options
-
+      
       const response = await fetch(`/api/servers/${serverId}/mods`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -769,10 +775,10 @@ const ModManager: React.FC<ModManagerProps> = ({
         return 'Invalid Date';
       }
       
-      return new Intl.DateTimeFormat('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
+    return new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
       }).format(dateObj);
     } catch (error) {
       console.error('Date formatting error:', error);
@@ -806,13 +812,13 @@ const ModManager: React.FC<ModManagerProps> = ({
 
       <div className="border-t border-matrix-500/30 pt-4">
         <h4 className="font-bold text-matrix-400 uppercase tracking-wider text-xs mb-2">Filter Installed</h4>
-        <input
-          type="text"
-          placeholder="Search installed mods..."
-          value={installedModsSearchQuery}
-          onChange={(e) => setInstalledModsSearchQuery(e.target.value)}
+      <input
+        type="text"
+        placeholder="Search installed mods..."
+        value={installedModsSearchQuery}
+        onChange={(e) => setInstalledModsSearchQuery(e.target.value)}
           className="w-full bg-cyber-bg border-2 border-matrix-500/50 focus:border-matrix-500 p-2 text-matrix-400 font-mono text-sm"
-        />
+      />
       </div>
     </div>
   );
@@ -922,8 +928,8 @@ const ModManager: React.FC<ModManagerProps> = ({
 
     // Loading state
     if (isLoading) {
-      return (
-        <div className="text-center p-8 border-2 border-dashed border-matrix-500/30">
+    return (
+      <div className="text-center p-8 border-2 border-dashed border-matrix-500/30">
           <div className="loading loading-spinner loading-lg text-matrix-500 mx-auto mb-4"></div>
           <p className="text-matrix-600">Loading {category} mods...</p>
           <p className="text-xs text-matrix-700">Checking cache and fetching fresh data</p>

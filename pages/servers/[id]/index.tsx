@@ -14,13 +14,15 @@ import {
   CheckCircleIcon,
   ClockIcon,
   PlayIcon,
-  StopIcon
+  StopIcon,
+  WrenchScrewdriverIcon
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 import type { ServerConfig, ServerStatus } from '@/types/server';
 import { useGlobalSettings } from '@/lib/global-settings';
 import { GlobalSettingsModal } from '@/components/GlobalSettingsModal';
 import { AddServerForm } from '@/components/forms/AddServerForm';
+import { ServerConfigEditor, ServerConfigModal } from '@/components/config/ServerConfigEditor';
 
 const ServerDetailPage = () => {
   const router = useRouter();
@@ -33,6 +35,7 @@ const ServerDetailPage = () => {
   const [showGlobalSettingsModal, setShowGlobalSettingsModal] = useState(false);
   const [showAddServerModal, setShowAddServerModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showConfigEditor, setShowConfigEditor] = useState(false);
 
   useEffect(() => {
     if (id && typeof id === 'string') {
@@ -155,6 +158,34 @@ const ServerDetailPage = () => {
 
   const handleAddServerCancel = () => {
     setShowAddServerModal(false);
+  };
+
+  const handleConfigUpdate = async (updatedConfig: Partial<ServerConfig>) => {
+    if (!server) return;
+
+    try {
+      const response = await fetch(`/api/servers/${server.id}/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedConfig),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update server configuration');
+      }
+
+      const result = await response.json();
+      if (result.success && result.data?.server) {
+        setServer(result.data.server);
+        toast.success('Server configuration updated successfully');
+      } else {
+        throw new Error('Invalid response from server');
+      }
+    } catch (error) {
+      console.error('Failed to update server configuration:', error);
+      toast.error('Failed to update server configuration');
+      throw error;
+    }
   };
 
   if (!id || typeof id !== 'string') {
@@ -365,6 +396,15 @@ const ServerDetailPage = () => {
                 </div>
               </div>
 
+              {/* Server Configuration Modal */}
+              {showConfigEditor && server && (
+                <ServerConfigModal
+                  server={server}
+                  onConfigUpdate={handleConfigUpdate}
+                  onCancel={() => setShowConfigEditor(false)}
+                />
+              )}
+
               {/* Navigation and Details */}
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
                 {/* Navigation Sidebar */}
@@ -398,6 +438,19 @@ const ServerDetailPage = () => {
                           <div className="flex items-center justify-center gap-3 w-full">
                             <CogIcon className="h-5 w-5" />
                             <span>Server Config</span>
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => setShowConfigEditor(!showConfigEditor)}
+                          className={`btn w-full rounded-xl transition-all duration-300 font-semibold tracking-wide text-base py-3 ${
+                            showConfigEditor 
+                              ? 'btn-primary hover:shadow-glow hover:shadow-primary/30' 
+                              : 'btn-outline hover:bg-secondary hover:border-secondary hover:text-secondary-content'
+                          }`}
+                        >
+                          <div className="flex items-center justify-center gap-3 w-full">
+                            <WrenchScrewdriverIcon className="h-5 w-5" />
+                            <span>{showConfigEditor ? 'Hide Config' : 'Quick Config'}</span>
                           </div>
                         </button>
                       </div>

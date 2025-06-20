@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect } from 'react';
-import { initializeTheme, getStoredTheme } from '@/lib/theme-manager';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { initializeTheme, getStoredTheme, ThemeManager, Theme } from '@/lib/theme-manager';
 
 interface ThemeContextType {
   theme: string;
@@ -34,9 +34,41 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
 }
 
 export function useTheme() {
-  const context = useContext(ThemeContext);
-  if (context === undefined) {
-    throw new Error('useTheme must be used within a ThemeProvider');
+  const [theme, setTheme] = useState<Theme>('matrix');
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const themeManager = ThemeManager.getInstance();
+    setTheme(themeManager.getTheme());
+    setMounted(true);
+  }, []);
+
+  const toggleTheme = () => {
+    const themeManager = ThemeManager.getInstance();
+    themeManager.toggleTheme();
+    setTheme(themeManager.getTheme());
+  };
+
+  const setThemeValue = (newTheme: Theme) => {
+    const themeManager = ThemeManager.getInstance();
+    themeManager.setTheme(newTheme);
+    setTheme(newTheme);
+  };
+
+  // Return default values during SSR
+  if (!mounted) {
+    return {
+      theme: 'matrix' as Theme,
+      toggleTheme: () => {},
+      setTheme: () => {},
+      mounted: false
+    };
   }
-  return context;
+
+  return {
+    theme,
+    toggleTheme,
+    setTheme: setThemeValue,
+    mounted
+  };
 }

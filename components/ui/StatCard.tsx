@@ -24,32 +24,32 @@ export function StatCard({
   trend
 }: StatCardProps) {
   const variantClasses = {
-    default: 'bg-base-200 border-base-content/8',
-    success: 'bg-success/5 border-success/20',
-    warning: 'bg-warning/5 border-warning/20',
-    error: 'bg-error/5 border-error/20',
-    info: 'bg-info/5 border-info/20'
+    default: 'bg-cyber-panel border-matrix-700',
+    success: 'bg-cyber-panel border-matrix-500',
+    warning: 'bg-cyber-panel border-warning-orange',
+    error: 'bg-cyber-panel border-danger-red',
+    info: 'bg-cyber-panel border-info-blue'
   };
 
   const iconColors = {
-    default: 'text-base-content/60',
-    success: 'text-success',
-    warning: 'text-warning',
-    error: 'text-error',
-    info: 'text-info'
+    default: 'text-matrix-600',
+    success: 'text-matrix-500',
+    warning: 'text-warning-orange',
+    error: 'text-danger-red',
+    info: 'text-info-blue'
   };
 
   const valueColors = {
-    default: 'text-base-content',
-    success: 'text-success',
-    warning: 'text-warning',
-    error: 'text-error',
-    info: 'text-info'
+    default: 'text-matrix-500',
+    success: 'text-matrix-500',
+    warning: 'text-warning-orange',
+    error: 'text-danger-red',
+    info: 'text-info-blue'
   };
 
   return (
     <div className={cn(
-      'p-6 rounded-xl border shadow-modern transition-all duration-200 hover:shadow-modern-lg',
+      'p-6 border-2 shadow-matrix transition-all duration-200 hover:shadow-matrix-glow cyber-hover',
       variantClasses[variant],
       className
     )}>
@@ -58,29 +58,29 @@ export function StatCard({
           <div className="flex items-center gap-3 mb-3">
             {icon && (
               <div className={cn(
-                'w-10 h-10 rounded-lg flex items-center justify-center',
-                variant === 'default' ? 'bg-base-content/5' : `bg-${variant}/10`
+                'w-10 h-10 border flex items-center justify-center',
+                variant === 'default' ? 'bg-cyber-panel border-matrix-700' : `bg-cyber-panel border-${variant === 'success' ? 'matrix-600' : variant === 'warning' ? 'warning-orange' : variant === 'error' ? 'danger-red' : 'info-blue'}`
               )}>
                 <div className={cn('w-5 h-5', iconColors[variant])}>
                   {icon}
                 </div>
               </div>
             )}
-            <h3 className="text-sm font-medium text-base-content/70 tracking-wide uppercase">
+            <h3 className="text-sm font-mono font-medium text-matrix-600 tracking-widest uppercase">
               {title}
             </h3>
           </div>
           
           <div className="space-y-1">
             <p className={cn(
-              'text-3xl font-bold tracking-tight',
+              'text-3xl font-bold font-mono tracking-wider',
               valueColors[variant]
             )}>
               {value}
             </p>
             
             {description && (
-              <p className="text-sm text-base-content/60">
+              <p className="text-sm text-matrix-600 font-mono">
                 {description}
               </p>
             )}
@@ -88,10 +88,10 @@ export function StatCard({
             {trend && (
               <div className="flex items-center gap-1 mt-2">
                 <div className={cn(
-                  'flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium',
+                  'flex items-center gap-1 px-2 py-1 border text-xs font-mono font-medium uppercase tracking-wider',
                   trend.isPositive 
-                    ? 'bg-success/10 text-success' 
-                    : 'bg-error/10 text-error'
+                    ? 'bg-cyber-panel border-matrix-500 text-matrix-500' 
+                    : 'bg-cyber-panel border-danger-red text-danger-red'
                 )}>
                   <span className={cn(
                     'text-xs',

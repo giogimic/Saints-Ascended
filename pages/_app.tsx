@@ -6,9 +6,14 @@ import Head from "next/head";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { GlobalSettingsProvider } from "@/components/GlobalSettingsProvider";
 
-// Import cache refresh service (server-side only)
+// Import cache refresh service and Strategy 2 optimizations (server-side only)
 if (typeof window === "undefined") {
   import("@/lib/cache-refresh-service");
+  // Strategy 2: Start optimized cache warming service
+  import("@/lib/mod-service-optimized").then(({ modServiceOptimized }) => {
+    modServiceOptimized.startCacheWarming();
+    console.log("Strategy 2: Cache warming service started");
+  });
 }
 
 export default function App({ Component, pageProps }: AppProps) {

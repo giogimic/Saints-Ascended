@@ -16,13 +16,13 @@ export function Card({
   padding = 'md',
   onClick
 }: CardProps) {
-  const baseClasses = 'rounded-xl transition-all duration-200';
+  const baseClasses = 'transition-all duration-200 cyber-hover';
   
   const variantClasses = {
-    default: 'bg-base-200 border border-base-content/8 shadow-modern',
-    elevated: 'bg-base-200 border border-base-content/8 shadow-modern hover:shadow-modern-lg hover:border-base-content/12',
-    outlined: 'bg-transparent border-2 border-primary/30 shadow-none hover:border-primary/50',
-    glass: 'bg-base-200/60 border border-base-content/8 shadow-modern backdrop-blur-md'
+    default: 'bg-cyber-panel border-2 border-matrix-700 shadow-matrix',
+    elevated: 'bg-cyber-panel border-2 border-matrix-700 shadow-matrix hover:shadow-matrix-glow hover:border-matrix-600',
+    outlined: 'bg-transparent border-2 border-matrix-600 shadow-none hover:border-matrix-500',
+    glass: 'bg-cyber-panel/60 border-2 border-matrix-700 shadow-matrix backdrop-blur-md'
   };
   
   const paddingClasses = {
@@ -76,7 +76,7 @@ export function CardTitle({ children, className, size = 'md' }: CardTitleProps) 
 
   return (
     <h3 className={cn(
-      'text-base-content tracking-tight',
+      'text-matrix-500 tracking-wider font-mono uppercase cyber-text',
       sizeClasses[size],
       className
     )}>
@@ -92,7 +92,7 @@ interface CardDescriptionProps {
 
 export function CardDescription({ children, className }: CardDescriptionProps) {
   return (
-    <p className={cn('text-base-content/70 text-sm mt-2 leading-relaxed', className)}>
+    <p className={cn('text-matrix-600 text-sm mt-2 leading-relaxed font-mono', className)}>
       {children}
     </p>
   );
@@ -118,7 +118,7 @@ interface CardFooterProps {
 
 export function CardFooter({ children, className }: CardFooterProps) {
   return (
-    <div className={cn('flex items-center justify-between pt-6 border-t border-base-content/8', className)}>
+    <div className={cn('flex items-center justify-between pt-6 border-t border-matrix-700', className)}>
       {children}
     </div>
   );

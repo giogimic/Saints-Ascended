@@ -1,710 +1,698 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Classic Pip-Boy Theme - Global Styles */
+/* Cyberpunk Design System - Saints Ascended Panel Reference */
 :root {
-  --pipboy-green: #00ff00;
-  --pipboy-black: #000000;
+  /* Core Color Palette - Exact Match */
+  --primary-green: #00ff41;
+  --secondary-green: #00cc33;
+  --dark-green: #003311;
+  --bg-dark: #0a0a0a;
+  --bg-panel: #111111;
+  --grid-line: #1a4a1a;
+  --text-primary: #00ff41;
+  --text-secondary: #66ff66;
+  --text-muted: #448844;
+  --danger-red: #ff3333;
+  --warning-orange: #ff8800;
+  --info-blue: #0099ff;
+  
+  /* Legacy Pip-Boy Colors for Compatibility */
+  --pipboy-green: #00ff41;
+  --pipboy-black: #0a0a0a;
 }
 
-/* Base HTML and Body - Classic Pip-Boy Black */
+/* Base Styling - Enhanced */
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
 body {
-  background-color: var(--pipboy-black);
-  color: var(--pipboy-green);
-  font-family: 'JetBrains Mono', monospace;
-  position: relative;
+  max-width: 100vw;
   overflow-x: hidden;
-}
-
-/* Scanline Overlay for authentic feel */
-body::after {
-  content: "";
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-image: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(0, 255, 0, 0.08) 2px,
-    rgba(0, 255, 0, 0.08) 4px
-  );
-  pointer-events: none;
-  z-index: 10000;
-  animation: scanline 10s linear infinite;
-}
-
-@keyframes scanline {
-  0% {
-    background-position: 0 0;
-  }
-  100% {
-    background-position: 0 100vh;
-  }
-}
-
-@keyframes jitter {
-  0%, 100% { transform: translate(0, 0) skewX(0); }
-  25% { transform: translate(0.5px, -0.5px) skewX(-0.25deg); }
-  50% { transform: translate(-0.5px, 0.5px) skewX(0.25deg); }
-  75% { transform: translate(0.5px, 0.5px) skewX(-0.25deg); }
-}
-
-@keyframes text-flicker {
-  0% {
-    text-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
-    opacity: 1;
-  }
-  50% {
-    text-shadow: 0 0 8px rgba(0, 255, 0, 0.8), 0 0 2px rgba(255, 255, 255, 0.5);
-    opacity: 0.95;
-  }
-  100% {
-    text-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
-    opacity: 1;
-  }
-}
-
-/* Typography */
-h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
   font-family: 'JetBrains Mono', monospace;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  text-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
-}
-
-/* --- Component Overrides --- */
-
-/* Fix for Input Fields */
-.input,
-input[type="text"],
-input[type="password"],
-input[type="email"],
-input[type="number"],
-input[type="url"],
-input[type="tel"],
-input[type="search"],
-textarea,
-.textarea,
-.select {
-  background-color: transparent !important;
-  border: 1px solid var(--pipboy-green) !important;
-  color: var(--pipboy-green) !important;
-  border-radius: 0 !important;
-  transition: all 0.2s ease-in-out;
-}
-
-.input::placeholder,
-textarea::placeholder {
-  color: rgba(0, 255, 0, 0.4) !important;
-}
-
-.input:focus,
-textarea:focus,
-.select:focus {
-  outline: none !important;
-  box-shadow: 0 0 8px rgba(0, 255, 0, 0.7), inset 0 0 5px rgba(0, 255, 0, 0.3) !important;
-  border-color: var(--pipboy-green) !important;
-}
-
-/* General Card and Container Styling */
-.card, .box, .server-card, .stat-card {
-  background-color: var(--pipboy-black) !important;
-  border: 1px solid var(--pipboy-green) !important;
-  box-shadow: none !important;
-  border-radius: 0 !important;
-  padding: 1rem;
-}
-
-/* Button Styling */
-.btn {
-  border-radius: 0 !important;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  transition: all 0.2s ease-in-out;
-}
-
-.btn-primary {
-  background-color: var(--pipboy-green) !important;
-  color: var(--pipboy-black) !important;
-  border: 1px solid var(--pipboy-green) !important;
-}
-
-.btn-primary:hover {
-  background-color: var(--pipboy-black) !important;
-  color: var(--pipboy-green) !important;
-}
-
-.btn-ghost {
-  background-color: transparent !important;
-  color: var(--pipboy-green) !important;
-  border: 1px solid var(--pipboy-green) !important;
-}
-
-.btn-ghost:hover {
-  background-color: var(--pipboy-green) !important;
-  color: var(--pipboy-black) !important;
-}
-
-/* Table Styling */
-.table {
-  width: 100%;
-}
-.table th, .table td {
-  border-bottom: 1px solid var(--pipboy-green);
-  padding: 0.75rem 1rem;
-  color: var(--pipboy-green);
-}
-.table th {
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-
-/* Sidebar & Header */
-.sidebar {
-  background-color: var(--pipboy-black) !important;
-  border-right: 1px solid var(--pipboy-green);
-}
-
-.header {
-  background-color: var(--pipboy-black) !important;
-  border-bottom: 1px solid var(--pipboy-green);
-}
-
-/* Modern Pip-Boy Reimagined Theme - Global Styles */
-:root {
-  --pipboy-green: #00ff00;
-  --pipboy-green-dark: #00cc00;
-  --pipboy-green-darker: #009900;
-  --pipboy-black: #000000;
-  --pipboy-black-green: #001a00;
-  --pipboy-dark-green: #003300;
-  --pipboy-medium-green: #004d00;
-  --pipboy-light-green: #006600;
-  --pipboy-bright-green: #008000;
-}
-
-/* Base HTML and Body - Modern Pip-Boy Gradient */
-html {
+  background: var(--bg-dark);
+  color: var(--text-primary);
+  line-height: 1.4;
   scroll-behavior: smooth;
-  background: linear-gradient(135deg, 
-    var(--pipboy-black) 0%, 
-    var(--pipboy-black-green) 25%, 
-    var(--pipboy-dark-green) 50%, 
-    var(--pipboy-medium-green) 75%, 
-    var(--pipboy-light-green) 100%
-  );
-  background-attachment: fixed;
   min-height: 100vh;
+  background-image: 
+    radial-gradient(circle at 20% 50%, rgba(0, 255, 65, 0.03) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(0, 255, 65, 0.02) 0%, transparent 50%),
+    linear-gradient(90deg, transparent 49%, rgba(26, 74, 26, 0.3) 50%, transparent 51%),
+    linear-gradient(0deg, transparent 49%, rgba(26, 74, 26, 0.3) 50%, transparent 51%);
+  background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+  animation: gridPulse 4s ease-in-out infinite alternate;
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  background: transparent;
-  color: var(--pipboy-green);
-  line-height: 1.6;
-  letter-spacing: 0.025em;
   min-height: 100vh;
-  position: relative;
 }
 
-/* Modern Pip-Boy Background Effects */
-body::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: 
-    radial-gradient(circle at 20% 20%, rgba(0, 255, 0, 0.03) 0%, transparent 50%),
-    radial-gradient(circle at 80% 80%, rgba(0, 255, 0, 0.02) 0%, transparent 50%),
-    radial-gradient(circle at 40% 60%, rgba(0, 255, 0, 0.01) 0%, transparent 50%);
-  pointer-events: none;
-  z-index: -1;
-}
-
-/* Dark mode fallbacks and enhancements */
-.dark {
-  color-scheme: dark;
-}
-
-.dark body {
-  background: transparent;
-}
-
-/* Modern Pip-Boy Typography */
+/* Typography System */
 h1, h2, h3, h4, h5, h6 {
-  color: var(--pipboy-green);
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-shadow: 0 0 8px rgba(0, 255, 0, 0.3);
-}
-
-h1 {
-  font-size: 2.5rem;
+  font-family: 'JetBrains Mono', monospace;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
+  text-shadow: 0 0 10px var(--primary-green);
 }
 
-h2 {
-  font-size: 2rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+/* Enhanced Input Styling for Better Visibility */
+.input, .textarea, .select {
+  background-color: rgba(10, 10, 10, 0.9) !important;
+  border-color: rgba(0, 255, 65, 0.3) !important;
+  color: var(--primary-green) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  transition: all 0.3s ease !important;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5) !important;
 }
 
-h3 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+.input:focus, .textarea:focus, .select:focus {
+  border-color: var(--primary-green) !important;
+  box-shadow: 
+    inset 0 2px 4px rgba(0, 0, 0, 0.5),
+    0 0 10px rgba(0, 255, 65, 0.3) !important;
+  outline: none !important;
 }
 
-/* Modern Pip-Boy Links */
-a {
-  color: var(--pipboy-green);
-  text-decoration: none;
-  transition: all 0.2s ease;
-  text-shadow: 0 0 4px rgba(0, 255, 0, 0.2);
+.input::placeholder, .textarea::placeholder {
+  color: rgba(0, 255, 65, 0.5) !important;
+  font-family: 'JetBrains Mono', monospace !important;
 }
 
-a:hover {
-  color: var(--pipboy-bright-green);
-  text-shadow: 0 0 8px rgba(0, 255, 0, 0.5);
-  transform: translateY(-1px);
+.input-error {
+  border-color: var(--danger-red) !important;
+  box-shadow: 0 0 10px rgba(255, 51, 51, 0.3) !important;
 }
 
-/* Modern Pip-Boy Buttons */
-.btn {
-  text-transform: uppercase;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  border: 2px solid var(--pipboy-green);
-  background: transparent;
-  color: var(--pipboy-green);
-  transition: all 0.3s ease;
+/* Enhanced Form Controls */
+.form-control .label-text {
+  color: var(--text-secondary) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+.form-control .label-text-alt {
+  color: var(--text-muted) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 0.75rem !important;
+}
+
+/* Main Content Layout */
+.main-content {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 10;
+}
+
+/* Enhanced Metrics Grid */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.metric-card {
+  background: linear-gradient(135deg, rgba(17, 17, 17, 0.9), rgba(26, 74, 26, 0.3));
+  border: 1px solid var(--primary-green);
+  border-radius: 0;
+  padding: 1.5rem;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 0 10px rgba(0, 255, 0, 0.2);
+  transition: all 0.3s ease;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
-.btn::before {
+.metric-card::before {
   content: '';
   position: absolute;
   top: 0;
   left: -100%;
   width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(0, 255, 0, 0.1), transparent);
-  transition: left 0.5s ease;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--primary-green), transparent);
+  animation: scan-line 3s linear infinite;
 }
 
-.btn:hover::before {
-  left: 100%;
-}
-
-.btn:hover {
-  background: var(--pipboy-green);
-  color: var(--pipboy-black);
-  box-shadow: 0 0 20px rgba(0, 255, 0, 0.4);
+.metric-card:hover {
   transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 255, 65, 0.3);
+  border-color: var(--secondary-green);
 }
 
-.btn:active {
-  transform: translateY(0);
-  box-shadow: 0 0 15px rgba(0, 255, 0, 0.3);
+.metric-card:hover::before {
+  animation-duration: 1s;
 }
 
-/* Modern Pip-Boy Cards */
-.card {
-  background: linear-gradient(135deg, 
-    rgba(0, 0, 0, 0.9) 0%, 
-    rgba(0, 26, 0, 0.8) 50%, 
-    rgba(0, 51, 0, 0.7) 100%
-  );
-  border: 2px solid var(--pipboy-green);
-  box-shadow: 
-    0 0 20px rgba(0, 255, 0, 0.2),
-    inset 0 0 20px rgba(0, 255, 0, 0.05);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  transition: all 0.3s ease;
+.metric-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.metric-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  opacity: 0.8;
+}
+
+.metric-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--primary-green);
+  filter: drop-shadow(0 0 5px var(--primary-green));
+}
+
+.metric-value {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--primary-green);
+  text-shadow: 0 0 15px var(--primary-green);
+  margin-bottom: 0.5rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.metric-subtitle {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Empty State Styling */
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: linear-gradient(135deg, rgba(17, 17, 17, 0.8), rgba(26, 74, 26, 0.2));
+  border: 1px solid var(--primary-green);
+  border-radius: 0;
+  margin: 2rem 0;
   position: relative;
   overflow: hidden;
 }
 
-.card::before {
+.empty-state::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--pipboy-green), transparent);
-  opacity: 0;
-  transition: opacity 0.3s ease;
+  bottom: 0;
+  background: 
+    linear-gradient(90deg, transparent 49%, var(--grid-line) 50%, transparent 51%),
+    linear-gradient(0deg, transparent 49%, var(--grid-line) 50%, transparent 51%);
+  background-size: 40px 40px;
+  opacity: 0.3;
+  pointer-events: none;
 }
 
-.card:hover::before {
-  opacity: 1;
+.empty-icon {
+  font-size: 4rem;
+  margin-bottom: 1.5rem;
+  filter: drop-shadow(0 0 10px var(--primary-green));
 }
 
-.card:hover {
-  box-shadow: 
-    0 0 30px rgba(0, 255, 0, 0.3),
-    inset 0 0 30px rgba(0, 255, 0, 0.1);
-  transform: translateY(-2px);
-}
-
-/* Modern Pip-Boy Form Elements */
-input, textarea, select {
-  background: rgba(0, 0, 0, 0.8);
-  border: 2px solid var(--pipboy-green);
-  color: var(--pipboy-green);
-  padding: 0.75rem 1rem;
-  border-radius: 0.25rem;
-  transition: all 0.3s ease;
-  font-family: 'JetBrains Mono', monospace;
-  letter-spacing: 0.05em;
-}
-
-input:focus, textarea:focus, select:focus {
-  outline: none;
-  border-color: var(--pipboy-bright-green);
-  box-shadow: 0 0 15px rgba(0, 255, 0, 0.3);
-  background: rgba(0, 26, 0, 0.9);
-}
-
-input::placeholder, textarea::placeholder {
-  color: rgba(0, 255, 0, 0.5);
-  font-style: italic;
-}
-
-/* Modern Pip-Boy Tables */
-table {
-  background: rgba(0, 0, 0, 0.8);
-  border: 2px solid var(--pipboy-green);
-  border-radius: 0.5rem;
-  overflow: hidden;
-  box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
-}
-
-th {
-  background: linear-gradient(135deg, var(--pipboy-dark-green), var(--pipboy-medium-green));
-  color: var(--pipboy-green);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  padding: 1rem;
-  border-bottom: 2px solid var(--pipboy-green);
-}
-
-td {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(0, 255, 0, 0.2);
-  color: var(--pipboy-green);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.9rem;
-}
-
-tr:hover {
-  background: rgba(0, 255, 0, 0.05);
-}
-
-/* Modern Pip-Boy Navigation */
-.navbar {
-  background: linear-gradient(135deg, 
-    rgba(0, 0, 0, 0.95) 0%, 
-    rgba(0, 26, 0, 0.9) 100%
-  );
-  border-bottom: 2px solid var(--pipboy-green);
-  -webkit-backdrop-filter: blur(15px);
-  backdrop-filter: blur(15px);
-  box-shadow: 0 0 30px rgba(0, 255, 0, 0.2);
-}
-
-.navbar-brand {
-  color: var(--pipboy-green);
+.empty-title {
+  font-size: 1.5rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
-  text-shadow: 0 0 10px rgba(0, 255, 0, 0.4);
+  letter-spacing: 0.1em;
+  color: var(--primary-green);
+  margin-bottom: 1rem;
+  text-shadow: 0 0 10px var(--primary-green);
 }
 
-/* Modern Pip-Boy Sidebar */
-.sidebar {
-  background: linear-gradient(180deg, 
-    rgba(0, 0, 0, 0.95) 0%, 
-    rgba(0, 26, 0, 0.9) 50%, 
-    rgba(0, 51, 0, 0.85) 100%
-  );
-  border-right: 2px solid var(--pipboy-green);
-  -webkit-backdrop-filter: blur(15px);
-  backdrop-filter: blur(15px);
-  box-shadow: 5px 0 30px rgba(0, 255, 0, 0.2);
+.empty-subtitle {
+  font-size: 1rem;
+  color: var(--text-muted);
+  margin-bottom: 2rem;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.6;
 }
 
-.sidebar-item {
-  color: var(--pipboy-green);
-  padding: 0.75rem 1rem;
-  margin: 0.25rem 0;
-  border-radius: 0.25rem;
-  transition: all 0.3s ease;
+/* Action Button */
+.action-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, var(--primary-green), var(--secondary-green));
+  color: var(--bg-dark);
+  border: none;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
 }
 
-.sidebar-item::before {
+.action-button::before {
   content: '';
   position: absolute;
   top: 0;
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(0, 255, 0, 0.1), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
   transition: left 0.5s ease;
 }
 
-.sidebar-item:hover::before {
+.action-button:hover::before {
   left: 100%;
 }
 
-.sidebar-item:hover {
-  background: rgba(0, 255, 0, 0.1);
-  color: var(--pipboy-bright-green);
-  transform: translateX(5px);
-  box-shadow: 0 0 15px rgba(0, 255, 0, 0.3);
+.action-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 255, 65, 0.4);
 }
 
-.sidebar-item.active {
-  background: linear-gradient(135deg, var(--pipboy-dark-green), var(--pipboy-medium-green));
-  color: var(--pipboy-black);
-  font-weight: 600;
-  box-shadow: 0 0 20px rgba(0, 255, 0, 0.4);
+/* Server Grid Layout */
+.server-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2rem;
 }
 
-/* Modern Pip-Boy Status Indicators */
+/* Status Indicators */
 .status-online {
-  color: var(--pipboy-green);
-  text-shadow: 0 0 8px rgba(0, 255, 0, 0.5);
-  animation: pipboy-glow 2s ease-in-out infinite alternate;
+  color: var(--primary-green);
+  text-shadow: 0 0 8px var(--primary-green);
 }
 
 .status-offline {
-  color: #ff0000;
-  text-shadow: 0 0 8px rgba(255, 0, 0, 0.5);
+  color: var(--text-muted);
+}
+
+.status-error {
+  color: var(--danger-red);
+  text-shadow: 0 0 8px var(--danger-red);
 }
 
 .status-warning {
-  color: var(--pipboy-green-dark);
-  text-shadow: 0 0 8px rgba(0, 204, 0, 0.5);
+  color: var(--warning-orange);
+  text-shadow: 0 0 8px var(--warning-orange);
 }
 
-/* Modern Pip-Boy Loading States */
-.loading {
+/* Loading Spinner */
+.spinner-border {
+  border: 3px solid var(--grid-line);
+  border-top: 3px solid var(--primary-green);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Scan Line Animation */
+@keyframes scan-line {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Jitter Effect */
+@keyframes jitter {
+  0%, 100% { transform: translate(0); }
+  10% { transform: translate(-1px, -1px) skew(1deg); }
+  20% { transform: translate(1px, 1px) skew(-1deg); }
+  30% { transform: translate(-1px, 1px) skew(1deg); }
+  40% { transform: translate(1px, -1px) skew(-1deg); }
+  50% { transform: translate(0, -1px) skew(0.5deg); }
+  60% { transform: translate(-1px, 0) skew(-0.5deg); }
+  70% { transform: translate(1px, 1px) skew(0.5deg); }
+  80% { transform: translate(0, 1px) skew(-0.5deg); }
+  90% { transform: translate(1px, 0) skew(1deg); }
+}
+
+/* Text Flicker */
+@keyframes text-flicker {
+  0%, 100% { opacity: 1; text-shadow: 0 0 10px var(--primary-green); }
+  50% { opacity: 0.8; text-shadow: 0 0 5px var(--primary-green), 0 0 15px var(--secondary-green); }
+}
+
+/* Hover Effects */
+.hover-jitter:hover {
+  animation: jitter 0.3s ease-in-out;
+}
+
+.hover-flicker:hover {
+  animation: text-flicker 0.5s ease-in-out;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .main-content {
+    padding: 1rem;
+  }
+  
+  .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .metric-value {
+    font-size: 2rem;
+  }
+  
+  .server-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Text Utilities */
+.text-muted {
+  color: var(--text-muted);
+}
+
+.text-primary {
+  color: var(--text-primary);
+}
+
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+/* Background Pattern */
+.cyber-grid {
+  background-image: 
+    linear-gradient(rgba(0, 255, 65, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 65, 0.1) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Hardware Panel Styling */
+.hardware-panel {
+  background: linear-gradient(135deg, rgba(17, 17, 17, 0.95), rgba(26, 74, 26, 0.2));
+  border: 1px solid var(--primary-green);
+  border-radius: 0;
   position: relative;
   overflow: hidden;
 }
 
-.loading::after {
+.hardware-panel::before {
   content: '';
   position: absolute;
   top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(0, 255, 0, 0.1), transparent);
-  animation: pipboy-scan 2s linear infinite;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--primary-green), transparent);
+  animation: scan-line 4s linear infinite;
 }
 
-/* Modern Pip-Boy Scrollbars */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Panel Header */
+.panel-header {
+  background: rgba(0, 255, 65, 0.1);
+  border-bottom: 1px solid var(--primary-green);
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.8);
-  border-radius: 4px;
+.panel-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--primary-green);
 }
 
-::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, var(--pipboy-green), var(--pipboy-green-dark));
-  border-radius: 4px;
-  border: 1px solid rgba(0, 255, 0, 0.3);
+/* Panel Content */
+.panel-content {
+  padding: 1.5rem;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, var(--pipboy-bright-green), var(--pipboy-green));
-  box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+/* Data Display */
+.data-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(0, 255, 65, 0.1);
 }
 
-/* Modern Pip-Boy Selection */
-::selection {
-  background: var(--pipboy-green);
-  color: var(--pipboy-black);
+.data-row:last-child {
+  border-bottom: none;
 }
 
-::-moz-selection {
-  background: var(--pipboy-green);
-  color: var(--pipboy-black);
+.data-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
 }
 
-/* Modern Pip-Boy Focus States */
-*:focus {
-  outline: 2px solid var(--pipboy-green);
-  outline-offset: 2px;
+.data-value {
+  font-weight: 600;
+  color: var(--primary-green);
+  font-family: 'JetBrains Mono', monospace;
 }
 
-/* Modern Pip-Boy Animations */
-@keyframes pipboy-glow {
-  0% {
-    text-shadow: 0 0 8px rgba(0, 255, 0, 0.3);
+/* Enhanced Cyberpunk Animations */
+@keyframes gridPulse {
+  0% { background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px; }
+  100% { background-size: 100% 100%, 100% 100%, 42px 42px, 42px 42px; }
+}
+
+@keyframes jitter {
+  0%, 100% { transform: translateX(0) translateY(0); }
+  10% { transform: translateX(-1px) translateY(-1px); }
+  20% { transform: translateX(1px) translateY(1px); }
+  30% { transform: translateX(-1px) translateY(1px); }
+  40% { transform: translateX(1px) translateY(-1px); }
+  50% { transform: translateX(-1px) translateY(-1px); }
+  60% { transform: translateX(1px) translateY(1px); }
+  70% { transform: translateX(-1px) translateY(1px); }
+  80% { transform: translateX(1px) translateY(-1px); }
+  90% { transform: translateX(-1px) translateY(-1px); }
+}
+
+@keyframes textFlicker {
+  0%, 100% { opacity: 1; text-shadow: 0 0 10px var(--primary-green); }
+  5% { opacity: 0.9; text-shadow: 0 0 15px var(--primary-green); }
+  10% { opacity: 1; text-shadow: 0 0 5px var(--primary-green); }
+  15% { opacity: 0.95; text-shadow: 0 0 20px var(--primary-green); }
+  20% { opacity: 1; text-shadow: 0 0 10px var(--primary-green); }
+}
+
+@keyframes scanLine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes pulseMatrix {
+  0%, 100% { 
+    opacity: 1; 
+    box-shadow: 0 0 0 0 rgba(0, 255, 65, 0.4); 
   }
-  100% {
-    text-shadow: 0 0 16px rgba(0, 255, 0, 0.6);
+  50% { 
+    opacity: 0.7; 
+    box-shadow: 0 0 0 8px rgba(0, 255, 65, 0); 
   }
 }
 
-@keyframes pipboy-scan {
-  0% {
-    left: -100%;
-  }
-  100% {
-    left: 100%;
-  }
+@keyframes glitchHover {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-2px) translateY(1px); }
+  40% { transform: translateX(2px) translateY(-1px); }
+  60% { transform: translateX(-1px) translateY(1px); }
+  80% { transform: translateX(1px) translateY(-1px); }
 }
 
-/* Modern Pip-Boy Utility Classes */
-.pipboy-gradient {
-  background: linear-gradient(135deg, 
-    var(--pipboy-black) 0%, 
-    var(--pipboy-black-green) 25%, 
-    var(--pipboy-dark-green) 50%, 
-    var(--pipboy-medium-green) 75%, 
-    var(--pipboy-light-green) 100%
-  );
+@keyframes cardGlitch {
+  0%, 100% { transform: translateY(-2px); }
+  25% { transform: translateY(-3px) translateX(1px); }
+  50% { transform: translateY(-1px) translateX(-1px); }
+  75% { transform: translateY(-2px) translateX(1px); }
 }
 
-.pipboy-gradient-radial {
-  background: radial-gradient(circle at center, 
-    var(--pipboy-dark-green) 0%, 
-    var(--pipboy-black-green) 50%, 
-    var(--pipboy-black) 100%
-  );
+@keyframes buttonGlitch {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-2px); }
+  40% { transform: translateX(2px); }
+  60% { transform: translateX(-1px); }
+  80% { transform: translateX(1px); }
 }
 
-.pipboy-glow {
-  box-shadow: 0 0 20px rgba(0, 255, 0, 0.4), inset 0 0 20px rgba(0, 255, 0, 0.1);
+@keyframes randomGlitch {
+  0%, 95% { opacity: 0; transform: translateX(0); }
+  96% { opacity: 1; transform: translateX(-2px); }
+  97% { opacity: 0; transform: translateX(2px); }
+  98% { opacity: 1; transform: translateX(-1px); }
+  99% { opacity: 0; transform: translateX(1px); }
+  100% { opacity: 0; transform: translateX(0); }
 }
 
-.pipboy-glow-lg {
-  box-shadow: 0 0 40px rgba(0, 255, 0, 0.6), inset 0 0 40px rgba(0, 255, 0, 0.2);
+@keyframes typewriter {
+  0% { width: 0; }
+  50% { width: 100%; }
+  100% { width: 0; }
 }
 
-.pipboy-text-glow {
-  text-shadow: 0 0 8px rgba(0, 255, 0, 0.5);
+/* Professional Cyberpunk Components */
+.cyber-card {
+  @apply bg-cyber-panel border border-matrix-900 relative overflow-hidden;
+  @apply transition-all duration-300 ease-out;
+  @apply hover:border-matrix-500 hover:shadow-lg hover:shadow-matrix-500/20;
+  @apply before:absolute before:top-0 before:left-0 before:w-full before:h-0.5;
+  @apply before:bg-gradient-to-r before:from-transparent before:via-matrix-500 before:to-transparent;
+  @apply before:transform before:-translate-x-full before:transition-transform before:duration-500;
+  @apply hover:before:translate-x-full;
 }
 
-.pipboy-border-glow {
-  border: 2px solid var(--pipboy-green);
-  box-shadow: 0 0 15px rgba(0, 255, 0, 0.3);
+.cyber-card:hover {
+  animation: cardGlitch 0.3s ease;
 }
 
-/* Modern Pip-Boy Responsive Design */
+.cyber-button {
+  @apply bg-transparent border border-matrix-500 text-matrix-500;
+  @apply hover:bg-matrix-500 hover:text-cyber-bg transition-all duration-300;
+  @apply relative overflow-hidden;
+  @apply before:absolute before:top-0 before:left-0 before:w-full before:h-full;
+  @apply before:bg-matrix-500 before:transform before:-translate-x-full;
+  @apply before:transition-transform before:duration-300 before:z-[-1];
+  @apply hover:before:translate-x-0;
+}
+
+.cyber-button:hover {
+  animation: buttonGlitch 0.3s ease;
+}
+
+.metrics-card {
+  @apply cyber-card p-6;
+  @apply bg-gradient-to-br from-cyber-panel to-cyber-panel/80;
+  @apply backdrop-blur-sm;
+}
+
+.metrics-card:hover {
+  @apply bg-gradient-to-br from-matrix-950/50 to-cyber-panel;
+  transform: translateY(-2px);
+}
+
+.nav-item-cyber {
+  @apply flex items-center px-5 py-3 text-matrix-600 border-l-2 border-transparent;
+  @apply transition-all duration-300 relative overflow-hidden;
+  @apply hover:text-matrix-500 hover:border-matrix-500 hover:bg-matrix-950/30;
+  @apply before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0;
+  @apply before:bg-gradient-to-r before:from-matrix-500 before:to-transparent;
+  @apply before:transition-all before:duration-300;
+  @apply hover:before:w-full hover:transform hover:translate-x-0.5;
+}
+
+.nav-item-cyber.active {
+  @apply text-matrix-500 border-matrix-500 bg-matrix-950/20;
+}
+
+.nav-item-cyber:hover {
+  animation: glitchHover 0.3s ease;
+}
+
+.status-indicator {
+  @apply flex items-center gap-2 text-xs text-matrix-600;
+}
+
+.status-dot {
+  @apply w-2 h-2 rounded-full bg-matrix-500;
+  animation: pulseMatrix 2s infinite;
+}
+
+.empty-state-cyber {
+  @apply text-center py-16 px-8;
+}
+
+.empty-icon-cyber {
+  @apply w-16 h-16 mx-auto mb-6 opacity-30 bg-matrix-900 rounded-lg;
+  @apply flex items-center justify-center text-2xl text-matrix-600;
+}
+
+.header-cyber {
+  @apply flex items-center justify-between mb-8 pb-6;
+  @apply border-b border-matrix-900;
+}
+
+.header-title-cyber {
+  @apply text-2xl font-light text-matrix-500 uppercase tracking-[3px];
+  @apply text-shadow-matrix;
+}
+
+.section-header-cyber {
+  @apply px-6 py-4 border-b border-matrix-900;
+  @apply bg-gradient-to-r from-matrix-950/20 to-transparent;
+}
+
+.section-title-cyber {
+  @apply text-sm font-medium text-matrix-500 uppercase tracking-wider;
+}
+
+/* Enhanced Utility Classes */
+.text-shadow-matrix {
+  text-shadow: 0 0 10px rgba(0, 255, 65, 0.3);
+}
+
+.text-glow-matrix {
+  text-shadow: 0 0 15px rgba(0, 255, 65, 0.5);
+}
+
+.border-glow-matrix {
+  box-shadow: 0 0 10px rgba(0, 255, 65, 0.2);
+}
+
+.bg-scan-lines {
+  background-image: 
+    linear-gradient(0deg, transparent 98%, rgba(0, 255, 65, 0.1) 100%);
+  background-size: 100% 4px;
+}
+
+/* Responsive Design */
 @media (max-width: 768px) {
-  html {
-    background: linear-gradient(180deg, 
-      var(--pipboy-black) 0%, 
-      var(--pipboy-black-green) 50%, 
-      var(--pipboy-dark-green) 100%
-    );
+  .cyber-grid {
+    grid-template-columns: 1fr;
   }
   
-  .card {
-    margin: 0.5rem;
-    border-radius: 0.25rem;
-  }
-  
-  h1 {
-    font-size: 2rem;
-  }
-  
-  h2 {
-    font-size: 1.5rem;
+  .metrics-grid-cyber {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   }
 }
 
-/* Modern Pip-Boy Print Styles */
-@media print {
-  body {
-    background: white;
-    color: black;
-  }
-  
-  .card, .navbar, .sidebar {
-    background: white;
-    border: 1px solid #ccc;
-    box-shadow: none;
-  }
+/* Theme Integration */
+[data-theme="matrix"] {
+  --tw-bg-opacity: 1;
+  background-color: rgb(10 10 10 / var(--tw-bg-opacity));
+  color: rgb(0 255 65 / var(--tw-text-opacity));
 }
 
-/* Modern Pip-Boy High Contrast Mode */
-@media (prefers-contrast: high) {
-  :root {
-    --pipboy-green: #00ff00;
-    --pipboy-black: #000000;
-  }
-  
-  .card {
-    border-width: 3px;
-  }
-  
-  .btn {
-    border-width: 3px;
-  }
+/* Animation Classes */
+.animate-typewriter {
+  animation: typewriter 2s steps(40) infinite;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
-/* Modern Pip-Boy Reduced Motion */
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-  
-  .btn::before,
-  .sidebar-item::before,
-  .loading::after {
-    display: none;
-  }
-}
-
-/* --- Distorted Hover States --- */
-
-.btn:hover,
-.sidebar a:hover,
-.server-card:hover,
-.stat-card:hover {
-  animation: jitter 0.2s ease-in-out 2; /* Runs twice for a brief but noticeable effect */
-}
-
-/* For text elements inside hovered components */
-.btn:hover span,
-.sidebar a:hover span,
-.card:hover h1,
-.card:hover h2,
-.card:hover .h1,
-.card:hover .h2,
-a:hover {
-  animation: text-flicker 0.3s ease-in-out 2;
+.animate-random-glitch {
+  animation: randomGlitch 15s infinite;
 }

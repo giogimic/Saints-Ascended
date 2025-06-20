@@ -1,3 +1,5 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
 # dependencies
 /node_modules
 /.pnp
@@ -72,3 +74,7 @@ next-env.d.ts
 ehthumbs.db
 Thumbs.db
 /generated/prisma
+mods.db
+
+# Context folder - not for project use
+/Context Do Not Use In Project/

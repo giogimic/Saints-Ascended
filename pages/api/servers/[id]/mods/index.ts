@@ -14,51 +14,144 @@ interface ModPerformanceMetrics {
   compatibility: 'excellent' | 'good' | 'fair' | 'poor' | 'unknown';
 }
 
-// Mock data store - in production, use a proper database
-const getModDataPath = (serverId: string) => join(process.cwd(), 'data', 'servers', serverId, 'mods.json');
-const getModMetricsPath = (serverId: string) => join(process.cwd(), 'data', 'servers', serverId, 'mod-metrics.json');
+// Data paths
+const getServersPath = () => join(process.cwd(), 'data', 'servers.json');
+const getModCachePath = (serverId: string) => join(process.cwd(), 'data', 'mod-cache', `${serverId}.json`);
+const getModMetricsPath = (serverId: string) => join(process.cwd(), 'data', 'mod-metrics', `${serverId}.json`);
 
-const loadServerMods = (serverId: string): ModInfo[] => {
-  const modPath = getModDataPath(serverId);
-  if (!existsSync(modPath)) {
+// Load servers data
+const loadServers = () => {
+  const serversPath = getServersPath();
+  if (!existsSync(serversPath)) {
     return [];
   }
   
   try {
-    const data = readFileSync(modPath, 'utf-8');
+    const data = readFileSync(serversPath, 'utf-8');
     return JSON.parse(data);
+  } catch (error) {
+    console.error('Failed to load servers:', error);
+    return [];
+  }
+};
+
+// Save servers data
+const saveServers = (servers: any[]) => {
+  const serversPath = getServersPath();
+  writeFileSync(serversPath, JSON.stringify(servers, null, 2));
+};
+
+// Load server mods from both server data and cache
+const loadServerMods = (serverId: string): ModInfo[] => {
+  try {
+    // First, try to load from mod cache (SQLite equivalent)
+    const cachePath = getModCachePath(serverId);
+    if (existsSync(cachePath)) {
+      const cacheData = JSON.parse(readFileSync(cachePath, 'utf-8'));
+      if (cacheData.mods && Array.isArray(cacheData.mods)) {
+        return cacheData.mods;
+      }
+    }
+
+    // Fallback: Load from server data structure
+    const servers = loadServers();
+    const server = servers.find((s: any) => s.id === serverId);
+    
+    if (server && server.launchOptions && server.launchOptions.mods) {
+      // Convert mod IDs to full ModInfo objects if they're just strings
+      const mods = server.launchOptions.mods.map((mod: any, index: number) => {
+        if (typeof mod === 'string') {
+          // Convert legacy mod ID to ModInfo object
+          return {
+            id: crypto.randomUUID(),
+            name: `Mod ${mod}`,
+            description: `Workshop mod ${mod}`,
+            version: '1.0.0',
+            workshopId: mod,
+            enabled: true,
+            loadOrder: index,
+            dependencies: [],
+            incompatibilities: [],
+            size: 'Unknown',
+            lastUpdated: new Date()
+          };
+        }
+        return mod;
+      });
+      
+      // Save to cache for future use
+      saveServerModsCache(serverId, mods);
+      return mods;
+    }
+    
+    return [];
   } catch (error) {
     console.error('Failed to load server mods:', error);
     return [];
   }
 };
 
+// Save server mods to both cache and server data
 const saveServerMods = async (serverId: string, mods: ModInfo[]) => {
-  const modsDir = join(process.cwd(), 'data', 'servers', serverId, 'mods');
-  if (!existsSync(modsDir)) {
-    mkdirSync(modsDir, { recursive: true });
-  }
-
-  const modsPath = join(process.cwd(), 'data', 'servers', serverId, 'mods', 'mods.json');
-  if (!existsSync(join(process.cwd(), 'data', 'servers', serverId, 'mods'))) {
-    mkdirSync(join(process.cwd(), 'data', 'servers', serverId, 'mods'), { recursive: true });
-  }
-  writeFileSync(modsPath, JSON.stringify(mods, null, 2));
-  
-  // Sync with launch options system
   try {
-    const launchOptions = await loadLaunchOptions(serverId);
-    const enabledModIds = mods
-      .filter(mod => mod.enabled)
-      .map(mod => mod.id);
+    // Save to cache (SQLite equivalent)
+    saveServerModsCache(serverId, mods);
     
-    launchOptions.mods = enabledModIds;
-    await saveLaunchOptions(serverId, launchOptions);
+    // Update server data structure
+    const servers = loadServers();
+    const serverIndex = servers.findIndex((s: any) => s.id === serverId);
+    
+    if (serverIndex !== -1) {
+      // Ensure launchOptions exists
+      if (!servers[serverIndex].launchOptions) {
+        servers[serverIndex].launchOptions = {};
+      }
+      
+      // Update mods in server data (store full ModInfo objects)
+      servers[serverIndex].launchOptions.mods = mods;
+      servers[serverIndex].updatedAt = new Date().toISOString();
+      
+      saveServers(servers);
+    }
+    
+    // Sync with launch options system (for backwards compatibility)
+    try {
+      const launchOptions = await loadLaunchOptions(serverId);
+      const enabledModIds = mods
+        .filter(mod => mod.enabled)
+        .map(mod => mod.workshopId || mod.id);
+      
+      launchOptions.mods = enabledModIds;
+      await saveLaunchOptions(serverId, launchOptions);
+    } catch (error) {
+      console.error('Failed to sync mods with launch options:', error);
+    }
   } catch (error) {
-    console.error('Failed to sync mods with launch options:', error);
+    console.error('Failed to save server mods:', error);
+    throw error;
   }
 };
 
+// Save mods to cache file (SQLite equivalent)
+const saveServerModsCache = (serverId: string, mods: ModInfo[]) => {
+  const cachePath = getModCachePath(serverId);
+  const cacheDir = join(process.cwd(), 'data', 'mod-cache');
+  
+  // Ensure cache directory exists
+  if (!existsSync(cacheDir)) {
+    mkdirSync(cacheDir, { recursive: true });
+  }
+  
+  const cacheData = {
+    serverId,
+    lastUpdated: new Date().toISOString(),
+    mods
+  };
+  
+  writeFileSync(cachePath, JSON.stringify(cacheData, null, 2));
+};
+
+// Load mod performance metrics
 const loadModMetrics = (serverId: string): Record<string, ModPerformanceMetrics> => {
   const metricsPath = getModMetricsPath(serverId);
   if (!existsSync(metricsPath)) {
@@ -74,13 +167,14 @@ const loadModMetrics = (serverId: string): Record<string, ModPerformanceMetrics>
   }
 };
 
+// Save mod performance metrics
 const saveModMetrics = (serverId: string, metrics: Record<string, ModPerformanceMetrics>) => {
   const metricsPath = getModMetricsPath(serverId);
-  const dirPath = join(process.cwd(), 'data', 'servers', serverId);
+  const metricsDir = join(process.cwd(), 'data', 'mod-metrics');
   
   // Ensure directory exists
-  if (!existsSync(dirPath)) {
-    mkdirSync(dirPath, { recursive: true });
+  if (!existsSync(metricsDir)) {
+    mkdirSync(metricsDir, { recursive: true });
   }
   
   writeFileSync(metricsPath, JSON.stringify(metrics, null, 2));
@@ -175,14 +269,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const newMod: ModInfo = {
           id: req.body.id || crypto.randomUUID(),
           name: req.body.name,
-          description: req.body.description,
-          version: req.body.version,
+          description: req.body.description || '',
+          version: req.body.version || '1.0.0',
           workshopId: req.body.workshopId,
           enabled: req.body.enabled ?? true,
           loadOrder: req.body.loadOrder ?? 0,
           dependencies: req.body.dependencies || [],
           incompatibilities: req.body.incompatibilities || [],
-          size: req.body.size,
+          size: req.body.size || 'Unknown',
           lastUpdated: req.body.lastUpdated ? new Date(req.body.lastUpdated) : new Date()
         };
 
@@ -207,8 +301,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         res.status(200).json(modsToUpdate);
         break;
 
+      case 'DELETE':
+        // Delete a specific mod
+        const { modId } = req.body;
+        if (!modId) {
+          return res.status(400).json({ error: 'Mod ID required' });
+        }
+        
+        const allMods = loadServerMods(serverId);
+        const filteredMods = allMods.filter(mod => mod.id !== modId);
+        await saveServerMods(serverId, filteredMods);
+        
+        res.status(200).json({ success: true });
+        break;
+
       default:
-        res.setHeader('Allow', ['GET', 'POST', 'PUT']);
+        res.setHeader('Allow', ['GET', 'POST', 'PUT', 'DELETE']);
         res.status(405).json({ error: `Method ${req.method} not allowed` });
     }
   } catch (error) {

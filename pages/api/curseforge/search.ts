@@ -7,6 +7,7 @@ import {
   CurseForgeForbiddenError,
 } from "@/lib/curseforge-api";
 import { modCache } from "@/lib/mod-cache";
+import { convertBigIntsToStrings } from "@/lib/json-helpers";
 
 export default async function handler(
   req: NextApiRequest,
@@ -73,9 +74,10 @@ export default async function handler(
         pageSizeNum
       );
       if (cachedResult.data && cachedResult.data.length > 0) {
+        const safeData = convertBigIntsToStrings(cachedResult.data);
         return res
           .status(200)
-          .json({ data: cachedResult.data, source: "cache" });
+          .json({ data: safeData, source: "cache" });
       }
     }
 
@@ -102,7 +104,8 @@ export default async function handler(
       );
     }
 
-    res.status(200).json({ data: mods, source: "api" });
+    const safeMods = convertBigIntsToStrings(mods);
+    res.status(200).json({ data: safeMods, source: "api" });
   } catch (error) {
     console.error("CurseForge search error:", error);
 
@@ -139,9 +142,10 @@ export default async function handler(
 
     // Handle generic errors
     if (error instanceof Error) {
+      const safeError = convertBigIntsToStrings(error);
       return res.status(500).json({
         error: "Failed to search CurseForge mods",
-        details: error.message,
+        details: safeError.message,
       });
     }
 

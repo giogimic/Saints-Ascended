@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { CurseForgeAPI } from "@/lib/curseforge-api";
+import { modServiceOptimized } from "@/lib/mod-service-optimized";
 
 export default async function handler(
   req: NextApiRequest,
@@ -14,6 +15,8 @@ export default async function handler(
           tokenBucket: CurseForgeAPI.getTokenBucketStatus(),
           canMakeRequest: CurseForgeAPI.canMakeRequest(),
           rateLimited: CurseForgeAPI.isRateLimited(),
+          // Strategy 2: Include cache warming status
+          cacheWarming: modServiceOptimized.getCacheWarmingStatus(),
         };
 
         return res.status(200).json({
@@ -27,15 +30,19 @@ export default async function handler(
 
         if (action === "start") {
           CurseForgeAPI.startBackgroundFetching();
+          // Strategy 2: Start cache warming service
+          modServiceOptimized.startCacheWarming();
           return res.status(200).json({
             success: true,
-            message: "Background mod fetching service started",
+            message: "Background mod fetching and cache warming services started",
           });
         } else if (action === "stop") {
           CurseForgeAPI.stopBackgroundFetching();
+          // Strategy 2: Stop cache warming service
+          modServiceOptimized.stopCacheWarming();
           return res.status(200).json({
             success: true,
-            message: "Background mod fetching service stopped",
+            message: "Background mod fetching and cache warming services stopped",
           });
         } else {
           return res.status(400).json({

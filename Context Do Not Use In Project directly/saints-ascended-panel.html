@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saints Ascended - Server Control</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --primary-green: #00ff41;
+            --secondary-green: #00cc33;
+            --dark-green: #003311;
+            --bg-dark: #0a0a0a;
+            --bg-panel: #111111;
+            --grid-line: #1a4a1a;
+            --text-primary: #00ff41;
+            --text-secondary: #66ff66;
+            --text-muted: #448844;
+            --danger-red: #ff3333;
+            --warning-orange: #ff8800;
+            --info-blue: #0099ff;
+        }
+        
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 20% 50%, rgba(0, 255, 65, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(0, 255, 65, 0.02) 0%, transparent 50%),
+                linear-gradient(90deg, transparent 49%, rgba(26, 74, 26, 0.3) 50%, transparent 51%),
+                linear-gradient(0deg, transparent 49%, rgba(26, 74, 26, 0.3) 50%, transparent 51%);
+            background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+            animation: gridPulse 4s ease-in-out infinite alternate;
+        }
+        
+        @keyframes gridPulse {
+            0% { background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px; }
+            100% { background-size: 100% 100%, 100% 100%, 42px 42px, 42px 42px; }
+        }
+        
+        .container {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            min-height: 100vh;
+            gap: 2px;
+            background: var(--grid-line);
+        }
+        
+        .sidebar {
+            background: var(--bg-panel);
+            border-right: 2px solid var(--grid-line);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .sidebar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--primary-green), transparent);
+            animation: scanLine 3s linear infinite;
+        }
+        
+        @keyframes scanLine {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        
+        .logo-section {
+            padding: 20px;
+            border-bottom: 1px solid var(--grid-line);
+            background: linear-gradient(135deg, var(--bg-panel) 0%, rgba(0, 255, 65, 0.05) 100%);
+        }
+        
+        .logo-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--primary-green);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 4px;
+            text-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
+        }
+        
+        .logo-subtitle {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .nav-section {
+            padding: 20px 0;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-left: 3px solid transparent;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .nav-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 0;
+            background: linear-gradient(90deg, var(--primary-green), transparent);
+            transition: width 0.3s ease;
+        }
+        
+        .nav-item:hover {
+            background: rgba(0, 255, 65, 0.08);
+            border-left-color: var(--primary-green);
+            color: var(--primary-green);
+            transform: translateX(2px);
+            animation: glitchHover 0.3s ease;
+        }
+        
+        .nav-item:hover::before {
+            width: 100%;
+        }
+        
+        @keyframes glitchHover {
+            0%, 100% { transform: translateX(2px); }
+            20% { transform: translateX(1px) translateY(1px); }
+            40% { transform: translateX(3px) translateY(-1px); }
+            60% { transform: translateX(1px) translateY(1px); }
+            80% { transform: translateX(2px) translateY(-1px); }
+        }
+        
+        .nav-item.active {
+            background: rgba(0, 255, 65, 0.15);
+            border-left-color: var(--primary-green);
+            color: var(--primary-green);
+        }
+        
+        .nav-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 12px;
+            opacity: 0.8;
+        }
+        
+        .stats-section {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 20px;
+            border-top: 1px solid var(--grid-line);
+            background: linear-gradient(0deg, rgba(0, 255, 65, 0.02) 0%, transparent 100%);
+        }
+        
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+        
+        .stat-label {
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .stat-value {
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+        
+        .main-content {
+            background: var(--bg-panel);
+            padding: 30px;
+            position: relative;
+        }
+        
+        .header {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--grid-line);
+        }
+        
+        .header-title {
+            font-size: 24px;
+            font-weight: 300;
+            color: var(--primary-green);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--primary-green);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0, 255, 65, 0.4); }
+            50% { opacity: 0.7; box-shadow: 0 0 0 8px rgba(0, 255, 65, 0); }
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2px;
+            margin-bottom: 30px;
+            background: var(--grid-line);
+        }
+        
+        .metric-card {
+            background: var(--bg-panel);
+            padding: 20px;
+            border: 1px solid var(--grid-line);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--primary-green), transparent);
+            transition: left 0.5s ease;
+        }
+        
+        .metric-card:hover {
+            background: rgba(0, 255, 65, 0.03);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 255, 65, 0.1);
+            animation: cardGlitch 0.3s ease;
+        }
+        
+        .metric-card:hover::before {
+            left: 100%;
+        }
+        
+        @keyframes cardGlitch {
+            0%, 100% { transform: translateY(-2px); }
+            25% { transform: translateY(-3px) translateX(1px); }
+            50% { transform: translateY(-1px) translateX(-1px); }
+            75% { transform: translateY(-2px) translateX(1px); }
+        }
+        
+        .metric-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+        
+        .metric-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--primary-green);
+            margin-bottom: 4px;
+            text-shadow: 0 0 10px rgba(0, 255, 65, 0.3);
+        }
+        
+        .metric-change {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        
+        .server-section {
+            background: var(--bg-panel);
+            border: 1px solid var(--grid-line);
+            position: relative;
+        }
+        
+        .section-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--grid-line);
+            background: linear-gradient(135deg, rgba(0, 255, 65, 0.02) 0%, transparent 100%);
+        }
+        
+        .section-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--primary-green);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .empty-state {
+            padding: 60px 20px;
+            text-align: center;
+            color: var(--text-muted);
+        }
+        
+        .empty-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 20px;
+            opacity: 0.3;
+            background: var(--grid-line);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+        
+        .empty-title {
+            font-size: 18px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+        
+        .empty-subtitle {
+            font-size: 14px;
+            line-height: 1.4;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        
+        .action-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            background: transparent;
+            border: 1px solid var(--primary-green);
+            color: var(--primary-green);
+            text-decoration: none;
+            font-family: inherit;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            margin-top: 20px;
+        }
+        
+        .action-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: var(--primary-green);
+            transition: left 0.3s ease;
+            z-index: -1;
+        }
+        
+        .action-button:hover {
+            color: var(--bg-dark);
+            animation: buttonGlitch 0.3s ease;
+        }
+        
+        .action-button:hover::before {
+            left: 0;
+        }
+        
+        @keyframes buttonGlitch {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-2px); }
+            40% { transform: translateX(2px); }
+            60% { transform: translateX(-1px); }
+            80% { transform: translateX(1px); }
+        }
+        
+        .terminal-output {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 300px;
+            height: 120px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid var(--primary-green);
+            padding: 10px;
+            font-size: 10px;
+            color: var(--primary-green);
+            overflow: hidden;
+            z-index: 1000;
+            opacity: 0.7;
+        }
+        
+        .terminal-line {
+            margin-bottom: 2px;
+            animation: typewriter 2s steps(40) infinite;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        
+        @keyframes typewriter {
+            0% { width: 0; }
+            50% { width: 100%; }
+            100% { width: 0; }
+        }
+        
+        .glitch-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 999;
+            opacity: 0;
+            background: linear-gradient(90deg, transparent 0%, rgba(0, 255, 65, 0.03) 50%, transparent 100%);
+            animation: randomGlitch 15s infinite;
+        }
+        
+        @keyframes randomGlitch {
+            0%, 95% { opacity: 0; transform: translateX(0); }
+            96% { opacity: 1; transform: translateX(-2px); }
+            97% { opacity: 0; transform: translateX(2px); }
+            98% { opacity: 1; transform: translateX(-1px); }
+            99% { opacity: 0; transform: translateX(1px); }
+            100% { opacity: 0; transform: translateX(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="glitch-overlay"></div>
+    
+    <div class="container">
+        <div class="sidebar">
+            <div class="logo-section">
+                <div class="logo-title">SAINTS ASCENDED</div>
+                <div class="logo-subtitle">Dedicated Server Control</div>
+            </div>
+            
+            <nav class="nav-section">
+                <a href="#" class="nav-item active">
+                    <div class="nav-icon">🖥️</div>
+                    Dashboard
+                </a>
+                <a href="#" class="nav-item">
+                    <div class="nav-icon">⚙️</div>
+                    Global Settings
+                </a>
+                <a href="#" class="nav-item">
+                    <div class="nav-icon">➕</div>
+                    Add Server
+                </a>
+                <a href="#" class="nav-item">
+                    <div class="nav-icon">📊</div>
+                    Analytics
+                </a>
+                <a href="#" class="nav-item">
+                    <div class="nav-icon">🔧</div>
+                    Configuration
+                </a>
+                <a href="#" class="nav-item">
+                    <div class="nav-icon">📋</div>
+                    Logs
+                </a>
+            </nav>
+            
+            <div class="stats-section">
+                <div class="stat-item">
+                    <span class="stat-label">Total Servers</span>
+                    <span class="stat-value">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Online</span>
+                    <span class="stat-value">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Players</span>
+                    <span class="stat-value">0</span>
+                </div>
+            </div>
+        </div>
+        
+        <main class="main-content">
+            <header class="header">
+                <h1 class="header-title">ONLINE SERVERS</h1>
+                <div class="status-indicator">
+                    <div class="status-dot"></div>
+                    <span>SYSTEM OPERATIONAL</span>
+                </div>
+            </header>
+            
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-label">CPU Usage</div>
+                    <div class="metric-value">12%</div>
+                    <div class="metric-change">▲ 2% from last hour</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Memory</div>
+                    <div class="metric-value">2.1GB</div>
+                    <div class="metric-change">▼ 0.3GB from last hour</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Network I/O</div>
+                    <div class="metric-value">45MB/s</div>
+                    <div class="metric-change">▲ 12MB/s from last hour</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Uptime</div>
+                    <div class="metric-value">99.9%</div>
+                    <div class="metric-change">✓ All systems nominal</div>
+                </div>
+            </div>
+            
+            <div class="server-section">
+                <div class="section-header">
+                    <h2 class="section-title">ACTIVE SERVERS</h2>
+                </div>
+                
+                <div class="empty-state">
+                    <div class="empty-icon">🏗️</div>
+                    <div class="empty-title">NO SERVERS CONFIGURED</div>
+                    <div class="empty-subtitle">
+                        Get started by adding your first ARK: Survival Ascended 
+                        dedicated server to begin managing your game 
+                        infrastructure.
+                    </div>
+                    <button class="action-button">
+                        <span>⚡</span>
+                        DEPLOY FIRST SERVER
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <div class="terminal-output">
+        <div class="terminal-line">[SYSTEM] Monitoring network traffic...</div>
+        <div class="terminal-line">[SERVER] Awaiting configuration...</div>
+        <div class="terminal-line">[SECURITY] All protocols encrypted</div>
+        <div class="terminal-line">[STATUS] Ready for deployment</div>
+    </div>
+    
+    <script>
+        // Add subtle interactive glitch effects
+        document.addEventListener('DOMContentLoaded', function() {
+            const cards = document.querySelectorAll('.metric-card');
+            const navItems = document.querySelectorAll('.nav-item');
+            
+            // Random glitch effect on metric cards
+            function addRandomGlitch() {
+                const randomCard = cards[Math.floor(Math.random() * cards.length)];
+                randomCard.style.animation = 'cardGlitch 0.2s ease';
+                setTimeout(() => {
+                    randomCard.style.animation = '';
+                }, 200);
+            }
+            
+            // Trigger random glitches occasionally
+            setInterval(addRandomGlitch, 8000 + Math.random() * 5000);
+            
+            // Terminal output cycling
+            const terminalLines = [
+                '[SYSTEM] Monitoring network traffic...',
+                '[SERVER] Awaiting configuration...',
+                '[SECURITY] All protocols encrypted',
+                '[STATUS] Ready for deployment',
+                '[NETWORK] Bandwidth: 1.2GB/s available',
+                '[POWER] Generator status: OPTIMAL',
+                '[BACKUP] Last sync: 00:00:45 ago',
+                '[ALERT] System running efficiently'
+            ];
+            
+            let currentLine = 0;
+            const terminalElement = document.querySelector('.terminal-output');
+            
+            function updateTerminal() {
+                const lines = terminalElement.querySelectorAll('.terminal-line');
+                lines.forEach((line, index) => {
+                    line.textContent = terminalLines[(currentLine + index) % terminalLines.length];
+                });
+                currentLine = (currentLine + 1) % terminalLines.length;
+            }
+            
+            setInterval(updateTerminal, 3000);
+            
+            // Add click effects to nav items
+            navItems.forEach(item => {
+                item.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    navItems.forEach(nav => nav.classList.remove('active'));
+                    this.classList.add('active');
+                });
+            });
+        });
+    </script>
+</body>
+</html>

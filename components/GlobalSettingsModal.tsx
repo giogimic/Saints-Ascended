@@ -290,10 +290,10 @@ export function GlobalSettingsModal({
 
   return isOpen ? (
     <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+      <div className="flex min-h-screen items-center justify-center px-4 py-8 text-center sm:block sm:p-0">
         {/* Improved backdrop with proper z-index and blur */}
         <div
-          className="fixed inset-0 bg-base-300/75 backdrop-blur-sm transition-opacity"
+          className="fixed inset-0 bg-black/80 backdrop-blur-md transition-opacity"
           onClick={(e) => {
             e.stopPropagation();
             onClose();
@@ -302,251 +302,258 @@ export function GlobalSettingsModal({
         />
 
         {/* Modal panel */}
-        <div className="inline-block transform overflow-hidden rounded-lg bg-base-100 text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-3xl sm:align-middle">
-          <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-            <div className="sm:flex sm:items-start">
-              <div className="w-full">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-medium leading-6">
-                    Global Settings
-                  </h3>
-                  <button
-                    onClick={onClose}
-                    className="rounded-full p-1 hover:bg-base-200 transition-colors"
-                    aria-label="Close dialog"
-                  >
-                    <XMarkIcon className="h-6 w-6" />
-                  </button>
-                </div>
-
-                <form onSubmit={handleSave} className="space-y-6">
-                  {/* Site Title */}
-                  <div className="form-control">
-                    <label className="label">
-                      <span className="label-text">Site Title *</span>
-                    </label>
-                    <input
-                      type="text"
-                      className={`input input-bordered w-full ${errors.siteTitle ? "input-error" : ""}`}
-                      value={settings.siteTitle}
-                      onChange={(e) =>
-                        handleInputChange("siteTitle", e.target.value)
-                      }
-                      placeholder="Enter site title"
-                      disabled={isSaving || isDownloading}
-                      aria-label="Site title"
-                      required
-                    />
-                    {errors.siteTitle && (
-                      <label className="label">
-                        <span className="label-text-alt text-error">
-                          {errors.siteTitle}
-                        </span>
-                      </label>
-                    )}
-                  </div>
-
-                  {/* Favicon */}
-                  <div className="form-control">
-                    <label className="label">
-                      <span className="label-text">Favicon *</span>
-                    </label>
-                    <div className="flex gap-2 mb-2">
-                      <button
-                        type="button"
-                        className={`btn btn-sm flex-1 ${faviconType === "emoji" ? "btn-primary" : "btn-outline"}`}
-                        onClick={() => setFaviconType("emoji")}
-                      >
-                        Emoji
-                      </button>
-                      <button
-                        type="button"
-                        className={`btn btn-sm flex-1 ${faviconType === "custom" ? "btn-primary" : "btn-outline"}`}
-                        onClick={() => setFaviconType("custom")}
-                      >
-                        Custom
-                      </button>
+        <div className="inline-block transform overflow-hidden rounded-2xl bg-base-100 text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-3xl sm:align-middle border border-primary/30">
+          <div className="bg-gradient-to-br from-base-100 to-base-200/50">
+            <div className="px-6 pt-6 pb-6 sm:p-6">
+              <div className="sm:flex sm:items-start">
+                <div className="w-full">
+                  <div className="flex justify-between items-center mb-6">
+                    <div>
+                      <h3 className="text-2xl font-bold text-primary font-display tracking-wide">
+                        Global Settings
+                      </h3>
+                      <p className="text-primary/70 font-mono mt-2">
+                        Configure application-wide settings
+                      </p>
                     </div>
-
-                    {faviconType === "emoji" ? (
-                      <div className="grid grid-cols-5 gap-2 sm:grid-cols-10">
-                        {EMOJI_OPTIONS.map((emoji) => (
-                          <button
-                            key={emoji}
-                            type="button"
-                            onClick={() => handleEmojiSelect(emoji)}
-                            className={`btn btn-sm ${
-                              settings.favicon === emoji
-                                ? "btn-primary"
-                                : "btn-outline"
-                            }`}
-                          >
-                            {emoji}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleFileUpload}
-                          className="file-input file-input-bordered w-full"
-                          title="Upload custom favicon"
-                          placeholder="Choose a file..."
-                          aria-label="Upload custom favicon"
-                        />
-                        <p className="text-sm text-base-content/60">
-                          Max file size: 100KB. Recommended size: 32x32 pixels.
-                        </p>
-                        {settings.favicon &&
-                          settings.favicon.startsWith("data:") && (
-                            <img
-                              src={settings.favicon}
-                              alt="Current favicon"
-                              className="h-8 w-8 rounded border border-base-content/20 mt-2"
-                            />
-                          )}
-                      </div>
-                    )}
-                    {errors.favicon && (
-                      <label className="label">
-                        <span className="label-text-alt text-error">
-                          {errors.favicon}
-                        </span>
-                      </label>
-                    )}
+                    <button
+                      onClick={onClose}
+                      className="btn btn-ghost btn-sm rounded-xl hover:bg-primary/10 hover:text-primary transition-all duration-200"
+                      aria-label="Close dialog"
+                    >
+                      <XMarkIcon className="h-5 w-5" />
+                    </button>
                   </div>
 
-                  {/* SteamCMD Path */}
-                  <div className="form-control">
-                    <label className="label">
-                      <span className="label-text">SteamCMD Path</span>
-                    </label>
-                    <div className="flex gap-2">
+                  <form onSubmit={handleSave} className="space-y-6">
+                    {/* Site Title */}
+                    <div className="form-control">
+                      <label className="label">
+                        <span className="label-text text-primary font-display font-semibold">Site Title *</span>
+                      </label>
                       <input
                         type="text"
-                        className={`input input-bordered flex-1 ${errors.steamCmdPath ? "input-error" : ""}`}
-                        value={settings.steamCmdPath}
+                        className={`input input-bordered w-full ${errors.siteTitle ? "input-error" : ""}`}
+                        value={settings.siteTitle}
                         onChange={(e) =>
-                          handleInputChange("steamCmdPath", e.target.value)
+                          handleInputChange("siteTitle", e.target.value)
                         }
-                        placeholder="C:\SteamCMD"
-                        disabled={isDownloading}
-                        aria-label="SteamCMD path"
+                        placeholder="Enter site title"
+                        disabled={isSaving || isDownloading}
+                        aria-label="Site title"
+                        required
                       />
+                      {errors.siteTitle && (
+                        <label className="label">
+                          <span className="label-text-alt text-error">
+                            {errors.siteTitle}
+                          </span>
+                        </label>
+                      )}
+                    </div>
+
+                    {/* Favicon */}
+                    <div className="form-control">
+                      <label className="label">
+                        <span className="label-text text-primary font-display font-semibold">Favicon *</span>
+                      </label>
+                      <div className="flex gap-2 mb-2">
+                        <button
+                          type="button"
+                          className={`btn btn-sm flex-1 ${faviconType === "emoji" ? "btn-primary" : "btn-outline"}`}
+                          onClick={() => setFaviconType("emoji")}
+                        >
+                          Emoji
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn btn-sm flex-1 ${faviconType === "custom" ? "btn-primary" : "btn-outline"}`}
+                          onClick={() => setFaviconType("custom")}
+                        >
+                          Custom
+                        </button>
+                      </div>
+
+                      {faviconType === "emoji" ? (
+                        <div className="grid grid-cols-5 gap-2 sm:grid-cols-10">
+                          {EMOJI_OPTIONS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => handleEmojiSelect(emoji)}
+                              className={`btn btn-sm ${
+                                settings.favicon === emoji
+                                  ? "btn-primary"
+                                  : "btn-outline"
+                              }`}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFileUpload}
+                            className="file-input file-input-bordered w-full"
+                            title="Upload custom favicon"
+                            placeholder="Choose a file..."
+                            aria-label="Upload custom favicon"
+                          />
+                          <p className="text-sm text-primary/60 font-mono">
+                            Max file size: 100KB. Recommended size: 32x32 pixels.
+                          </p>
+                          {settings.favicon &&
+                            settings.favicon.startsWith("data:") && (
+                              <img
+                                src={settings.favicon}
+                                alt="Current favicon"
+                                className="h-8 w-8 rounded border border-primary/30 mt-2"
+                              />
+                            )}
+                        </div>
+                      )}
+                      {errors.favicon && (
+                        <label className="label">
+                          <span className="label-text-alt text-error">
+                            {errors.favicon}
+                          </span>
+                        </label>
+                      )}
+                    </div>
+
+                    {/* SteamCMD Path */}
+                    <div className="form-control">
+                      <label className="label">
+                        <span className="label-text text-primary font-display font-semibold">SteamCMD Path</span>
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          className={`input input-bordered flex-1 ${errors.steamCmdPath ? "input-error" : ""}`}
+                          value={settings.steamCmdPath}
+                          onChange={(e) =>
+                            handleInputChange("steamCmdPath", e.target.value)
+                          }
+                          placeholder="C:\SteamCMD"
+                          disabled={isDownloading}
+                          aria-label="SteamCMD path"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleDownloadSteamCMD}
+                          className="btn btn-primary"
+                          disabled={
+                            isDownloading || !settings.steamCmdPath.trim()
+                          }
+                        >
+                          {isDownloading ? (
+                            <>
+                              <span className="loading loading-spinner loading-sm" />
+                              Downloading...
+                            </>
+                          ) : (
+                            "Download"
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Cache Settings */}
+                    <div className="form-control">
+                      <label className="label">
+                        <span className="label-text text-primary font-display font-semibold">Mod Cache Settings</span>
+                      </label>
+                      <div className="space-y-4">
+                        {/* Enable Cache */}
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            className="checkbox checkbox-primary"
+                            checked={settings.cacheEnabled}
+                            onChange={(e) =>
+                              setSettings((prev) => ({
+                                ...prev,
+                                cacheEnabled: e.target.checked,
+                              }))
+                            }
+                            disabled={isSaving}
+                            id="cache-enabled"
+                            aria-label="Enable mod caching"
+                          />
+                          <label
+                            htmlFor="cache-enabled"
+                            className="label-text cursor-pointer text-primary/80 font-mono"
+                          >
+                            Enable mod caching
+                          </label>
+                        </div>
+
+                        {/* Cache Refresh Interval */}
+                        <div className="flex items-center gap-2">
+                          <label
+                            htmlFor="cache-interval"
+                            className="label-text min-w-[200px] text-primary/80 font-mono"
+                          >
+                            Refresh interval:
+                          </label>
+                          <input
+                            type="number"
+                            id="cache-interval"
+                            className="input input-bordered w-20"
+                            value={settings.cacheRefreshInterval}
+                            onChange={(e) =>
+                              setSettings((prev) => ({
+                                ...prev,
+                                cacheRefreshInterval:
+                                  parseInt(e.target.value) || 5,
+                              }))
+                            }
+                            min="1"
+                            max="24"
+                            disabled={isSaving || !settings.cacheEnabled}
+                            aria-label="Cache refresh interval in hours"
+                          />
+                          <span className="label-text">hours</span>
+                        </div>
+
+                        <p className="text-sm text-primary/60 font-mono">
+                          Mod data is cached to improve performance. Cache is
+                          refreshed automatically every{" "}
+                          {settings.cacheRefreshInterval} hours.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex justify-end gap-4 mt-8">
                       <button
                         type="button"
-                        onClick={handleDownloadSteamCMD}
-                        className="btn btn-primary"
-                        disabled={
-                          isDownloading || !settings.steamCmdPath.trim()
-                        }
+                        onClick={onClose}
+                        className="btn btn-ghost min-w-[100px]"
+                        disabled={isSaving || isDownloading}
                       >
-                        {isDownloading ? (
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn btn-primary min-w-[140px]"
+                        disabled={isSaving || isDownloading}
+                      >
+                        {isSaving ? (
                           <>
                             <span className="loading loading-spinner loading-sm" />
-                            Downloading...
+                            Saving...
                           </>
                         ) : (
-                          "Download"
+                          "Save Changes"
                         )}
                       </button>
                     </div>
-                  </div>
-
-                  {/* Cache Settings */}
-                  <div className="form-control">
-                    <label className="label">
-                      <span className="label-text">Mod Cache Settings</span>
-                    </label>
-                    <div className="space-y-4">
-                      {/* Enable Cache */}
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          className="checkbox checkbox-primary"
-                          checked={settings.cacheEnabled}
-                          onChange={(e) =>
-                            setSettings((prev) => ({
-                              ...prev,
-                              cacheEnabled: e.target.checked,
-                            }))
-                          }
-                          disabled={isSaving}
-                          id="cache-enabled"
-                          aria-label="Enable mod caching"
-                        />
-                        <label
-                          htmlFor="cache-enabled"
-                          className="label-text cursor-pointer"
-                        >
-                          Enable mod caching
-                        </label>
-                      </div>
-
-                      {/* Cache Refresh Interval */}
-                      <div className="flex items-center gap-2">
-                        <label
-                          htmlFor="cache-interval"
-                          className="label-text min-w-[200px]"
-                        >
-                          Refresh interval:
-                        </label>
-                        <input
-                          type="number"
-                          id="cache-interval"
-                          className="input input-bordered w-20"
-                          value={settings.cacheRefreshInterval}
-                          onChange={(e) =>
-                            setSettings((prev) => ({
-                              ...prev,
-                              cacheRefreshInterval:
-                                parseInt(e.target.value) || 5,
-                            }))
-                          }
-                          min="1"
-                          max="24"
-                          disabled={isSaving || !settings.cacheEnabled}
-                          aria-label="Cache refresh interval in hours"
-                        />
-                        <span className="label-text">hours</span>
-                      </div>
-
-                      <p className="text-sm text-base-content/60">
-                        Mod data is cached to improve performance. Cache is
-                        refreshed automatically every{" "}
-                        {settings.cacheRefreshInterval} hours.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex justify-end gap-4 mt-8">
-                    <button
-                      type="button"
-                      onClick={onClose}
-                      className="btn btn-ghost min-w-[100px]"
-                      disabled={isSaving || isDownloading}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="btn btn-primary min-w-[140px]"
-                      disabled={isSaving || isDownloading}
-                    >
-                      {isSaving ? (
-                        <>
-                          <span className="loading loading-spinner loading-sm" />
-                          Saving...
-                        </>
-                      ) : (
-                        "Save Changes"
-                      )}
-                    </button>
-                  </div>
-                </form>
+                  </form>
+                </div>
               </div>
             </div>
           </div>

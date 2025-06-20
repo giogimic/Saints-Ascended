@@ -200,92 +200,39 @@ export default function Dashboard() {
         });
 
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `Failed to ${action} server`);
+          throw new Error(`Server action failed: ${response.statusText}`);
         }
 
         const data = await response.json();
         return data;
       },
-      { component: "Dashboard", action: "handleServerAction", serverId }
+      {
+        component: "Dashboard",
+        action: "handleServerAction",
+        serverId,
+      }
     );
 
     if (result.success) {
-      toast.success(`Server ${action} initiated`);
-      // Refresh server status after a delay
-      setTimeout(() => fetchServers(), 2000);
+      toast.success(`Server ${action} successful`);
+      // Refresh server statuses
+      await fetchServers();
     }
   };
 
   const handleRetry = () => {
-    setError(null);
     fetchServers();
   };
 
-  // Error boundary for critical errors
-  if (error && servers.length === 0) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-base-100 text-base-content flex items-center justify-center px-4">
-        <div className="card bg-base-200 shadow-xl border border-error/30 rounded-2xl max-w-md w-full">
-          <div className="card-body text-center p-8">
-            <div className="w-16 h-16 bg-error/20 rounded-2xl flex items-center justify-center ring-2 ring-error/30 shadow-glow shadow-error/20 mx-auto mb-6">
-              <svg
-                className="h-8 w-8 text-error drop-shadow-glow"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
-                />
-              </svg>
-            </div>
-            <h1 className="text-2xl font-bold text-base-content mb-4 font-display tracking-wide">
-              Failed to Load Dashboard
-            </h1>
-            <p className="text-base-content/70 mb-6 font-mono">{error}</p>
-            <div className="flex gap-2 justify-center">
-              <button
-                onClick={handleRetry}
-                className="btn btn-primary rounded-xl shadow-lg hover:shadow-glow hover:shadow-primary/30 transition-all duration-300 font-semibold tracking-wide"
-              >
-                Try Again
-              </button>
-              <button
-                onClick={() => window.location.reload()}
-                className="btn btn-outline rounded-xl hover:bg-secondary hover:border-secondary hover:text-secondary-content transition-all duration-300 font-semibold tracking-wide"
-              >
-                Reload Page
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <Head>
-        <title>{globalSettings?.siteTitle || "Saints Ascended"}</title>
-        <meta
-          name="description"
-          content="Manage your Ark: Survival Ascended servers"
-        />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href={globalSettings?.favicon || "🦕"} />
-      </Head>
-
       <Layout
         showSidebar={true}
-        globalSettings={globalSettings}
+        sidebarOpen={sidebarOpen}
         onAddServer={() => setShowAddServerModal(true)}
         onGlobalSettings={handleGlobalSettingsClick}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-        sidebarOpen={sidebarOpen}
+        globalSettings={globalSettings}
         sidebarStats={{
           totalServers: servers.length,
           onlineServers: Object.values(serverStatuses).filter(
@@ -297,61 +244,143 @@ export default function Dashboard() {
           ),
         }}
       >
-        <div className="container mx-auto px-4 py-8">
-          <DashboardOverview
-            servers={servers}
-            serverStatuses={serverStatuses}
-          />
-
-          <ModernServerList
-            servers={servers}
-            serverStatuses={serverStatuses}
-            loading={loading}
-            onServerAction={handleServerAction}
-            onEditServer={(serverId) =>
-              router.push(`/servers/${serverId}/edit`)
-            }
-            onDeleteServer={async (serverId) => {
-              if (!confirm("Are you sure you want to delete this server?"))
-                return;
-
-              const result = await ErrorHandler.handleAsync(
-                async () => {
-                  const response = await fetch(`/api/servers/${serverId}`, {
-                    method: "DELETE",
-                  });
-
-                  if (!response.ok) {
-                    throw new Error("Failed to delete server");
-                  }
-
-                  return response.json();
-                },
-                { component: "Dashboard", action: "deleteServer", serverId }
-              );
-
-              if (result.success) {
-                toast.success("Server deleted successfully");
-                fetchServers();
-              }
-            }}
-            onViewDashboard={(serverId) => router.push(`/servers/${serverId}`)}
-          />
+        <Head>
+          <title>{globalSettings?.siteTitle || "Saints Ascended"}</title>
+        </Head>
+        <div className="main-content">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <div className="spinner-border animate-spin w-8 h-8 mx-auto mb-4"></div>
+              <div className="text-muted">LOADING SYSTEM DATA...</div>
+            </div>
+          </div>
         </div>
       </Layout>
+    );
+  }
 
+  if (error) {
+    return (
+      <Layout
+        showSidebar={true}
+        sidebarOpen={sidebarOpen}
+        onAddServer={() => setShowAddServerModal(true)}
+        onGlobalSettings={handleGlobalSettingsClick}
+        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+        globalSettings={globalSettings}
+        sidebarStats={{
+          totalServers: servers.length,
+          onlineServers: Object.values(serverStatuses).filter(
+            (s) => s.status === "online"
+          ).length,
+          totalPlayers: Object.values(serverStatuses).reduce(
+            (sum, s) => sum + s.players.current,
+            0
+          ),
+        }}
+      >
+        <Head>
+          <title>{globalSettings?.siteTitle || "Saints Ascended"}</title>
+        </Head>
+        <div className="main-content">
+          <div className="text-center py-12">
+            <div className="empty-icon mb-4">⚠️</div>
+            <div className="empty-title mb-2">SYSTEM ERROR</div>
+            <div className="empty-subtitle mb-6">{error}</div>
+            <button onClick={handleRetry} className="action-button">
+              <span>🔄</span>
+              RETRY CONNECTION
+            </button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout
+      showSidebar={true}
+      sidebarOpen={sidebarOpen}
+      onAddServer={() => setShowAddServerModal(true)}
+      onGlobalSettings={handleGlobalSettingsClick}
+      onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+      globalSettings={globalSettings}
+      sidebarStats={{
+        totalServers: servers.length,
+        onlineServers: Object.values(serverStatuses).filter(
+          (s) => s.status === "online"
+        ).length,
+        totalPlayers: Object.values(serverStatuses).reduce(
+          (sum, s) => sum + s.players.current,
+          0
+        ),
+      }}
+    >
+      <Head>
+        <title>{globalSettings?.siteTitle || "Saints Ascended"}</title>
+      </Head>
+
+      <div className="main-content">
+        <DashboardOverview 
+          servers={servers} 
+          serverStatuses={serverStatuses} 
+        />
+
+        {/* Server List - Only show if there are servers */}
+        {servers.length > 0 && (
+          <div className="mt-8">
+            <ModernServerList
+              servers={servers}
+              serverStatuses={serverStatuses}
+              onServerAction={handleServerAction}
+              onEditServer={(serverId) => router.push(`/servers/${serverId}/edit`)}
+              onDeleteServer={async (serverId) => {
+                if (!confirm("Are you sure you want to delete this server?"))
+                  return;
+
+                const result = await ErrorHandler.handleAsync(
+                  async () => {
+                    const response = await fetch(`/api/servers/${serverId}`, {
+                      method: "DELETE",
+                    });
+
+                    if (!response.ok) {
+                      throw new Error("Failed to delete server");
+                    }
+
+                    return response.json();
+                  },
+                  { component: "Dashboard", action: "deleteServer", serverId }
+                );
+
+                if (result.success) {
+                  toast.success("Server deleted successfully");
+                  fetchServers();
+                }
+              }}
+              onViewDashboard={(serverId) => router.push(`/servers/${serverId}`)}
+              loading={loading}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Modals */}
       {showAddServerModal && (
         <AddServerForm
           onSuccess={handleAddServerSuccess}
           onClose={handleAddServerCancel}
         />
       )}
-      <GlobalSettingsModal
-        settings={globalSettings}
-        onSettingsUpdate={handleGlobalSettingsUpdate}
-        onClose={handleGlobalSettingsClose}
-        isOpen={showGlobalSettingsModal}
-      />
-    </>
+
+      {showGlobalSettingsModal && (
+        <GlobalSettingsModal
+          isOpen={showGlobalSettingsModal}
+          onClose={handleGlobalSettingsClose}
+          onSettingsUpdate={handleGlobalSettingsUpdate}
+          settings={globalSettings}
+        />
+      )}
+    </Layout>
   );
 }

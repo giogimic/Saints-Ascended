@@ -31,27 +31,27 @@ export function Sidebar({
 
   const navigationItems = [
     {
-      name: 'Dashboard',
+      name: 'DASHBOARD',
       icon: HomeIcon,
       href: '/',
-      description: 'Server overview and management'
+      description: 'SERVER OVERVIEW AND MANAGEMENT'
     },
     {
-      name: 'Add Server',
+      name: 'ADD SERVER',
       icon: PlusIcon,
       action: onAddServer,
-      description: 'Create a new ARK server'
+      description: 'CREATE A NEW ARK SERVER'
     },
     {
-      name: 'Global Settings',
+      name: 'GLOBAL SETTINGS',
       icon: Cog6ToothIcon,
       action: onGlobalSettings,
-      description: 'Site title, favicon, theme, and system preferences'
+      description: 'SITE TITLE, FAVICON, THEME, AND SYSTEM PREFERENCES'
     }
   ];
 
   return (
-    <aside className={`fixed left-0 top-16 h-[calc(100%-4rem)] bg-base-200/90 backdrop-blur-lg border-r border-base-content/8 shadow-modern transition-all duration-300 z-40 ${
+    <aside className={`fixed left-0 top-16 h-[calc(100vh-4rem)] bg-cyber-panel/95 backdrop-blur-lg border-r-2 border-matrix-500 shadow-matrix transition-all duration-300 z-[60] overflow-y-auto ${
       isOpen ? 'w-64' : 'w-16'
     }`}>
       {/* Toggle Button */}
@@ -60,7 +60,7 @@ export function Sidebar({
           e.stopPropagation();
           onToggleSidebar?.();
         }}
-        className="absolute -right-4 top-1/2 transform -translate-y-1/2 w-8 h-8 bg-modern-gradient from-primary to-secondary text-white rounded-full flex items-center justify-center shadow-lg hover:shadow-primary/25 transition-all duration-200 z-50 border-2 border-base-100"
+        className="absolute -right-4 top-1/2 transform -translate-y-1/2 w-8 h-8 bg-cyber-panel border-2 border-matrix-500 text-matrix-500 flex items-center justify-center shadow-matrix hover:shadow-matrix-glow transition-all duration-200 z-50 cyber-hover"
         title={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
       >
         {isOpen ? (
@@ -89,20 +89,20 @@ export function Sidebar({
                   }
                 }}
                 type="button"
-                className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-all duration-200 group ${
+                className={`w-full flex items-center gap-3 px-3 py-3 bg-cyber-panel border border-matrix-700 text-left transition-all duration-200 group cyber-hover ${
                   isActive 
-                    ? 'bg-modern-gradient from-primary/10 to-secondary/10 text-primary border border-primary/20 shadow-sm' 
-                    : 'hover:bg-base-content/5 text-base-content/80 hover:text-base-content'
+                    ? 'border-matrix-500 text-matrix-500 shadow-matrix-glow' 
+                    : 'hover:border-matrix-600 text-matrix-600 hover:text-matrix-500'
                 }`}
                 title={item.description}
               >
                 <Icon className={`h-5 w-5 transition-colors ${
-                  isActive ? 'text-primary' : 'text-base-content/60 group-hover:text-base-content'
+                  isActive ? 'text-matrix-500' : 'text-matrix-600 group-hover:text-matrix-500'
                 }`} />
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm truncate">{item.name}</div>
-                  <div className={`text-xs transition-colors truncate ${
-                    isActive ? 'text-primary/70' : 'text-base-content/50 group-hover:text-base-content/70'
+                  <div className="font-mono font-medium text-sm truncate uppercase tracking-wider">{item.name}</div>
+                  <div className={`text-xs font-mono transition-colors truncate uppercase tracking-widest ${
+                    isActive ? 'text-matrix-600' : 'text-matrix-700 group-hover:text-matrix-600'
                   }`}>
                     {item.description}
                   </div>
@@ -113,21 +113,21 @@ export function Sidebar({
         </nav>
 
         {/* Quick Stats */}
-        <div className="mt-8 pt-6 border-t border-base-content/8">
+        <div className="mt-8 pt-6 border-t border-matrix-700">
           <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 rounded-lg bg-base-content/2 text-sm">
-              <span className="text-base-content/70 font-medium">Total Servers</span>
-              <span className="font-semibold text-base-content">{totalServers}</span>
+            <div className="flex items-center justify-between p-3 bg-cyber-panel border border-matrix-700 text-sm">
+              <span className="text-matrix-600 font-mono font-medium uppercase tracking-wider">TOTAL SERVERS</span>
+              <span className="font-mono font-semibold text-matrix-500">{totalServers}</span>
             </div>
             
-            <div className="flex items-center justify-between p-3 rounded-lg bg-success/5 text-sm">
-              <span className="text-base-content/70 font-medium">Online</span>
-              <span className="font-semibold text-success">{onlineServers}</span>
+            <div className="flex items-center justify-between p-3 bg-cyber-panel border border-matrix-700 text-sm">
+              <span className="text-matrix-600 font-mono font-medium uppercase tracking-wider">ONLINE</span>
+              <span className="font-mono font-semibold text-matrix-500">{onlineServers}</span>
             </div>
             
-            <div className="flex items-center justify-between p-3 rounded-lg bg-accent/5 text-sm">
-              <span className="text-base-content/70 font-medium">Players</span>
-              <span className="font-semibold text-accent">{totalPlayers}</span>
+            <div className="flex items-center justify-between p-3 bg-cyber-panel border border-matrix-700 text-sm">
+              <span className="text-matrix-600 font-mono font-medium uppercase tracking-wider">PLAYERS</span>
+              <span className="font-mono font-semibold text-matrix-500">{totalPlayers}</span>
             </div>
           </div>
         </div>
@@ -152,15 +152,15 @@ export function Sidebar({
                   }
                 }}
                 type="button"
-                className={`w-10 h-10 flex items-center justify-center rounded-lg transition-all duration-200 group ${
+                className={`w-10 h-10 flex items-center justify-center bg-cyber-panel border border-matrix-700 transition-all duration-200 group cyber-hover ${
                   isActive 
-                    ? 'bg-modern-gradient from-primary/10 to-secondary/10 text-primary border border-primary/20 shadow-sm' 
-                    : 'hover:bg-base-content/5 text-base-content/70 hover:text-base-content'
+                    ? 'border-matrix-500 text-matrix-500 shadow-matrix-glow' 
+                    : 'hover:border-matrix-600 text-matrix-600 hover:text-matrix-500'
                 }`}
                 title={item.name}
               >
                 <Icon className={`h-5 w-5 transition-colors ${
-                  isActive ? 'text-primary' : 'text-base-content/60 group-hover:text-base-content'
+                  isActive ? 'text-matrix-500' : 'text-matrix-600 group-hover:text-matrix-500'
                 }`} />
               </button>
             );

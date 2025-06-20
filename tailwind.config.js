@@ -26,6 +26,40 @@ module.exports = {
       },
     },
     extend: {
+      // Matrix Color Palette - Exact specification from prompt.md
+      colors: {
+        'matrix': {
+          50: '#f0fff4',
+          100: '#dcfce7',
+          200: '#bbf7d0',
+          300: '#86efac',
+          400: '#4ade80',
+          500: '#00ff41',  // Primary matrix green
+          600: '#00cc33',  // Secondary matrix green
+          700: '#15803d',
+          800: '#166534',
+          900: '#14532d',
+          950: '#052e16',
+        },
+        'cyber': {
+          bg: '#0a0a0a',
+          panel: '#111111',
+          border: '#1a4a1a',
+          text: '#00ff41',
+          muted: '#448844',
+        },
+        'pipboy': {
+          green: '#00ff41',
+          black: '#0a0a0a',
+          amber: '#ffb000',
+        },
+        'status': {
+          online: '#00ff41',
+          offline: '#ff3333',
+          warning: '#ff8800',
+          info: '#0099ff',
+        }
+      },
       spacing: {
         18: "4.5rem",
         88: "22rem",
@@ -40,7 +74,7 @@ module.exports = {
           "-apple-system",
           "sans-serif",
         ],
-        mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+        mono: ['JetBrains Mono', 'monospace'],
         display: ["Inter", "sans-serif"],
       },
       fontSize: {
@@ -87,6 +121,7 @@ module.exports = {
         "3xl": "1.5rem",
         tech: "0.75rem",
       },
+      // Exact animations from prompt.md specifications
       animation: {
         "fade-in": "fadeIn 0.5s ease-in-out",
         "slide-up": "slideUp 0.3s ease-out",
@@ -97,9 +132,22 @@ module.exports = {
         float: "float 3s ease-in-out infinite",
         shimmer: "shimmer 2s linear infinite",
         "pulse-border": "pulseBorder 1.5s ease-in-out infinite",
+        // Prompt.md specified animations
+        'glitch': 'glitch 0.3s ease-in-out',
+        'scan-line': 'scanLine 2s linear infinite',
+        'pulse-matrix': 'pulseMatrix 2s ease-in-out infinite',
+        'grid-pulse': 'gridPulse 4s ease-in-out infinite alternate',
+        // Legacy animations for compatibility
         "pipboy-scan": "pipboyScan 3s linear infinite",
         "pipboy-glow": "pipboyGlow 4s ease-in-out infinite alternate",
         "pipboy-scanline": "scanline 8s linear infinite",
+        'jitter': 'jitter 0.3s ease-in-out',
+        'text-flicker': 'textFlicker 1.5s ease-in-out infinite',
+        'glitch-hover': 'glitchHover 0.3s ease-in-out',
+        'card-glitch': 'cardGlitch 0.3s ease-in-out',
+        'button-glitch': 'buttonGlitch 0.3s ease-in-out',
+        'random-glitch': 'randomGlitch 15s infinite',
+        'typewriter': 'typewriter 2s steps(40) infinite',
       },
       keyframes: {
         fadeIn: {
@@ -134,6 +182,40 @@ module.exports = {
           "0%, 100%": { borderColor: "oklch(var(--p) / 0.3)" },
           "50%": { borderColor: "oklch(var(--p))" },
         },
+        // Prompt.md specified keyframes
+        glitch: {
+          "0%": { transform: "translate(0)" },
+          "20%": { transform: "translate(-2px, 2px)" },
+          "40%": { transform: "translate(-2px, -2px)" },
+          "60%": { transform: "translate(2px, 2px)" },
+          "80%": { transform: "translate(2px, -2px)" },
+          "100%": { transform: "translate(0)" },
+        },
+        scanLine: {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(100%)" },
+        },
+        pulseMatrix: {
+          "0%, 100%": { 
+            opacity: "1",
+            boxShadow: "0 0 0 0 rgba(0, 255, 65, 0.4)"
+          },
+          "50%": { 
+            opacity: "0.7",
+            boxShadow: "0 0 0 8px rgba(0, 255, 65, 0)"
+          },
+        },
+        gridPulse: {
+          "0%": { 
+            backgroundSize: "40px 40px",
+            opacity: "0.5"
+          },
+          "100%": { 
+            backgroundSize: "42px 42px",
+            opacity: "0.8"
+          },
+        },
+        // Legacy keyframes for compatibility
         pipboyScan: {
           "0%": { 
             transform: "translateY(-100%)",
@@ -155,6 +237,58 @@ module.exports = {
             boxShadow: "0 0 40px rgba(0, 255, 0, 0.6), inset 0 0 40px rgba(0, 255, 0, 0.2)"
           },
         },
+        jitter: {
+          '0%, 100%': { transform: 'translateX(0) translateY(0)' },
+          '10%': { transform: 'translateX(-1px) translateY(-1px)' },
+          '20%': { transform: 'translateX(1px) translateY(1px)' },
+          '30%': { transform: 'translateX(-1px) translateY(1px)' },
+          '40%': { transform: 'translateX(1px) translateY(-1px)' },
+          '50%': { transform: 'translateX(-1px) translateY(-1px)' },
+          '60%': { transform: 'translateX(1px) translateY(1px)' },
+          '70%': { transform: 'translateX(-1px) translateY(1px)' },
+          '80%': { transform: 'translateX(1px) translateY(-1px)' },
+          '90%': { transform: 'translateX(-1px) translateY(-1px)' },
+        },
+        textFlicker: {
+          '0%, 100%': { opacity: '1', textShadow: '0 0 10px rgb(0 255 65)' },
+          '5%': { opacity: '0.9', textShadow: '0 0 15px rgb(0 255 65)' },
+          '10%': { opacity: '1', textShadow: '0 0 5px rgb(0 255 65)' },
+          '15%': { opacity: '0.95', textShadow: '0 0 20px rgb(0 255 65)' },
+          '20%': { opacity: '1', textShadow: '0 0 10px rgb(0 255 65)' },
+        },
+        glitchHover: {
+          '0%, 100%': { transform: 'translateX(0)' },
+          '20%': { transform: 'translateX(-2px) translateY(1px)' },
+          '40%': { transform: 'translateX(2px) translateY(-1px)' },
+          '60%': { transform: 'translateX(-1px) translateY(1px)' },
+          '80%': { transform: 'translateX(1px) translateY(-1px)' },
+        },
+        cardGlitch: {
+          '0%, 100%': { transform: 'translateY(-2px)' },
+          '25%': { transform: 'translateY(-3px) translateX(1px)' },
+          '50%': { transform: 'translateY(-1px) translateX(-1px)' },
+          '75%': { transform: 'translateY(-2px) translateX(1px)' },
+        },
+        buttonGlitch: {
+          '0%, 100%': { transform: 'translateX(0)' },
+          '20%': { transform: 'translateX(-2px)' },
+          '40%': { transform: 'translateX(2px)' },
+          '60%': { transform: 'translateX(-1px)' },
+          '80%': { transform: 'translateX(1px)' },
+        },
+        randomGlitch: {
+          '0%, 95%': { opacity: '0', transform: 'translateX(0)' },
+          '96%': { opacity: '1', transform: 'translateX(-2px)' },
+          '97%': { opacity: '0', transform: 'translateX(2px)' },
+          '98%': { opacity: '1', transform: 'translateX(-1px)' },
+          '99%': { opacity: '0', transform: 'translateX(1px)' },
+          '100%': { opacity: '0', transform: 'translateX(0)' },
+        },
+        typewriter: {
+          '0%': { width: '0' },
+          '50%': { width: '100%' },
+          '100%': { width: '0' },
+        },
       },
       boxShadow: {
         "glow-sm": "0 0 4px currentColor",
@@ -170,6 +304,12 @@ module.exports = {
         "pipboy-glow": "0 0 20px rgba(0, 255, 0, 0.4), inset 0 0 20px rgba(0, 255, 0, 0.1)",
         "pipboy-glow-lg": "0 0 40px rgba(0, 255, 0, 0.6), inset 0 0 40px rgba(0, 255, 0, 0.2)",
         "pipboy-glow-xl": "0 0 60px rgba(0, 255, 0, 0.8), inset 0 0 60px rgba(0, 255, 0, 0.3)",
+        // Matrix-specific shadows
+        "matrix-glow": "0 0 20px rgba(0, 255, 65, 0.4), inset 0 0 20px rgba(0, 255, 65, 0.1)",
+        "matrix-glow-lg": "0 0 40px rgba(0, 255, 65, 0.6), inset 0 0 40px rgba(0, 255, 65, 0.2)",
+        "matrix": '0 0 20px rgba(0, 255, 65, 0.3)',
+        "matrix-lg": '0 0 30px rgba(0, 255, 65, 0.4)',
+        "cyber": '0 4px 20px rgba(0, 255, 65, 0.1)',
       },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
@@ -177,6 +317,12 @@ module.exports = {
           "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
         "modern-gradient": "linear-gradient(135deg, var(--tw-gradient-stops))",
         "mesh-gradient": "radial-gradient(circle at 25% 25%, var(--tw-gradient-stops))",
+        // Matrix-specific gradients
+        "matrix-gradient": "linear-gradient(135deg, #0a0a0a 0%, #001a0a 25%, #003311 50%, #00cc33 75%, #00ff41 100%)",
+        "matrix-gradient-radial": "radial-gradient(circle at center, #003311 0%, #001a0a 50%, #0a0a0a 100%)",
+        "matrix-scan": "linear-gradient(90deg, transparent 0%, rgba(0, 255, 65, 0.1) 50%, transparent 100%)",
+        "matrix-grid": "linear-gradient(90deg, transparent 49%, rgba(26, 74, 26, 0.3) 50%, transparent 51%), linear-gradient(0deg, transparent 49%, rgba(26, 74, 26, 0.3) 50%, transparent 51%)",
+        // Legacy gradients for compatibility
         "pipboy-gradient": "linear-gradient(135deg, #000000 0%, #001a00 25%, #003300 50%, #004d00 75%, #006600 100%)",
         "pipboy-gradient-radial": "radial-gradient(circle at center, #003300 0%, #001a00 50%, #000000 100%)",
         "pipboy-gradient-diagonal": "linear-gradient(45deg, #000000 0%, #001a00 20%, #003300 40%, #004d00 60%, #006600 80%, #008000 100%)",
@@ -185,6 +331,11 @@ module.exports = {
       },
       backdropBlur: {
         xs: "2px",
+        cyber: '10px',
+      },
+      textShadow: {
+        'matrix': '0 0 10px rgba(0, 255, 65, 0.5)',
+        'matrix-lg': '0 0 20px rgba(0, 255, 65, 0.7)',
       },
     },
   },
@@ -193,63 +344,109 @@ module.exports = {
     require("@tailwindcss/typography"),
     require("@tailwindcss/aspect-ratio"),
     require("daisyui"),
+    function({ addUtilities }) {
+      const newUtilities = {
+        '.text-shadow-matrix': {
+          textShadow: '0 0 10px rgba(0, 255, 65, 0.5)',
+        },
+        '.text-shadow-matrix-lg': {
+          textShadow: '0 0 20px rgba(0, 255, 65, 0.7)',
+        },
+        '.border-glow-matrix': {
+          boxShadow: '0 0 10px rgba(0, 255, 65, 0.3)',
+        },
+        '.bg-scan-lines': {
+          backgroundImage: 'linear-gradient(0deg, transparent 98%, rgba(0, 255, 65, 0.1) 100%)',
+          backgroundSize: '100% 4px',
+        },
+      }
+      addUtilities(newUtilities)
+    }
   ],
   daisyui: {
     themes: [
       {
         pipboy: {
-          // Classic Pip-Boy Theme - Back to Basics
-          primary: "#00ff00",          // Bright Pip-Boy green
-          "primary-focus": "#33ff33",   // Lighter green for focus
-          "primary-content": "#000000",   // Black text on green
-
-          secondary: "#00dd00",       // Slightly darker green
-          "secondary-focus": "#00bb00",
-          "secondary-content": "#000000",
-
-          accent: "#00ff00",
-          "accent-focus": "#33ff33",
-          "accent-content": "#000000",
-
-          // Neutral colors - pure black for high contrast
-          neutral: "#000000",
-          "neutral-focus": "#1c1c1c", // very dark grey
-          "neutral-content": "#00ff00", // Green text
-
-          // Background layers - solid black for true Pip-Boy feel
-          "base-100": "#000000",
-          "base-200": "#080808",
-          "base-300": "#101010",
-          "base-content": "#00ff00",
-
-          // Status colors
-          info: "#00ff00",
-          "info-content": "#000000",
-          success: "#00ff00",
-          "success-content": "#000000",
-          warning: "#00dd00",
-          "warning-content": "#000000",
-          error: "#ff0000",
-          "error-content": "#000000",
-
-          // Component styling - Sharp and functional
-          "--rounded-box": "0rem",
-          "--rounded-btn": "0rem",
-          "--rounded-badge": "0rem",
-          "--animation-btn": "0.1s",
-          "--animation-input": "0.1s",
+          "primary": "#00ff41",
+          "primary-focus": "#00cc33",
+          "primary-content": "#0a0a0a",
+          "secondary": "#00cc33",
+          "secondary-focus": "#003311",
+          "secondary-content": "#0a0a0a",
+          "accent": "#00ff41",
+          "accent-focus": "#00cc33",
+          "accent-content": "#0a0a0a",
+          "neutral": "#111111",
+          "neutral-focus": "#0a0a0a",
+          "neutral-content": "#00ff41",
+          "base-100": "#0a0a0a",
+          "base-200": "#111111",
+          "base-300": "#1a4a1a",
+          "base-content": "#00ff41",
+          "info": "#0099ff",
+          "info-content": "#0a0a0a",
+          "success": "#00ff41",
+          "success-content": "#0a0a0a",
+          "warning": "#ff8800",
+          "warning-content": "#0a0a0a",
+          "error": "#ff3333",
+          "error-content": "#0a0a0a",
+          "--rounded-box": "0",
+          "--rounded-btn": "0",
+          "--rounded-badge": "0",
+          "--animation-btn": "0.3s",
+          "--animation-input": "0.3s",
           "--btn-text-case": "uppercase",
-          "--navbar-padding": "0.5rem",
-          "--tab-radius": "0rem",
+          "--btn-focus-scale": "0.98",
+          "--border-btn": "1px",
+          "--tab-border": "1px",
+          "--tab-radius": "0",
+        },
+        // Matrix theme - exact specification from prompt.md
+        matrix: {
+          "primary": "#00ff41",
+          "primary-focus": "#00cc33",
+          "primary-content": "#0a0a0a",
+          "secondary": "#00cc33",
+          "secondary-focus": "#003311",
+          "secondary-content": "#0a0a0a",
+          "accent": "#00ff41",
+          "accent-focus": "#00cc33",
+          "accent-content": "#0a0a0a",
+          "neutral": "#111111",
+          "neutral-focus": "#0a0a0a",
+          "neutral-content": "#00ff41",
+          "base-100": "#0a0a0a",
+          "base-200": "#111111",
+          "base-300": "#1a4a1a",
+          "base-content": "#00ff41",
+          "info": "#0099ff",
+          "info-content": "#0a0a0a",
+          "success": "#00ff41",
+          "success-content": "#0a0a0a",
+          "warning": "#ff8800",
+          "warning-content": "#0a0a0a",
+          "error": "#ff3333",
+          "error-content": "#0a0a0a",
+          "--rounded-box": "0",
+          "--rounded-btn": "0",
+          "--rounded-badge": "0",
+          "--animation-btn": "0.3s",
+          "--animation-input": "0.3s",
+          "--btn-text-case": "uppercase",
+          "--btn-focus-scale": "0.98",
+          "--border-btn": "1px",
+          "--tab-border": "1px",
+          "--tab-radius": "0",
         },
       },
     ],
-    darkTheme: "pipboy",
+    darkTheme: "matrix",
     base: true,
     styled: true,
     utils: true,
-    rtl: false,
     prefix: "",
-    logs: false,
+    logs: true,
+    themeRoot: ":root",
   },
 };

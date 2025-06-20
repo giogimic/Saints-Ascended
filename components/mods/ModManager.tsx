@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { ModInfo } from "../../types/server";
 import {
@@ -6,15 +6,14 @@ import {
   PuzzlePieceIcon,
   PlusIcon,
   TrashIcon,
-  ArrowUpIcon,
-  ArrowDownIcon,
   CheckIcon,
   XMarkIcon,
   ExclamationTriangleIcon,
-  WrenchScrewdriverIcon,
-  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import { clsx } from "clsx";
+import { toast } from 'react-hot-toast';
+import { modCacheClient } from "@/lib/mod-cache-client";
+import { addConsoleError } from "@/components/ui/Layout";
 
 interface ModManagerProps {
   serverId: string;
@@ -26,123 +25,45 @@ interface ModManagerProps {
 
 interface CurseForgeModData {
   id: number;
-  gameId: number;
   name: string;
-  slug: string;
-  links: {
-    websiteUrl: string;
-    wikiUrl: string;
-    issuesUrl: string;
-    sourceUrl: string;
-  };
   summary: string;
-  status: number;
-  downloadCount: number;
-  isFeatured: boolean;
-  primaryCategoryId: number;
-  categories: Array<{
-    id: number;
-    gameId: number;
-    name: string;
-    slug: string;
-    url: string;
-    iconUrl: string;
-    dateModified: string;
-    isClass: boolean;
-    classId: number;
-    parentCategoryId: number;
-    displayIndex: number;
-  }>;
-  classId: number;
-  authors: Array<{
-    id: number;
-    name: string;
-    url: string;
-  }>;
-  logo: {
-    id: number;
-    modId: number;
-    title: string;
-    description: string;
-    thumbnailUrl: string;
+  logo?: {
     url: string;
   };
-  screenshots: Array<{
-    id: number;
-    modId: number;
-    title: string;
-    description: string;
-    thumbnailUrl: string;
+  screenshots?: Array<{
     url: string;
   }>;
-  mainFileId: number;
-  latestFiles: Array<{
-    id: number;
-    gameId: number;
-    modId: number;
-    isAvailable: boolean;
-    displayName: string;
-    fileName: string;
-    releaseType: number;
-    fileStatus: number;
-    hashes: Array<{
-      value: string;
-      algo: number;
-    }>;
-    fileDate: string;
-    fileLength: number;
-    downloadCount: number;
-    fileSizeOnDisk: number;
-    downloadUrl: string;
-    gameVersions: string[];
-    sortableGameVersions: Array<{
-      gameVersionName: string;
-      gameVersionPadded: string;
-      gameVersion: string;
-      gameVersionReleaseDate: string;
-      gameVersionTypeId: number;
-    }>;
-    dependencies: Array<{
-      modId: number;
-      relationType: number;
-    }>;
-    exposeAsAlternative: boolean;
-    parentProjectFileId: number;
-    alternateFileId: number;
-    isServerPack: boolean;
-    serverPackFileId: number;
-    isEarlyAccessContent: boolean;
-    earlyAccessEndDate: string;
-    fileFingerprint: number;
-    modules: Array<{
+  authors: Array<{
       name: string;
-      fingerprint: number;
-    }>;
   }>;
-  latestFilesIndexes: Array<{
-    gameVersion: string;
-    fileId: number;
-    filename: string;
-    releaseType: number;
-    gameVersionTypeId: number;
-    modLoader: number;
-  }>;
+  downloadCount: number;
   dateCreated: string;
   dateModified: string;
-  dateReleased: string;
-  allowModDistribution: boolean;
-  gamePopularityRank: number;
-  isAvailable: boolean;
-  thumbsUpCount: number;
+  gamePopularityRank?: number;
+  categories: Array<{
+    id: number;
+    name: string;
+  }>;
 }
 
-interface CurseForgeCategory {
-  id: number;
+interface DisplayMod {
+  id: string;
   name: string;
+  description: string;
+  version: string;
+  workshopId: string;
+  enabled: boolean;
+  loadOrder: number;
+  dependencies: string[];
+  incompatibilities: string[];
+  size: string;
+  lastUpdated: Date;
+  _curseforgeData?: CurseForgeModData;
 }
 
-// Predefined mod categories matching the requested structure
+// Predefined mod categories
 const MOD_CATEGORIES = [
+  "Installed",
   "QoL",
   "RPG",
   "Maps",
@@ -150,1861 +71,863 @@ const MOD_CATEGORIES = [
   "Overhauls",
   "General",
   "Custom Cosmetics",
-  "Installed",
 ];
-
-// Category to search term mapping
-const CATEGORY_SEARCH_TERMS: { [key: string]: string[] } = {
-  QoL: [
-    "QoL",
-    "Quality of Life",
-    "Improvement",
-    "Tweak",
-    "Fix",
-    "Enhancement",
-    "Utility",
-    "Optimization",
-    "Better",
-    "Improved",
-    "Enhanced",
-    "Convenient",
-    "Helper",
-    "Assistant",
-    "Tool",
-    "Auto",
-    "Stack",
-    "Pickup",
-    "Interface",
-    "UI",
-    "HUD",
-    "Notification",
-    "Alert",
-    "Indicator",
-    "Smart",
-    "Advanced",
-    "Extended",
-    "Plus",
-    "Pro",
-    "Ultimate",
-    "Super",
-    "Mega",
-    "S+",
-    "Structures Plus",
-    "Awesome SpyGlass",
-    "Ultra Stacks",
-    "Inventory Manager",
-    "Auto Stack",
-    "Quick Craft",
-    "Fast Travel",
-    "Resource Tracker",
-    "Auto Harvest",
-    "Auto Craft",
-    "Hotkeys",
-    "Quick Build",
-    "Easy Place",
-    "Fast Loot",
-    "Auto Sort",
-    "Quick Repair",
-    "Quick Heal",
-    "Resource",
-    "Pulling",
-    "System",
-    "Automation",
-    "Streamlined",
-    "Simplified",
-    "Performance",
-    "FSR",
-    "Frame Rate",
-    "Upscaling",
-    "Efficient",
-    "Smooth",
-    "Faster",
-    "Quick",
-    "Instant",
-    "Management",
-    "Organizer",
-    "Sorter",
-    "Filter",
-    "Search",
-    "Browse",
-    "Navigate",
-    "Depletion",
-    "Infinite",
-    "Unlimited",
-    "Boosted",
-    "Multiplier",
-    "Enhanced Stats",
-  ],
-  RPG: [
-    "RPG",
-    "Roleplaying",
-    "Roleplay",
-    "Progression",
-    "Skills",
-    "Stats",
-    "Leveling",
-    "Classes",
-    "Experience",
-    "XP",
-    "Level",
-    "Skill Tree",
-    "Talent",
-    "Attribute",
-    "Character",
-    "Profession",
-    "Job",
-    "Career",
-    "Specialization",
-    "Build",
-    "Development",
-    "Adventure",
-    "Quest",
-    "Mission",
-    "Story",
-    "Narrative",
-    "Campaign",
-    "Magic",
-    "Perks",
-    "Lore",
-    "Ark Advance",
-    "ARK Additions",
-    "Spell",
-    "Potion",
-    "Crafting Skill",
-    "Trader",
-    "Guild",
-    "Faction",
-    "Reputation",
-    "Bounty",
-    "Exploration",
-    "Dungeon",
-    "Boss",
-    "Mount",
-    "Pet Companion",
-    "Hardcore",
-    "Permadeath",
-    "Difficulty",
-    "Challenge",
-    "Immersive",
-    "Realistic",
-    "Simulation",
-    "Survival Experience",
-    "Tribe",
-    "Clan",
-    "Alliance",
-    "Rank",
-    "Prestige",
-    "Mastery",
-    "Ascension",
-    "Evolution",
-    "Mutation",
-  ],
-  Maps: [
-    "Map",
-    "Maps",
-    "Custom Map",
-    "New Map",
-    "Biome",
-    "Terrain",
-    "World",
-    "Island",
-    "Environment",
-    "Landscape",
-    "Location",
-    "Area",
-    "Region",
-    "Zone",
-    "Territory",
-    "Expansion",
-    "DLC",
-    "Add-on",
-    "Extension",
-    "Pack",
-    "Collection",
-    "Aberration",
-    "Extinction",
-    "Genesis",
-    "Ragnarok",
-    "Valguero",
-    "Crystal Isles",
-    "Lost Island",
-    "Fjordur",
-    "Scorched Earth",
-    "Center",
-    "Atlas",
-    "Adventure Map",
-    "Parkour Map",
-    "PvP Map",
-    "Survival Map",
-    "Building Map",
-    "Roleplay Map",
-    "Custom",
-    "Remake",
-    "Remaster",
-    "Conversion",
-    "Port",
-    "Updated",
-    "Reimagined",
-    "Mysterious",
-    "Verdant",
-    "Azure",
-    "Misty",
-    "Jungle",
-    "Ocean",
-    "Desert",
-    "Snow",
-    "Volcanic",
-    "Underground",
-    "Cave",
-    "Cliff",
-    "Mountain",
-    "Valley",
-  ],
-  Popular: [
-    "Popular",
-    "Trending",
-    "Top Rated",
-    "Most Downloaded",
-    "Hot",
-    "Recommended",
-    "Featured",
-    "Best",
-    "Top",
-    "Favorite",
-    "Must Have",
-    "Essential",
-    "Core",
-    "Awesome",
-    "Amazing",
-    "Great",
-    "Excellent",
-    "Outstanding",
-    "Fantastic",
-    "Structures Plus",
-    "Awesome SpyGlass",
-    "Ultra Stacks",
-    "Dino Storage",
-    "ARK Additions",
-    "ARK Advance",
-    "Eco's Mods",
-    "Classic Flyers",
-    "Sheep's Ark",
-    "Pillars Plus",
-    "Reusable",
-    "Multipurpose",
-    "Community Favorite",
-    "Community",
-    "Staff Pick",
-    "Editor Choice",
-    "Highly Rated",
-    "Celebrated",
-    "Acclaimed",
-    "Beloved",
-    "Iconic",
-    "Legendary",
-    "Classic",
-    "Timeless",
-    "Viral",
-    "Buzzing",
-    "Sensation",
-    "Phenomenon",
-    "Breakthrough",
-  ],
-  Overhauls: [
-    "Overhaul",
-    "Total Conversion",
-    "Rework",
-    "Expansion",
-    "Revamp",
-    "Modpack",
-    "Complete",
-    "Full",
-    "Major",
-    "Massive",
-    "Huge",
-    "Big",
-    "Large Scale",
-    "Remaster",
-    "Remake",
-    "Redesign",
-    "Rebuild",
-    "Transform",
-    "Revolution",
-    "Game Changer",
-    "Total",
-    "Ultimate",
-    "Comprehensive",
-    "All-in-One",
-    "Primal Fear",
-    "Omega",
-    "Ebenus Astrum",
-    "Genesis Ascended",
-    "Exiled Lands",
-    "Dark Ages",
-    "TRex Calibration",
-    "Combat Overhaul",
-    "Creature Evolution",
-    "System Overhaul",
-    "Comprehensive Building",
-    "Core Improvements",
-    "Ground-up",
-    "Next-generation",
-    "Unreal Engine 5",
-    "Revolutionary",
-    "Cross-platform",
-    "Modding Experience",
-    "Technology",
-    "Innovation",
-  ],
-  Structures: [
-    "Structures",
-    "Building",
-    "Construction",
-    "Architecture",
-    "Platforms",
-    "Foundations",
-    "Walls",
-    "Roofs",
-    "Doors",
-    "Windows",
-    "Stairs",
-    "Ramps",
-    "Pillars",
-    "Beams",
-    "Super Structures",
-    "Arkitect",
-    "Advanced Building",
-    "Building Plus",
-    "B+",
-    "Snap",
-    "Snapping",
-    "Placement",
-    "Wedges",
-    "Triangles",
-    "Circles",
-    "Curves",
-    "Decorative",
-    "Furniture",
-    "Chairs",
-    "Tables",
-    "Lights",
-    "Cobble Stone",
-    "Wooden",
-    "Metal",
-    "Tek",
-    "Glass",
-    "Crystal",
-    "Stone",
-    "Thatch",
-    "Progression",
-    "Utility Structures",
-    "P.U.S",
-    "Remastered",
-    "Core",
-  ],
-  Creatures: [
-    "Creatures",
-    "Dinosaurs",
-    "Dinos",
-    "Animals",
-    "Beasts",
-    "Monsters",
-    "Wildlife",
-    "Prehistoric",
-    "Extinct",
-    "Ancient",
-    "Primeval",
-    "Jurassic",
-    "Cretaceous",
-    "Additions",
-    "New Species",
-    "Custom Creatures",
-    "Unique",
-    "Rare",
-    "Legendary",
-    "Predators",
-    "Herbivores",
-    "Carnivores",
-    "Omnivores",
-    "Flying",
-    "Swimming",
-    "Aquatic",
-    "Marine",
-    "Sea",
-    "Ocean",
-    "Land",
-    "Terrestrial",
-    "Aerial",
-    "Toothy",
-    "Gargantuan",
-    "Massive",
-    "Tiny",
-    "Giant",
-    "Boss",
-    "Alpha",
-    "Tameable",
-    "Rideable",
-    "Mountable",
-    "Companion",
-    "Pet",
-    "Breeding",
-    "Mammals",
-    "Sharks",
-    "Dragons",
-    "Wyverns",
-    "Griffins",
-    "Phoenix",
-  ],
-  General: [
-    "Content",
-    "AI",
-    "Creature",
-    "Item",
-    "Gameplay",
-    "Balance",
-    "Mod",
-    "Feature",
-    "Addition",
-    "New",
-    "Extra",
-    "More",
-    "Additional",
-    "Extended",
-    "Expanded",
-    "Misc",
-    "Miscellaneous",
-    "Various",
-    "Mixed",
-    "Assorted",
-    "Collection",
-    "Pack",
-    "Bundle",
-    "Set",
-    "Group",
-    "Compilation",
-    "Anthology",
-    "Ark",
-    "Ascended",
-    "ASA",
-    "Ascension",
-    "Survival",
-    "Adventure",
-    "Crafting",
-    "Building",
-    "Tooltips",
-    "Tutorial",
-    "Legacy",
-    "Debug",
-    "Cheat",
-    "Test",
-    "Dev",
-    "Prototype",
-    "Evolved",
-    "SA",
-    "Server",
-    "Client",
-    "Dedicated",
-    "Local",
-    "Single Player",
-    "Multiplayer",
-    "PvP",
-    "PvE",
-    "Official",
-    "Unofficial",
-    "Private",
-    "Public",
-  ],
-  "Custom Cosmetics": [
-    "Cosmetic",
-    "Skin",
-    "Appearance",
-    "Visual",
-    "Decoration",
-    "Aesthetic",
-    "Hair",
-    "Armor Skin",
-    "Style",
-    "Emote",
-    "Costume",
-    "Outfit",
-    "Clothing",
-    "Apparel",
-    "Fashion",
-    "Beauty",
-    "Makeover",
-    "Color",
-    "Paint",
-    "Dye",
-    "Pattern",
-    "Design",
-    "Theme",
-    "Look",
-    "Glamour",
-    "Vanity",
-    "Ornament",
-    "Accessory",
-    "Jewelry",
-    "Embellishment",
-    "Face Paint",
-    "Tattoo Pack",
-    "Hair Pack",
-    "Emote Pack",
-    "Mask",
-    "Hats",
-    "Glasses",
-    "Wristbands",
-    "Boots",
-    "Backpack Skin",
-    "Pet Skin",
-    "Furniture Skins",
-    "Premium Outfits",
-    "Bounty Hunter",
-    "Medieval",
-    "Plague Doctor",
-    "Custom Armor",
-    "Weapons",
-    "Inspired",
-    "Character Customization",
-    "Player Models",
-    "Textures",
-    "Recolors",
-    "Retextures",
-    "HD",
-    "High Definition",
-    "4K",
-    "Graphics",
-    "Shaders",
-    "Materials",
-    "Particle Effects",
-    "Glow",
-    "Shine",
-    "Metallic",
-  ],
-};
 
 const ModManager: React.FC<ModManagerProps> = ({
   serverId,
   onModsUpdate,
-  searchQuery: externalSearchQuery,
-  showAddModModal: externalShowAddModal,
+  searchQuery = "",
+  showAddModModal: externalShowAddModModal,
   setShowAddModModal: externalSetShowAddModal,
 }) => {
+  // State management
   const [mods, setMods] = useState<ModInfo[]>([]);
-  const [availableMods, setAvailableMods] = useState<CurseForgeModData[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState("QoL");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [launchOptionsText, setLaunchOptionsText] = useState("");
-  const [showAddModModal, setShowAddModModal] = useState(false);
-  const [manualModId, setManualModId] = useState("");
-  const [manualModName, setManualModName] = useState("");
-  const [showSearchModal, setShowSearchModal] = useState(false);
-  const [searchModalQuery, setSearchModalQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("Installed");
   const [searchResults, setSearchResults] = useState<CurseForgeModData[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [searchModalError, setSearchModalError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState("featured");
-  const [sortOrder, setSortOrder] = useState("desc");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalMods, setTotalMods] = useState(0);
-  const [backgroundFetchStatus, setBackgroundFetchStatus] = useState<{
-    isRunning: boolean;
-    tokenBucket: { tokens: number; capacity: number };
-    canMakeRequest: boolean;
-    rateLimited: boolean;
-  } | null>(null);
-  const pageSize = 10;
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchModalQuery, setSearchModalQuery] = useState("");
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [showAddModModal, setShowAddModModal] = useState(false);
+  const [manualModId, setManualModId] = useState("");
 
-  // Handle external search query from parent component
+  const [launchOptions, setLaunchOptions] = useState("");
+  const [backgroundFetchStatus, setBackgroundFetchStatus] = useState<any>(null);
+  const [installedModsSearchQuery, setInstalledModsSearchQuery] = useState(""); // For searching installed mods
+
+  // Load mods on component mount
   useEffect(() => {
-    if (externalSearchQuery && externalSearchQuery.trim()) {
-      setSearchQuery(externalSearchQuery);
-      // Open search modal with the external query
-      setSearchModalQuery(externalSearchQuery);
-      setShowSearchModal(true);
-      performSearch(externalSearchQuery);
-    }
-  }, [externalSearchQuery]);
+    loadMods();
+    loadLaunchOptions();
+    loadBackgroundFetchStatus();
+    
+    // Strategy 1: Pre-fetch popular categories for better UX
+    modCacheClient.prefetchPopularCategories();
+  }, [serverId]);
 
-  // Load mods for the selected category when it changes
-  useEffect(() => {
-    if (selectedCategory !== "Installed") {
-      setCurrentPage(1);
-      loadModsForCategory(selectedCategory, false, 1);
-    }
-  }, [selectedCategory, sortBy, sortOrder]);
-
-  // Use external modal state if provided
-  useEffect(() => {
-    if (externalShowAddModal !== undefined) {
-      setShowAddModModal(externalShowAddModal);
-    }
-  }, [externalShowAddModal]);
-
-  const loadModsForCategory = async (
-    category: string,
-    forceRefresh: boolean = false,
-    page: number = 1
-  ) => {
-    setIsLoading(true);
-    setSearchError(null);
-
+  // Load mods from API - Fix: Handle both array and object responses
+  const loadMods = async () => {
     try {
-      const params = new URLSearchParams({
-        category: category,
-        pageSize: "10", // Limit to 10 mods per page
-        page: page.toString(),
-        forceRefresh: forceRefresh.toString(),
-        sortBy: sortBy,
-        sortOrder: sortOrder,
-      });
-
-      const response = await fetch(`/api/curseforge/categories?${params}`);
-
-      if (!response.ok) {
-        throw new Error(`Failed to load mods: ${response.statusText}`);
-      }
-
+      const response = await fetch(`/api/servers/${serverId}/mods`);
+      if (response.ok) {
       const data = await response.json();
-
-      if (data.success) {
-        setAvailableMods(data.data.mods || []);
-        setTotalMods(data.data.totalCount || 0);
-        setTotalPages(data.data.totalPages || 1);
-        setCurrentPage(page);
-      } else {
-        setSearchError(data.error || "Failed to load mods");
-      }
-    } catch (error) {
-      console.error("Error loading mods for category:", error);
-      setSearchError(
-        error instanceof Error ? error.message : "Failed to load mods"
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const loadServerMods = useCallback(async () => {
-    try {
-      // First, try to load from local storage for faster UI
-      const localStorageResponse = await fetch(
-        `/api/servers/${serverId}/mods/storage`
-      );
-      let localMods: any[] = [];
-
-      if (localStorageResponse.ok) {
-        const localData = await localStorageResponse.json();
-        // Ensure localMods is always an array
-        localMods = Array.isArray(localData.data) ? localData.data : [];
-
-        // Convert local storage format to ModInfo format for UI
-        const uiMods: ModInfo[] = localMods.map((mod) => ({
-          id: mod.id,
-          name: mod.name,
-          enabled: mod.isEnabled,
-          loadOrder: mod.loadOrder,
-        }));
-
-        setMods(uiMods);
-        onModsUpdate(uiMods);
-      }
-
-      // Load mods from the mods API for server sync
-      const modsResponse = await fetch(`/api/servers/${serverId}/mods`);
-      let serverMods: ModInfo[] = [];
-      if (modsResponse.ok) {
-        const responseData = await modsResponse.json();
-        serverMods = Array.isArray(responseData) ? responseData : [];
-      }
-
-      // Load launch options from the config API
-      const configResponse = await fetch(`/api/servers/${serverId}/config`);
-      if (configResponse.ok) {
-        const { data } = await configResponse.json();
-
-        if (data.launchOptions && data.launchOptions.mods) {
-          // Update launch options text from persistent storage
-          const modIds = data.launchOptions.mods;
-          const launchOptionsText =
-            modIds.length > 0 ? `-mods=${modIds.join(",")}` : "";
-          setLaunchOptionsText(launchOptionsText);
-
-          // Merge launch options with existing mods instead of replacing
-          const existingModIds = serverMods.map((mod) => mod.id);
-          const newModIds = modIds.filter(
-            (id: string) => !existingModIds.includes(id)
-          );
-
-          if (newModIds.length > 0) {
-            // Add new mods from launch options that aren't already in the list
-            const newMods = newModIds.map((id: string, index: number) => ({
-              id: id,
-              name: `Mod ${id}`,
-              enabled: true,
-              loadOrder: serverMods.length + index + 1,
-            }));
-
-            const mergedMods = [...serverMods, ...newMods];
-            setMods(mergedMods);
-            onModsUpdate(mergedMods);
-
-            // Save new mods to local storage
-            for (const newMod of newMods) {
-              await fetch(`/api/servers/${serverId}/mods/storage`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  modId: newMod.id,
-                  isEnabled: newMod.enabled,
-                  loadOrder: newMod.loadOrder,
-                }),
-              });
-            }
-          }
-
-          // Update enable states to match launch options
-          const updatedMods = serverMods.map((mod) => ({
-            ...mod,
-            enabled: modIds.includes(mod.id),
-          }));
-
-          if (
-            JSON.stringify(
-              updatedMods.map((m) => ({ id: m.id, enabled: m.enabled }))
-            ) !==
-            JSON.stringify(
-              serverMods.map((m) => ({ id: m.id, enabled: m.enabled }))
-            )
-          ) {
-            setMods(updatedMods);
-            onModsUpdate(updatedMods);
-
-            // Update local storage
-            const updates = updatedMods.map((mod) => ({
-              id: mod.id,
-              isEnabled: mod.enabled,
-              loadOrder: mod.loadOrder,
-            }));
-
-            await fetch(`/api/servers/${serverId}/mods/storage`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ updates }),
-            });
-          }
-        } else {
-          // Fallback: generate launch options text from current mods
-          const modIds = serverMods
-            .filter((mod: ModInfo) => mod.enabled)
-            .map((mod: ModInfo) => mod.id);
-          const launchOptionsText =
-            modIds.length > 0 ? `-mods=${modIds.join(",")}` : "";
-          setLaunchOptionsText(launchOptionsText);
-
-          // Save to launch options if not already saved
-          if (modIds.length > 0) {
-            await saveLaunchOptions(modIds);
-          }
+        // Handle both direct array response and object with mods property
+        const modsArray = Array.isArray(data) ? data : (data.mods || []);
+        setMods(modsArray);
+        if (onModsUpdate) {
+          onModsUpdate(modsArray);
         }
       }
     } catch (error) {
-      console.error("Failed to load server mods:", error);
+      console.error("Failed to load mods:", error);
+      toast.error("Failed to load mods");
     }
-  }, [serverId, onModsUpdate]);
+  };
 
-  useEffect(() => {
-    loadServerMods();
-  }, [loadServerMods]);
-
-  useEffect(() => {
-    // Load detailed mod information from local storage
-    if (mods.length > 0) {
-      loadModDetails();
+  // Load launch options
+  const loadLaunchOptions = async () => {
+    try {
+      const response = await fetch(`/api/servers/${serverId}/mods/storage`);
+      if (response.ok) {
+        const data = await response.json();
+        setLaunchOptions(data.launchOptions || "");
+      }
+    } catch (error) {
+      console.error("Failed to load launch options:", error);
     }
-  }, [mods.length > 0]); // Only run when mods are loaded
-
-  // Auto-fetch metadata when entering the mod manager or when mods are loaded
-  useEffect(() => {
-    if (mods.length > 0) {
-      // Auto-refresh metadata for all mods when entering the mod manager
-      refreshAllModMetadata();
-    }
-  }, []); // Run once when component mounts
-
-  // Auto-fetch metadata when switching to "Installed" category
-  useEffect(() => {
-    if (selectedCategory === "Installed" && mods.length > 0) {
-      // Refresh metadata for all mods when switching to installed category
-      refreshAllModMetadata();
-    }
-  }, [selectedCategory, mods.length]);
+  };
 
   // Load background fetch status
-  useEffect(() => {
-    loadBackgroundFetchStatus();
-    const interval = setInterval(loadBackgroundFetchStatus, 5000); // Update every 5 seconds
-    return () => clearInterval(interval);
-  }, []);
-
   const loadBackgroundFetchStatus = async () => {
     try {
-      const response = await fetch("/api/curseforge/background-fetch");
+      const response = await fetch('/api/curseforge/background-fetch');
       if (response.ok) {
-        const { data } = await response.json();
-        setBackgroundFetchStatus(data);
+        const data = await response.json();
+        setBackgroundFetchStatus(data.data);
       }
     } catch (error) {
       console.error("Failed to load background fetch status:", error);
     }
   };
 
+  // Start background fetching
   const startBackgroundFetching = async () => {
     try {
-      const response = await fetch("/api/curseforge/background-fetch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "start" }),
+      const response = await fetch('/api/curseforge/background-fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start' })
       });
       if (response.ok) {
-        await loadBackgroundFetchStatus();
+        loadBackgroundFetchStatus();
+        toast.success("Background fetching started");
       }
     } catch (error) {
       console.error("Failed to start background fetching:", error);
+      toast.error("Failed to start background fetching");
     }
   };
 
+  // Stop background fetching
   const stopBackgroundFetching = async () => {
     try {
-      const response = await fetch("/api/curseforge/background-fetch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "stop" }),
+      const response = await fetch('/api/curseforge/background-fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'stop' })
       });
       if (response.ok) {
-        await loadBackgroundFetchStatus();
+        loadBackgroundFetchStatus();
+        toast.success("Background fetching stopped");
       }
     } catch (error) {
       console.error("Failed to stop background fetching:", error);
+      toast.error("Failed to stop background fetching");
     }
   };
 
-  const updateLaunchOptionsText = async (currentMods: ModInfo[]) => {
-    const modIds = currentMods
-      .filter((mod) => mod.enabled)
-      .map((mod) => mod.id);
+  // Handle launch options change
+  const handleLaunchOptionsChange = async (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = event.target.value;
+    setLaunchOptions(newValue);
 
-    const launchOptionsText =
-      modIds.length > 0 ? `-mods=${modIds.join(",")}` : "";
-    setLaunchOptionsText(launchOptionsText);
-
-    // Save mods to persistent launch options
-    await saveLaunchOptions(modIds);
-  };
-
-  const saveLaunchOptions = async (modIds: string[]) => {
+    // Save launch options
     try {
-      const response = await fetch(`/api/servers/${serverId}/config`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          launchOptionKey: "mods",
-          launchOptionValue: modIds,
-        }),
+      const response = await fetch(`/api/servers/${serverId}/mods/storage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ launchOptions: newValue })
       });
-
-      if (!response.ok) {
-        console.error("Failed to save launch options");
+      if (response.ok) {
+        toast.success("Launch options saved");
       }
     } catch (error) {
-      console.error("Error saving launch options:", error);
+      console.error("Failed to save launch options:", error);
+      toast.error("Failed to save launch options");
     }
   };
 
-  const handleLaunchOptionsChange = async (
-    event: React.ChangeEvent<HTMLTextAreaElement>
-  ) => {
-    const newText = event.target.value;
-    setLaunchOptionsText(newText);
-
-    // More robust mod parsing that can handle various formats:
-    // -mods=123,456,789
-    // -mods=123, 456, 789
-    // -mods=-mods=123,456 (duplicate prefix)
-    // -mods=123,456,789 -other-param
-
-    let modIds: string[] = [];
-
-    // First, try to find -mods= parameter
-    const modParamMatch = newText.match(/-mods=(.+?)(?:\s+-\w+|$)/);
-    if (modParamMatch) {
-      let modListString = modParamMatch[1].trim();
-
-      // Handle case where someone pasted "-mods=-mods=123,456" (duplicate prefix)
-      if (modListString.startsWith("-mods=")) {
-        modListString = modListString.substring(6); // Remove the duplicate "-mods="
-      }
-
-      // Split by comma and clean up each ID
-      modIds = modListString
-        .split(",")
-        .map((id) => id.trim())
-        .filter((id) => id && /^\d+$/.test(id)); // Only keep valid numeric IDs
-
-      console.log("Original text:", newText);
-      console.log("Extracted mod list string:", modListString);
-      console.log("Parsed mod IDs:", modIds);
-    }
-
-    if (modIds.length > 0) {
-      const updatedMods = modIds.map((id, index) => ({
-        id: id.trim(),
-        name: `Mod ${id.trim()}`,
-        enabled: true,
-        loadOrder: index + 1,
-      }));
-
-      setMods(updatedMods);
-      onModsUpdate(updatedMods);
-
-      // Save to persistent storage
-      await saveLaunchOptions(modIds);
-    } else {
-      // No mods found, save empty array
-      await saveLaunchOptions([]);
-    }
-  };
-
+  // Enhanced manual mod adding with bulk support
   const handleAddManualMod = async () => {
-    if (!manualModId.trim() || !manualModName.trim()) {
+    if (!manualModId.trim()) {
+      toast.error("Please enter mod ID(s)");
       return;
     }
 
-    const newMod: ModInfo = {
-      id: manualModId.trim(),
-      name: manualModName.trim(),
-      enabled: true,
-      loadOrder: mods.length + 1,
-    };
+    // Parse multiple mod IDs if comma-separated
+    const modIds = manualModId
+      .split(',')
+      .map(id => id.trim())
+      .filter(id => id && /^\d+$/.test(id));
 
-    const updatedMods = [...mods, newMod];
-    setMods(updatedMods);
-    await updateLaunchOptionsText(updatedMods);
-    onModsUpdate(updatedMods);
+    if (modIds.length === 0) {
+      toast.error("Please enter valid mod IDs");
+      return;
+    }
 
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (let i = 0; i < modIds.length; i++) {
+        const modId = modIds[i];
+        const displayName = `Mod ${modId}`;
+        
+        try {
+          // First try to fetch mod info from CurseForge
+          let modData: any = null;
+          try {
+            const searchResponse = await fetch(`/api/curseforge/search?query=${modId}&searchFilter=1`);
+            if (searchResponse.ok) {
+              const searchData = await searchResponse.json();
+              if (searchData.data && searchData.data.length > 0) {
+                const foundMod = searchData.data.find((mod: any) => mod.id.toString() === modId);
+                if (foundMod) {
+                  modData = foundMod;
+                }
+              }
+            }
+          } catch (searchError) {
+            console.warn(`Failed to fetch mod info for ${modId}:`, searchError);
+          }
+
+          // Create mod object
+          const newMod = {
+            id: modId,
+            name: modData?.name || displayName || `Mod ${modId}`,
+            description: modData?.summary || "Manually added mod",
+            version: "Unknown",
+            workshopId: modId,
+        enabled: true,
+            loadOrder: mods.length,
+            dependencies: [],
+            incompatibilities: [],
+            size: modData?.downloadCount ? `${Math.floor(modData.downloadCount / 1000)}K downloads` : undefined,
+            lastUpdated: new Date()
+          };
+
+          // Add to server
+          const response = await fetch(`/api/servers/${serverId}/mods`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newMod)
+          });
+
+          if (response.ok) {
+            successCount++;
+    } else {
+            errorCount++;
+            console.error(`Failed to add mod ${modId}:`, await response.text());
+          }
+        } catch (error) {
+          errorCount++;
+          console.error(`Error adding mod ${modId}:`, error);
+        }
+      }
+
+      // Reload mods and show results
+      await loadMods();
+      
+      if (successCount > 0) {
+        toast.success(`Successfully added ${successCount} mod${successCount > 1 ? 's' : ''}`);
+      }
+      if (errorCount > 0) {
+        toast.error(`Failed to add ${errorCount} mod${errorCount > 1 ? 's' : ''}`);
+      }
+
+      // Reset form
     setManualModId("");
-    setManualModName("");
+    
     if (externalSetShowAddModal) {
       externalSetShowAddModal(false);
     } else {
       setShowAddModModal(false);
+      }
+    } catch (error) {
+      console.error("Failed to add mods:", error);
+      toast.error("Failed to add mod(s)");
     }
   };
 
-  // Function to perform search and display in modal
+  // Perform search with category context
   const performSearch = async (query: string) => {
+    if (!query.trim()) {
+      // If empty search, load category mods
+      loadModsForCategory(selectedCategory);
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchError(null);
+
     try {
-      setIsSearching(true);
-      setSearchModalError(null);
-
-      let searchQuery = query;
-
-      // If no query provided, search for trending mods
-      if (!searchQuery.trim()) {
-        searchQuery = "trending";
-      }
-
+      // Use optimized search with category context
       const params = new URLSearchParams({
-        query: searchQuery,
-        sortBy,
-        sortOrder,
+        query: query.trim(),
+        gameId: "1122",
+        categoryId: "",
+        sortField: "popularity",
+        sortOrder: "desc",
+        pageIndex: "1",
+        pageSize: "20",
       });
 
-      const response = await fetch(`/api/curseforge/search?${params}`);
+      // Add category-specific search context
+      const categorySearchMap: Record<string, string> = {
+        "QoL": "quality of life utility",
+        "RPG": "rpg progression level",
+        "Maps": "map level world",
+        "Popular": "",
+        "Overhauls": "overhaul total conversion",
+        "General": "utility building decoration",
+        "Custom Cosmetics": "cosmetic decoration skin"
+      };
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        setSearchModalError(errorData.error || "Failed to search mods");
-        return;
+      const categoryContext = categorySearchMap[selectedCategory] || "";
+      if (categoryContext) {
+        params.set("query", `${query.trim()} ${categoryContext}`);
       }
 
-      const { data } = await response.json();
-      setSearchResults(data);
+      const response = await fetch(`/api/curseforge/search?${params}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to search mods");
+      }
+
+      const data = await response.json();
+      
+      if (data.data) {
+        setSearchResults(data.data);
+      } else {
+        throw new Error(data.error || "Failed to search mods");
+      }
     } catch (error) {
-      console.error("Failed to search mods:", error);
-      setSearchModalError("Failed to search mods");
+      console.error("Search error:", error);
+      setSearchError(error instanceof Error ? error.message : "Failed to search mods");
+      setSearchResults([]);
     } finally {
       setIsSearching(false);
     }
   };
 
-  const searchCurseForgeMods = async (query: string) => {
-    try {
-      setIsLoading(true);
-      setSearchError(null);
-
-      let searchQuery = query;
-
-      // If no query provided, search for trending mods
-      if (!searchQuery.trim()) {
-        searchQuery = "trending";
-      }
-
-      const params = new URLSearchParams({
-        query: searchQuery,
-        sortBy,
-        sortOrder,
-      });
-
-      const response = await fetch(`/api/curseforge/search?${params}`);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        setSearchError(errorData.error || "Failed to search mods");
-        return;
-      }
-
-      const { data } = await response.json();
-      setAvailableMods(data);
-    } catch (error) {
-      console.error("Failed to search mods:", error);
-      setSearchError("Failed to search mods");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+  // Add mod from search results
   const addMod = async (modData: CurseForgeModData) => {
-    const newMod: ModInfo = {
-      id: modData.id.toString(),
-      name: modData.name,
-      enabled: true,
-      loadOrder: mods.length + 1,
-    };
-
-    const updatedMods = [...mods, newMod];
-    setMods(updatedMods);
-    await updateLaunchOptionsText(updatedMods);
-    onModsUpdate(updatedMods);
-
-    // Save to local storage with full metadata
     try {
-      await fetch(`/api/servers/${serverId}/mods/storage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          modId: newMod.id,
-          curseForgeData: modData,
-          isEnabled: newMod.enabled,
-          loadOrder: newMod.loadOrder,
-        }),
-      });
-    } catch (error) {
-      console.error("Failed to save mod to local storage:", error);
-    }
-  };
+      const newMod = {
+        id: modData.id.toString(),
+        name: modData.name,
+        description: modData.summary,
+        version: "Latest",
+        workshopId: modData.id.toString(),
+        enabled: true,
+        loadOrder: mods.length,
+        dependencies: [],
+        incompatibilities: [],
+        size: `${Math.floor(modData.downloadCount / 1000)}K downloads`,
+        lastUpdated: new Date()
+      };
 
-  const removeMod = async (modId: string) => {
-    const updatedMods = mods.filter((mod) => mod.id !== modId);
-    setMods(updatedMods);
-    await updateLaunchOptionsText(updatedMods);
-    onModsUpdate(updatedMods);
-
-    // Remove from local storage
-    try {
-      await fetch(`/api/servers/${serverId}/mods/storage`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modId }),
-      });
-    } catch (error) {
-      console.error("Failed to remove mod from local storage:", error);
-    }
-  };
-
-  const updateLoadOrder = async (modId: string, newLoadOrder: number) => {
-    const updatedMods = mods.map((mod) =>
-      mod.id === modId ? { ...mod, loadOrder: newLoadOrder } : mod
-    );
-    setMods(updatedMods);
-    await updateLaunchOptionsText(updatedMods);
-    onModsUpdate(updatedMods);
-
-    // Update local storage
-    try {
-      const mod = updatedMods.find((m) => m.id === modId);
-      if (mod) {
-        await fetch(`/api/servers/${serverId}/mods/storage`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            updates: [
-              {
-                id: mod.id,
-                isEnabled: mod.enabled,
-                loadOrder: mod.loadOrder,
-              },
-            ],
-          }),
-        });
-      }
-    } catch (error) {
-      console.error("Failed to update load order in local storage:", error);
-    }
-  };
-
-  const toggleMod = async (modId: string) => {
-    const updatedMods = mods.map((mod) =>
-      mod.id === modId ? { ...mod, enabled: !mod.enabled } : mod
-    );
-    setMods(updatedMods);
-    await updateLaunchOptionsText(updatedMods);
-    onModsUpdate(updatedMods);
-
-    // Update local storage
-    try {
-      const mod = updatedMods.find((m) => m.id === modId);
-      if (mod) {
-        await fetch(`/api/servers/${serverId}/mods/storage`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            updates: [
-              {
-                id: mod.id,
-                isEnabled: mod.enabled,
-                loadOrder: mod.loadOrder,
-              },
-            ],
-          }),
-        });
-      }
-    } catch (error) {
-      console.error("Failed to update mod status in local storage:", error);
-    }
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
-  };
-
-  // Filter mods by selected category and search query (client-side filtering for additional refinement)
-  const filteredMods = availableMods.filter((mod) => {
-    // Add null check for mod
-    if (!mod) return false;
-
-    // If we're in a specific category, do additional client-side filtering for precision
-    const matchesCategory =
-      selectedCategory === "Installed" ||
-      (CATEGORY_SEARCH_TERMS[selectedCategory]?.some(
-        (term) =>
-          (mod.name?.toLowerCase() || "").includes(term.toLowerCase()) ||
-          (mod.summary?.toLowerCase() || "").includes(term.toLowerCase()) ||
-          (mod.categories?.some(
-            (cat) =>
-              (cat.name?.toLowerCase() || "").includes(term.toLowerCase()) ||
-              (cat.slug?.toLowerCase() || "").includes(term.toLowerCase())
-          ) ??
-            false)
-      ) ??
-        false);
-
-    return matchesCategory;
-  });
-
-  const refreshModMetadata = async (modId: string) => {
-    try {
-      const response = await fetch(`/api/servers/${serverId}/mods/storage`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modId }),
+      const response = await fetch(`/api/servers/${serverId}/mods`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newMod)
       });
 
       if (response.ok) {
-        const { data } = await response.json();
-
-        // Add null check to prevent TypeError
-        if (data && typeof data === "object") {
-          // Update the mod in the UI with fresh metadata
-          const updatedMods = mods.map((mod) =>
-            mod.id === modId ? { ...mod, name: data.name || mod.name } : mod
-          );
-          setMods(updatedMods);
-          onModsUpdate(updatedMods);
-        } else {
-          console.warn(`No valid data returned for mod ${modId}`);
-        }
+        await loadMods();
+        toast.success(`Added ${modData.name}`);
+      } else {
+        throw new Error('Failed to add mod');
       }
     } catch (error) {
-      console.error("Failed to refresh mod metadata:", error);
+      console.error("Failed to add mod:", error);
+      toast.error("Failed to add mod");
     }
   };
 
-  const refreshAllModMetadata = async () => {
-    try {
-      // Refresh metadata for all mods in parallel
-      const refreshPromises = mods.map((mod) => refreshModMetadata(mod.id));
-      await Promise.all(refreshPromises);
+  // Filter mods based on selected category
+  const getFilteredMods = () => {
+    if (selectedCategory === "Installed") {
+      let filteredMods = mods;
+      
+      // Apply search filter for installed mods
+      if (installedModsSearchQuery.trim()) {
+        const query = installedModsSearchQuery.toLowerCase();
+        filteredMods = mods.filter(mod => 
+          mod.name.toLowerCase().includes(query) ||
+          (mod.description || '').toLowerCase().includes(query) ||
+          (mod.workshopId || '').toLowerCase().includes(query)
+        );
+      }
+      
+      return filteredMods;
+    }
+    
+    // For other categories, return the fetched CurseForge mods from searchResults
+    return searchResults;
+  };
 
-      // After all refreshes are complete, reload mod details to get the full updated data
-      await loadModDetails();
+  // Load mods for non-installed categories from CurseForge API
+  // Strategy 1: Use client-side caching with batching and TTL
+  const loadModsForCategory = async (category: string) => {
+    if (category === "Installed") return;
+
+    setIsSearching(true);
+    setSearchError(null);
+
+    try {
+      // Map category names to CurseForge search parameters
+      const categorySearchMap: Record<string, { query?: string; categoryId?: number }> = {
+        "QoL": { query: "quality of life" },
+        "RPG": { query: "rpg progression" },
+        "Maps": { categoryId: 17 }, // Maps category ID in CurseForge
+        "Popular": { query: "" }, // Empty query returns popular mods
+        "Overhauls": { query: "overhaul total conversion" },
+        "General": { query: "utility building" },
+        "Custom Cosmetics": { query: "cosmetic decoration" }
+      };
+
+      const searchParams = categorySearchMap[category] || { query: category.toLowerCase() };
+      
+      const params = new URLSearchParams({
+        query: searchParams.query || "",
+        sortBy: "popularity",
+        sortOrder: "desc",
+        pageSize: "20"
+      });
+
+      if (searchParams.categoryId) {
+        params.append("categoryId", searchParams.categoryId.toString());
+      }
+
+      // Strategy 1: Use client-side cache with batching
+      const data = await modCacheClient.searchWithBatching(category, params);
+      setSearchResults(data);
+      
     } catch (error) {
-      console.error("Failed to refresh all mod metadata:", error);
+      console.error(`Error loading ${category} mods:`, error);
+      const errorMessage = error instanceof Error ? error.message : `Failed to load ${category} mods`;
+      setSearchError(errorMessage);
+      addConsoleError(`Mod loading error: ${errorMessage}`);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
     }
   };
 
-  const loadModDetails = async () => {
-    try {
-      const response = await fetch(`/api/servers/${serverId}/mods/storage`);
-      if (response.ok) {
-        const { data } = await response.json();
+  // Load category mods when category changes
+  useEffect(() => {
+    loadModsForCategory(selectedCategory);
+  }, [selectedCategory]);
 
-        // Add null check for data
-        if (!data || !Array.isArray(data)) {
-          console.warn("No valid mod data received from storage API");
-          return;
-        }
-
-        // Create a map of mod details for quick lookup
-        const modDetailsMap = new Map();
-        data.forEach((mod: any) => {
-          if (mod && mod.id) {
-            modDetailsMap.set(mod.id, mod);
+  // Strategy 2: Optionally batch load multiple categories on mount
+  useEffect(() => {
+    const loadMultipleCategories = async () => {
+      try {
+        // Load popular categories in a single batch request
+        const response = await fetch('/api/curseforge/search-optimized?categories=Popular,QoL,Maps');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            // Pre-populate client cache with batch results
+            Object.entries(data.data).forEach(([category, mods]) => {
+              const categorySearchMap: Record<string, { query?: string; categoryId?: number }> = {
+                "QoL": { query: "quality of life" },
+                "Popular": { query: "" },
+                "Maps": { categoryId: 17 }
+              };
+              
+              const searchParams = categorySearchMap[category];
+              if (searchParams) {
+                const params = new URLSearchParams({
+                  query: searchParams.query || "",
+                  sortBy: "popularity",
+                  sortOrder: "desc",
+                  pageSize: "20"
+                });
+                if (searchParams.categoryId) {
+                  params.append("categoryId", searchParams.categoryId.toString());
+                }
+                
+                modCacheClient.setCache(category, params, mods as any[], 10 * 60 * 1000); // 10 minutes TTL
+              }
+            });
           }
-        });
+        }
+      } catch (error) {
+        console.log('Strategy 2 batch loading failed, falling back to individual requests:', error);
+      }
+    };
+    
+    // Only load batch on initial mount
+    loadMultipleCategories();
+  }, []);
 
-        // Update mods with detailed information
-        const updatedMods = mods.map((mod) => {
-          const details = modDetailsMap.get(mod.id);
-          return {
-            ...mod,
-            name: details?.name || mod.name,
-            summary: details?.summary,
-            author: details?.author,
-            downloadCount: details?.downloadCount,
-            thumbsUpCount: details?.thumbsUpCount,
-            logoUrl: details?.logoUrl,
-            websiteUrl: details?.websiteUrl,
-            category: details?.category,
-            tags: details?.tags,
-            installedAt: details?.installedAt
-              ? new Date(details.installedAt)
-              : undefined,
-            lastUpdated: details?.lastUpdated
-              ? new Date(details.lastUpdated)
-              : undefined,
-          };
-        });
+  // For search results, convert CurseForge data for display
+  const getDisplayMods = (): DisplayMod[] => {
+    if (selectedCategory === "Installed") {
+      // Convert ModInfo to DisplayMod format
+      return (getFilteredMods() as ModInfo[]).map(mod => ({
+                id: mod.id,
+        name: mod.name,
+        description: mod.description || '',
+        version: mod.version || '1.0.0',
+        workshopId: mod.workshopId || mod.id,
+        enabled: mod.enabled,
+                loadOrder: mod.loadOrder,
+        dependencies: mod.dependencies || [],
+        incompatibilities: mod.incompatibilities || [],
+        size: typeof mod.size === 'string' ? mod.size : 'Unknown',
+        lastUpdated: mod.lastUpdated || new Date(),
+      }));
+    }
+    
+    // Convert CurseForge data to display format for non-installed tabs
+    const categoryMods = getFilteredMods() as CurseForgeModData[];
+    return categoryMods.map(mod => ({
+      id: mod.id.toString(),
+      name: mod.name,
+      description: mod.summary,
+      version: "Latest",
+      workshopId: mod.id.toString(),
+      enabled: false,
+      loadOrder: 0,
+      dependencies: [],
+      incompatibilities: [],
+      size: "Unknown",
+      lastUpdated: new Date(mod.dateModified),
+      _curseforgeData: mod // Store original data for adding
+    }));
+  };
 
-        setMods(updatedMods);
-        onModsUpdate(updatedMods);
+  // Enhanced mod removal with proper API call
+  const removeMod = async (modId: string) => {
+    try {
+      const response = await fetch(`/api/servers/${serverId}/mods`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ modId }),
+      });
+
+      if (response.ok) {
+        // Remove from local state
+        const updatedMods = mods.filter(mod => mod.id !== modId);
+          setMods(updatedMods);
+        if (onModsUpdate) {
+          onModsUpdate(updatedMods);
+        }
+        toast.success("Mod removed successfully");
+        } else {
+        throw new Error('Failed to remove mod');
       }
     } catch (error) {
-      console.error("Failed to load mod details:", error);
+      console.error("Failed to remove mod:", error);
+      toast.error("Failed to remove mod");
     }
   };
+
+  // Update load order
+  const updateLoadOrder = async (modId: string, newLoadOrder: number) => {
+    try {
+      const updatedMods = mods.map(mod => 
+        mod.id === modId ? { ...mod, loadOrder: newLoadOrder } : mod
+      );
+      
+      const response = await fetch(`/api/servers/${serverId}/mods`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedMods)
+      });
+
+      if (response.ok) {
+        setMods(updatedMods);
+        if (onModsUpdate) {
+          onModsUpdate(updatedMods);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to update load order:", error);
+      toast.error("Failed to update load order");
+    }
+  };
+
+  // Toggle mod enabled/disabled
+  const toggleMod = async (modId: string) => {
+    try {
+      const updatedMods = mods.map(mod => 
+        mod.id === modId ? { ...mod, enabled: !mod.enabled } : mod
+      );
+      
+      const response = await fetch(`/api/servers/${serverId}/mods`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedMods)
+      });
+
+      if (response.ok) {
+        setMods(updatedMods);
+        if (onModsUpdate) {
+        onModsUpdate(updatedMods);
+        }
+        toast.success("Mod updated");
+      }
+    } catch (error) {
+      console.error("Failed to toggle mod:", error);
+      toast.error("Failed to update mod");
+    }
+  };
+
+  // Format date helper
+  const formatDate = (date: Date) => {
+    return new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    }).format(date);
+  };
+
+  const filteredMods = getFilteredMods();
+  const displayMods = getDisplayMods();
 
   return (
-    <div className="w-full space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto">
-      {/* Search Error */}
-      {searchError && (
-        <div className="alert alert-error">
-          <ExclamationTriangleIcon className="h-5 w-5" />
-          <span>{searchError}</span>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold font-mono text-green-400">
+            MOD MANAGER
+          </h2>
+          <p className="text-sm text-green-300/60 font-mono">
+            Manage server modifications and addons
+          </p>
         </div>
-      )}
-
-      {/* Background Fetching Status */}
-      {backgroundFetchStatus && (
-        <div className="card bg-base-100 border border-base-content/10 shadow-lg">
-          <div className="card-body">
-            <div className="flex justify-between items-center">
-              <div>
-                <h3 className="text-lg font-semibold">
-                  Background Mod Fetching
-                </h3>
-                <div className="flex items-center gap-4 mt-2 text-sm">
-                  <span
-                    className={`badge ${backgroundFetchStatus.isRunning ? "badge-success" : "badge-warning"}`}
-                  >
-                    {backgroundFetchStatus.isRunning ? "Running" : "Stopped"}
-                  </span>
-                  <span className="text-base-content/70">
-                    Tokens: {backgroundFetchStatus.tokenBucket.tokens}/
-                    {backgroundFetchStatus.tokenBucket.capacity}
-                  </span>
-                  <span
-                    className={`badge ${backgroundFetchStatus.canMakeRequest ? "badge-success" : "badge-error"}`}
-                  >
-                    {backgroundFetchStatus.canMakeRequest
-                      ? "Can Request"
-                      : "Rate Limited"}
-                  </span>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                {backgroundFetchStatus.isRunning ? (
-                  <button
-                    onClick={stopBackgroundFetching}
-                    className="btn btn-sm btn-error"
-                  >
-                    Stop Fetching
-                  </button>
-                ) : (
-                  <button
-                    onClick={startBackgroundFetching}
-                    className="btn btn-sm btn-success"
-                  >
-                    Start Fetching
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="mt-2">
-              <div className="w-full bg-base-300 rounded-full h-2">
-                <div
-                  className="bg-primary h-2 rounded-full transition-all duration-300"
-                  style={{
-                    width: `${(backgroundFetchStatus.tokenBucket.tokens / backgroundFetchStatus.tokenBucket.capacity) * 100}%`,
-                  }}
-                ></div>
-              </div>
-              <p className="text-xs text-base-content/60 mt-1">
-                Token bucket: {backgroundFetchStatus.tokenBucket.tokens} tokens
-                available
-              </p>
-            </div>
-          </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowAddModModal(true)}
+            className="btn btn-primary btn-sm font-mono"
+          >
+            <PlusIcon className="w-4 h-4 mr-2" />
+            ADD MANUAL MOD
+          </button>
         </div>
-      )}
+      </div>
 
-      {/* Main Content */}
-      <div className="flex w-full">
-        {/* Category Navigation */}
-        <div className="w-64 border-r border-base-content/10 flex-shrink-0">
-          <div className="flex flex-col gap-1 pr-4">
+      {/* Category Tabs */}
+      <div className="flex flex-wrap gap-2 mb-6">
             {MOD_CATEGORIES.map((category) => (
               <button
                 key={category}
                 onClick={() => setSelectedCategory(category)}
                 className={clsx(
-                  "text-left px-4 py-2 rounded transition-colors",
-                  {
-                    "text-primary drop-shadow-[0_0_10px_rgba(0,255,0,0.5)]":
-                      selectedCategory === category,
-                    "text-base-content/50 hover:text-base-content/70":
-                      selectedCategory !== category,
-                  }
-                )}
-              >
-                {category}
+              "px-4 py-2 rounded-lg text-sm font-mono transition-all duration-200",
+              selectedCategory === category
+                ? "bg-green-400/20 text-green-400 border border-green-400/30"
+                : "bg-gray-800/50 text-gray-400 border border-gray-600/30 hover:bg-gray-700/50 hover:text-green-300"
+            )}
+          >
+            {category.toUpperCase()}
+            {category === "Installed" && mods.length > 0 && (
+              <span className="ml-2 bg-green-400/20 text-green-400 px-2 py-0.5 rounded text-xs">
+                {mods.length}
+              </span>
+            )}
               </button>
             ))}
+        </div>
+
+      {/* Background Fetch Status */}
+      {backgroundFetchStatus && (
+        <div className="bg-gray-800/50 border border-green-400/30 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-mono text-green-400">CURSEFORGE CACHE STATUS</h3>
+                    <div className="flex gap-2">
+                      <button
+                onClick={startBackgroundFetching}
+                className="btn btn-success btn-xs font-mono"
+                disabled={backgroundFetchStatus.isRunning}
+              >
+                START
+                      </button>
+                      <button
+                onClick={stopBackgroundFetching}
+                className="btn btn-error btn-xs font-mono"
+                disabled={!backgroundFetchStatus.isRunning}
+                      >
+                STOP
+                      </button>
+                    </div>
+                  </div>
+          <div className="text-xs font-mono text-green-300/60 space-y-1">
+            <div>Status: {backgroundFetchStatus.isRunning ? "RUNNING" : "STOPPED"}</div>
+            <div>Can Make Request: {backgroundFetchStatus.canMakeRequest ? "YES" : "NO"}</div>
+            <div>Rate Limited: {backgroundFetchStatus.rateLimited ? "YES" : "NO"}</div>
+            {backgroundFetchStatus.tokenBucket && (
+              <div>Tokens: {backgroundFetchStatus.tokenBucket.tokens}/{backgroundFetchStatus.tokenBucket.capacity}</div>
+            )}
+                    </div>
+                                  </div>
+      )}
+
+      {/* Launch Options */}
+      <div className="bg-gray-800/50 border border-green-400/30 rounded-lg p-4">
+        <h3 className="text-sm font-mono text-green-400 mb-2">LAUNCH OPTIONS</h3>
+        <textarea
+          value={launchOptions}
+          onChange={handleLaunchOptionsChange}
+          placeholder="Enter server launch options..."
+          className="w-full h-20 bg-gray-900/50 border border-green-400/30 rounded text-green-300 font-mono text-sm p-2 resize-none"
+        />
+      </div>
+
+      {/* Mod List */}
+      <div className="bg-gray-800/50 border border-green-400/30 rounded-lg">
+        <div className="p-4 border-b border-green-400/30">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-mono text-green-400">
+              {selectedCategory.toUpperCase()} MODS ({displayMods.length})
+            </h3>
+            
+            {/* Search Bar */}
+            <div className="flex gap-2">
+              {selectedCategory === "Installed" ? (
+                // Search installed mods
+                <input
+                  type="text"
+                  value={installedModsSearchQuery}
+                  onChange={(e) => setInstalledModsSearchQuery(e.target.value)}
+                  placeholder="Search installed mods..."
+                  className="input input-bordered input-sm w-64 h-8 text-sm font-mono bg-gray-800/50 border-green-400/30 text-green-300 placeholder:text-green-400/40"
+                />
+              ) : (
+                // Search CurseForge mods
+                <>
+                  <input
+                    type="text"
+                    value={searchModalQuery}
+                    onChange={(e) => setSearchModalQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        setShowSearchModal(true);
+                        performSearch(searchModalQuery);
+                      }
+                    }}
+                    placeholder={`Search ${selectedCategory.toLowerCase()} mods...`}
+                    className="input input-bordered input-sm w-64 h-8 text-sm font-mono bg-gray-800/50 border-green-400/30 text-green-300 placeholder:text-green-400/40"
+                  />
+                  <button
+                    onClick={() => {
+                      setShowSearchModal(true);
+                      if (searchModalQuery) {
+                        performSearch(searchModalQuery);
+                      } else {
+                        // Load category mods when no search query
+                        loadModsForCategory(selectedCategory);
+                      }
+                    }}
+                    className="btn btn-primary btn-sm font-mono bg-green-400/20 border-green-400/50 text-green-400 hover:bg-green-400/30 hover:border-green-400"
+                    title={`Search ${selectedCategory.toLowerCase()} mods`}
+                  >
+                    <MagnifyingGlassIcon className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Mod Content */}
-        <div className="flex-1 pl-6 min-w-0">
-          {selectedCategory === "Installed" ? (
-            /* Installed Mods Content */
-            <div className="space-y-6">
-              {/* Installed Mods */}
-              <div className="card bg-base-100 border border-base-content/10 shadow-lg w-full">
-                <div className="card-body">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold">Installed Mods</h3>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => refreshAllModMetadata()}
-                        className="btn btn-sm btn-outline"
-                        title="Refresh mod metadata from CurseForge"
-                      >
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                          />
-                        </svg>
-                        Refresh Metadata
-                      </button>
-                      <button
-                        onClick={() => setShowAddModModal(true)}
-                        className="btn btn-sm btn-primary"
-                      >
-                        Add Mod
-                      </button>
-                    </div>
-                  </div>
-
-                  {mods.length === 0 ? (
-                    <div className="text-center py-8 text-base-content/60">
-                      <p>No mods installed</p>
-                      <p className="text-sm mt-2">
-                        Click &quot;Add Mod&quot; to install mods from
-                        CurseForge
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="table table-zebra w-full">
-                        <thead>
-                          <tr className="bg-base-200/50">
-                            <th className="w-16 text-center">Order</th>
-                            <th className="w-8"></th> {/* Logo */}
-                            <th>Name & Author</th>
-                            <th className="hidden md:table-cell">Category</th>
-                            <th className="hidden lg:table-cell text-center">
-                              Downloads
-                            </th>
-                            <th className="hidden xl:table-cell text-center">
-                              Installed
-                            </th>
-                            <th className="w-20 text-center">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {mods
-                            .sort((a, b) => a.loadOrder - b.loadOrder)
-                            .map((mod) => (
-                              <tr
-                                key={mod.id}
-                                className={`group hover:bg-base-200/50 transition-colors ${
-                                  mod.enabled ? "" : "opacity-60"
-                                }`}
-                              >
-                                {/* Load Order */}
-                                <td className="text-center">
-                                  <div className="flex flex-col items-center gap-1">
-                                    <button
-                                      onClick={() =>
-                                        updateLoadOrder(
-                                          mod.id,
-                                          Math.max(1, mod.loadOrder - 1)
-                                        )
-                                      }
-                                      className="btn btn-xs btn-ghost btn-square"
-                                      disabled={mod.loadOrder <= 1}
-                                      title="Move up in load order"
-                                    >
-                                      ↑
-                                    </button>
-                                    <span className="text-xs font-mono font-medium">
-                                      {mod.loadOrder}
-                                    </span>
-                                    <button
-                                      onClick={() =>
-                                        updateLoadOrder(
-                                          mod.id,
-                                          Math.min(
-                                            mods.length,
-                                            mod.loadOrder + 1
-                                          )
-                                        )
-                                      }
-                                      className="btn btn-xs btn-ghost btn-square"
-                                      disabled={mod.loadOrder >= mods.length}
-                                      title="Move down in load order"
-                                    >
-                                      ↓
-                                    </button>
-                                  </div>
-                                </td>
-
-                                {/* Logo */}
-                                <td className="text-center">
-                                  {mod.logoUrl && (
-                                    <img
-                                      src={mod.logoUrl}
-                                      alt={`${mod.name} logo`}
-                                      className="w-6 h-6 rounded object-cover mx-auto"
-                                    />
-                                  )}
-                                </td>
-
-                                {/* Name & Author */}
-                                <td>
-                                  <div className="min-w-0">
-                                    <div className="font-medium text-base-content truncate">
-                                      {mod.name}
-                                    </div>
-                                    {mod.author && (
-                                      <div className="text-xs text-base-content/60 truncate">
-                                        by {mod.author}
-                                      </div>
-                                    )}
-                                    {mod.summary && (
-                                      <div className="text-xs text-base-content/50 truncate mt-1 hidden md:block">
-                                        {mod.summary}
-                                      </div>
-                                    )}
-                                    {/* Mobile: Show category and downloads inline */}
-                                    <div className="flex items-center gap-2 mt-1 md:hidden">
-                                      {mod.category && (
-                                        <span className="badge badge-xs badge-outline">
-                                          {mod.category}
-                                        </span>
-                                      )}
-                                      {mod.downloadCount && (
-                                        <span className="text-xs text-base-content/50">
-                                          📥{" "}
-                                          {mod.downloadCount.toLocaleString()}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </td>
-
-                                {/* Category - Desktop only */}
-                                <td className="hidden md:table-cell">
-                                  {mod.category ? (
-                                    <span className="badge badge-sm badge-outline">
-                                      {mod.category}
-                                    </span>
-                                  ) : (
-                                    <span className="text-xs text-base-content/40">
-                                      -
-                                    </span>
-                                  )}
-                                </td>
-
-                                {/* Downloads - Desktop only */}
-                                <td className="hidden lg:table-cell text-center">
-                                  {mod.downloadCount ? (
-                                    <div className="text-xs">
-                                      <div className="font-medium">
-                                        {mod.downloadCount.toLocaleString()}
-                                      </div>
-                                      {mod.thumbsUpCount && (
-                                        <div className="text-base-content/50">
-                                          👍{" "}
-                                          {mod.thumbsUpCount.toLocaleString()}
-                                        </div>
+        <div className="p-4">
+          {displayMods.length === 0 ? (
+            <div className="text-center py-12">
+              <PuzzlePieceIcon className="mx-auto h-12 w-12 text-green-400/40" />
+              <h4 className="mt-2 text-sm font-medium text-green-400 font-mono">
+                {selectedCategory === "Installed" ? "NO MODS INSTALLED" : `NO ${selectedCategory.toUpperCase()} MODS FOUND`}
+              </h4>
+              <p className="mt-1 text-sm text-green-300/60 font-mono">
+                {selectedCategory === "Installed" 
+                  ? "Add mods to get started with server customization."
+                  : `Browse ${selectedCategory.toLowerCase()} mods and add them to your server.`
+                }
+              </p>
+              {selectedCategory === "Installed" && (
+                <button
+                  onClick={() => setShowAddModModal(true)}
+                  className="mt-4 btn btn-primary btn-sm font-mono"
+                >
+                  <PlusIcon className="w-4 h-4 mr-2" />
+                  ADD FIRST MOD
+                </button>
                                       )}
                                     </div>
                                   ) : (
-                                    <span className="text-xs text-base-content/40">
-                                      -
-                                    </span>
-                                  )}
-                                </td>
-
-                                {/* Installed Date - Desktop only */}
-                                <td className="hidden xl:table-cell text-center">
-                                  {mod.installedAt ? (
-                                    <span className="text-xs text-base-content/70">
-                                      {new Date(
-                                        mod.installedAt
-                                      ).toLocaleDateString()}
-                                    </span>
-                                  ) : (
-                                    <span className="text-xs text-base-content/40">
-                                      -
-                                    </span>
-                                  )}
-                                </td>
-
-                                {/* Status & Actions */}
-                                <td className="text-center">
-                                  <div className="flex items-center justify-center gap-1">
+            <div className="space-y-3">
+              {displayMods
+                .sort((a, b) => (a.loadOrder || 0) - (b.loadOrder || 0))
+                .map((mod) => (
+                  <div
+                    key={mod.id}
+                    className={clsx(
+                      "bg-gray-900/50 border rounded-lg p-4 transition-all duration-200",
+                      selectedCategory === "Installed"
+                        ? mod.enabled
+                          ? "border-green-400/30"
+                          : "border-gray-600/30 opacity-60"
+                        : "border-green-400/30 hover:border-green-400/50"
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        {selectedCategory === "Installed" ? (
                                     <button
                                       onClick={() => toggleMod(mod.id)}
-                                      className={`btn btn-xs btn-square ${
+                            title={mod.enabled ? "Disable mod" : "Enable mod"}
+                            className={clsx(
+                              "w-4 h-4 rounded border-2 flex items-center justify-center transition-all duration-200",
                                         mod.enabled
-                                          ? "btn-success"
-                                          : "btn-ghost"
-                                      }`}
-                                      title={
-                                        mod.enabled
-                                          ? "Disable mod"
-                                          : "Enable mod"
-                                      }
-                                    >
-                                      {mod.enabled ? "✓" : "○"}
+                                ? "bg-green-400 border-green-400"
+                                : "border-gray-600 hover:border-green-400"
+                            )}
+                          >
+                            {mod.enabled && (
+                              <CheckIcon className="w-3 h-3 text-gray-900" />
+                            )}
                                     </button>
+                        ) : (
                                     <button
-                                      onClick={() => removeMod(mod.id)}
-                                      className="btn btn-xs btn-error btn-square"
-                                      title="Remove mod"
-                                    >
-                                      <TrashIcon className="h-3 w-3" />
+                            onClick={() => addMod((mod as any)._curseforgeData)}
+                            title={`Add ${mod.name} to server`}
+                            className="w-8 h-8 rounded border border-green-400/30 bg-green-400/10 hover:bg-green-400/20 flex items-center justify-center transition-all duration-200"
+                          >
+                            <PlusIcon className="w-4 h-4 text-green-400" />
                                     </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </div>
+                        )}
 
-              {/* Launch Options */}
-              <div className="card bg-base-100 border border-base-content/10 shadow-lg w-full">
-                <div className="card-body">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-medium text-base-content">
-                      Launch Options
+                        <div className="flex-1">
+                          <h4 className="text-sm font-medium text-green-400 font-mono">
+                            {mod.name}
                     </h4>
-                    <button
-                      onClick={() => {
-                        // Re-trigger parsing of current text
-                        const event = {
-                          target: { value: launchOptionsText },
-                        } as React.ChangeEvent<HTMLTextAreaElement>;
-                        handleLaunchOptionsChange(event);
-                      }}
-                      className="btn btn-outline btn-xs"
-                      title="Re-parse mod list from current text"
-                    >
-                      <ArrowPathIcon className="h-3 w-3 mr-1" />
-                      Parse
-                    </button>
-                  </div>
-                  <textarea
-                    value={launchOptionsText}
-                    onChange={handleLaunchOptionsChange}
-                    placeholder="Paste your mod list here, e.g.:&#10;-mods=969258,988797,928621,930366,953154&#10;&#10;Supports various formats:&#10;• -mods=123,456,789&#10;• -mods=123, 456, 789&#10;• -mods=-mods=123,456 (duplicate prefix)&#10;• Full launch commands with other parameters"
-                    className="textarea textarea-bordered w-full h-32 bg-base-200 border-base-content/20 focus:border-primary font-mono text-sm"
-                  />
-                  <div className="flex items-start justify-between mt-2">
-                    <p className="text-xs text-base-content/60 flex-1">
-                      This will be automatically generated based on your enabled
-                      mods and their load order. You can also paste mod lists
-                      here and they will be parsed automatically.
-                    </p>
-                    {mods.length > 0 && (
-                      <div className="text-xs text-success ml-4">
-                        ✓ {mods.length} mod{mods.length !== 1 ? "s" : ""} loaded
-                      </div>
+                          <p className="text-xs text-green-300/60 font-mono">
+                            {mod.description}
+                          </p>
+                          {mod.size && (
+                            <p className="text-xs text-green-300/40 font-mono">
+                              {mod.size}
+                            </p>
                     )}
                   </div>
                 </div>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Category Header with Refresh Button */}
-              <div className="card bg-base-100 border border-base-content/10 shadow-lg">
-                <div className="card-body">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-medium text-base-content">
-                      {selectedCategory} Mods
-                      {isLoading && (
-                        <span className="loading loading-spinner loading-sm ml-2"></span>
-                      )}
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <div className="text-sm text-base-content/60">
-                        Page {currentPage} of {totalPages} ({totalMods} total)
-                      </div>
-                      <button
-                        onClick={() =>
-                          loadModsForCategory(selectedCategory, true)
-                        }
-                        className="btn btn-outline btn-sm"
-                        disabled={isLoading}
-                        title="Refresh mods from CurseForge"
-                      >
-                        <ArrowPathIcon className="h-4 w-4 mr-1" />
-                        Refresh
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
 
-              {filteredMods.length === 0 && !isLoading && !searchError ? (
-                <div className="card bg-base-100 border border-base-content/10 shadow-lg">
-                  <div className="card-body text-center py-12">
-                    <MagnifyingGlassIcon className="mx-auto h-12 w-12 text-base-content/40" />
-                    <h3 className="mt-2 text-sm font-medium text-base-content">
-                      No mods found
-                    </h3>
-                    <p className="mt-1 text-sm text-base-content/60">
-                      Try refreshing or switching to a different category.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                /* Available Mods Grid */
-                <div className="card bg-base-100 border border-base-content/10 shadow-lg">
-                  <div className="card-body">
-                    {isLoading ? (
-                      <div className="flex items-center justify-center py-12">
-                        <div className="loading loading-spinner loading-lg text-primary"></div>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
-                        {filteredMods.map((mod) => (
-                          <div key={mod.id} className="space-y-2">
-                            <div className="flex items-start space-x-3 p-4 bg-base-200 rounded-lg border border-base-content/10">
-                              <div className="flex-shrink-0">
-                                {mod.logo?.thumbnailUrl ? (
-                                  <img
-                                    src={mod.logo.thumbnailUrl}
-                                    alt={mod.name}
-                                    className="w-12 h-12 rounded object-cover"
-                                  />
-                                ) : (
-                                  <div className="w-12 h-12 bg-base-300 rounded flex items-center justify-center">
-                                    <PuzzlePieceIcon className="h-6 w-6 text-base-content/40" />
+                      <div className="flex items-center space-x-2">
+                        {selectedCategory === "Installed" ? (
+                          <>
+                            <input
+                              type="number"
+                              value={mod.loadOrder || 0}
+                              onChange={(e) => updateLoadOrder(mod.id, parseInt(e.target.value) || 0)}
+                              title="Load order priority"
+                              className="w-16 h-8 bg-gray-900/50 border border-green-400/30 rounded text-green-300 font-mono text-xs text-center"
+                              min="0"
+                            />
+                      <button
+                              onClick={() => removeMod(mod.id)}
+                              title={`Remove ${mod.name}`}
+                              className="btn btn-error btn-xs font-mono"
+                            >
+                              <TrashIcon className="w-3 h-3" />
+                      </button>
+                          </>
+                        ) : (
+                          <div className="text-xs text-green-300/40 font-mono">
+                            {(mod as any)._curseforgeData?.downloadCount ? 
+                              `${((mod as any)._curseforgeData.downloadCount / 1000000).toFixed(1)}M downloads` 
+                              : 'Popular'
+                            }
                                   </div>
                                 )}
                               </div>
-                              <div className="flex-1 min-w-0">
-                                <h4 className="text-sm font-medium text-base-content truncate">
-                                  {mod.name}
-                                </h4>
-                                {mod.authors && mod.authors.length > 0 && (
-                                  <p className="text-xs text-base-content/60 truncate">
-                                    by {mod.authors[0].name}
-                                  </p>
-                                )}
-                                {mod.summary && (
-                                  <p className="text-xs text-base-content/70 mt-1 line-clamp-2">
-                                    {mod.summary}
-                                  </p>
-                                )}
-                                <div className="flex items-center gap-4 mt-2 text-xs text-base-content/50">
-                                  <span>
-                                    📥 {mod.downloadCount.toLocaleString()}
-                                  </span>
-                                  {mod.thumbsUpCount > 0 && (
-                                    <span>
-                                      👍 {mod.thumbsUpCount.toLocaleString()}
-                                    </span>
-                                  )}
-                                  {mod.categories &&
-                                    mod.categories.length > 0 && (
-                                      <span className="badge badge-xs badge-outline">
-                                        {mod.categories[0].name}
-                                      </span>
-                                    )}
                                 </div>
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => addMod(mod)}
-                              className="btn btn-primary btn-sm w-full"
-                            >
-                              Add Mod
-                            </button>
                           </div>
                         ))}
                       </div>
-                    )}
-
-                    {/* Pagination Controls */}
-                    {totalPages > 1 && (
-                      <div className="flex justify-center items-center gap-2 mt-6">
-                        <button
-                          onClick={() =>
-                            loadModsForCategory(
-                              selectedCategory,
-                              false,
-                              Math.max(1, currentPage - 1)
-                            )
-                          }
-                          className="btn btn-sm btn-outline"
-                          disabled={currentPage <= 1 || isLoading}
-                        >
-                          Previous
-                        </button>
-
-                        <div className="flex gap-1">
-                          {Array.from(
-                            { length: Math.min(5, totalPages) },
-                            (_, i) => {
-                              const pageNum =
-                                Math.max(
-                                  1,
-                                  Math.min(totalPages - 4, currentPage - 2)
-                                ) + i;
-                              return (
-                                <button
-                                  key={pageNum}
-                                  onClick={() =>
-                                    loadModsForCategory(
-                                      selectedCategory,
-                                      false,
-                                      pageNum
-                                    )
-                                  }
-                                  className={`btn btn-sm ${currentPage === pageNum ? "btn-primary" : "btn-outline"}`}
-                                  disabled={isLoading}
-                                >
-                                  {pageNum}
-                                </button>
-                              );
-                            }
-                          )}
-                        </div>
-
-                        <button
-                          onClick={() =>
-                            loadModsForCategory(
-                              selectedCategory,
-                              false,
-                              Math.min(totalPages, currentPage + 1)
-                            )
-                          }
-                          className="btn btn-sm btn-outline"
-                          disabled={currentPage >= totalPages || isLoading}
-                        >
-                          Next
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
           )}
         </div>
-      </div>
+                        </div>
+
+
 
       {/* Search Modal */}
       {showSearchModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            {/* Backdrop */}
-            <div
-              className="fixed inset-0 bg-base-300/75 backdrop-blur-sm transition-opacity"
-              onClick={() => setShowSearchModal(false)}
-              aria-hidden="true"
-            />
-
-            {/* Modal panel */}
-            <div className="inline-block transform overflow-hidden rounded-lg bg-base-100 text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-6xl sm:align-middle">
-              <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="w-full">
+        <div className="modal modal-open">
+          <div className="modal-box max-w-4xl bg-gray-900 border border-green-400/30">
                     <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-lg font-medium leading-6 text-primary glow font-mono">
-                        SEARCH RESULTS
-                      </h3>
+              <h3 className="font-bold text-lg text-green-400 font-mono">SEARCH CURSEFORGE MODS</h3>
                       <button
                         onClick={() => setShowSearchModal(false)}
-                        className="btn btn-ghost btn-sm btn-circle rounded-full hover:bg-base-200 transition-colors"
-                        aria-label="Close dialog"
+                className="btn btn-ghost btn-sm text-green-400"
+                title="Close search modal"
+                aria-label="Close search modal"
                       >
                         <XMarkIcon className="h-5 w-5" />
                       </button>
@@ -2023,7 +946,7 @@ const ModManager: React.FC<ModManagerProps> = ({
                             }
                           }}
                           placeholder="Search for mods..."
-                          className="input input-bordered flex-1 h-9 text-sm font-mono"
+                  className="input input-bordered flex-1 h-9 text-sm font-mono bg-gray-800 border-green-400/30 text-green-300"
                           disabled={isSearching}
                         />
                         <button
@@ -2042,11 +965,11 @@ const ModManager: React.FC<ModManagerProps> = ({
                     </div>
 
                     {/* Search Error */}
-                    {searchModalError && (
-                      <div className="alert alert-error mb-4">
-                        <ExclamationTriangleIcon className="h-5 w-5" />
-                        <span className="font-mono text-sm">
-                          {searchModalError}
+            {searchError && (
+              <div className="alert alert-error mb-4 bg-red-900/20 border-red-400/30">
+                <ExclamationTriangleIcon className="h-5 w-5 text-red-400" />
+                <span className="font-mono text-sm text-red-300">
+                  {searchError}
                         </span>
                       </div>
                     )}
@@ -2055,15 +978,15 @@ const ModManager: React.FC<ModManagerProps> = ({
                     <div className="max-h-[60vh] overflow-y-auto">
                       {isSearching ? (
                         <div className="flex items-center justify-center py-12">
-                          <div className="loading loading-spinner loading-lg text-primary"></div>
+                  <div className="loading loading-spinner loading-lg text-green-400"></div>
                         </div>
                       ) : searchResults.length === 0 ? (
                         <div className="text-center py-12">
-                          <MagnifyingGlassIcon className="mx-auto h-12 w-12 text-base-content/40" />
-                          <h4 className="mt-2 text-sm font-medium text-base-content font-mono">
+                  <MagnifyingGlassIcon className="mx-auto h-12 w-12 text-green-400/40" />
+                  <h4 className="mt-2 text-sm font-medium text-green-400 font-mono">
                             NO RESULTS FOUND
                           </h4>
-                          <p className="mt-1 text-sm text-base-content/60 font-mono">
+                  <p className="mt-1 text-sm text-green-300/60 font-mono">
                             Try different search terms or check your spelling.
                           </p>
                         </div>
@@ -2072,14 +995,14 @@ const ModManager: React.FC<ModManagerProps> = ({
                           {searchResults.map((mod) => (
                             <div
                               key={mod.id}
-                              className="card bg-base-200 border border-base-content/10 shadow-pipboy"
+                      className="card bg-gray-800 border border-green-400/30 shadow-lg"
                             >
                               <div className="card-body p-4">
                                 <div className="flex items-start space-x-3">
-                                  {mod.logo?.thumbnailUrl && (
+                          {mod.logo?.url && (
                                     <div className="flex-shrink-0">
                                       <Image
-                                        src={mod.logo.thumbnailUrl}
+                                src={mod.logo.url}
                                         alt={mod.name}
                                         width={48}
                                         height={48}
@@ -2089,19 +1012,16 @@ const ModManager: React.FC<ModManagerProps> = ({
                                   )}
 
                                   <div className="flex-1 min-w-0">
-                                    <h4 className="text-sm font-medium text-base-content truncate font-mono">
+                            <h4 className="text-sm font-medium text-green-400 truncate font-mono">
                                       {mod.name}
                                     </h4>
-                                    <p className="text-xs text-base-content/60 mt-1 line-clamp-2 font-mono">
+                            <p className="text-xs text-green-300/60 mt-1 line-clamp-2 font-mono">
                                       {mod.summary}
                                     </p>
 
-                                    <div className="flex items-center space-x-4 mt-2 text-xs text-base-content/40 font-mono">
+                            <div className="flex items-center space-x-4 mt-2 text-xs text-green-300/40 font-mono">
                                       <span>
                                         📥 {mod.downloadCount.toLocaleString()}
-                                      </span>
-                                      <span>
-                                        👍 {mod.thumbsUpCount.toLocaleString()}
                                       </span>
                                     </div>
 
@@ -2131,67 +1051,106 @@ const ModManager: React.FC<ModManagerProps> = ({
                           ))}
                         </div>
                       )}
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
       )}
 
       {/* Manual Mod Modal */}
-      {showAddModModal && (
-        <div className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold text-lg mb-4">Add Manual Mod</h3>
+      {(showAddModModal || externalShowAddModModal) && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-center justify-center px-4 py-8 text-center sm:block sm:p-0">
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 bg-black/80 backdrop-blur-md transition-opacity"
+              onClick={() => {
+                if (externalSetShowAddModal) {
+                  externalSetShowAddModal(false);
+                } else {
+                  setShowAddModModal(false);
+                }
+              }}
+              aria-hidden="true"
+            />
 
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text">Mod ID</span>
-              </label>
-              <input
-                type="text"
-                value={manualModId}
-                onChange={(e) => setManualModId(e.target.value)}
-                placeholder="Enter CurseForge mod ID"
-                className="input input-bordered bg-base-200 border-base-content/20 focus:border-primary"
-              />
-            </div>
+            {/* Modal panel */}
+            <div className="inline-block transform overflow-hidden rounded-2xl bg-gray-900 text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:align-middle border border-green-400/30">
+              <div className="bg-gradient-to-br from-gray-900 to-gray-800/50">
+                <div className="px-6 pt-6 pb-6 sm:p-6">
+                  <div className="w-full">
+                    <div className="flex justify-between items-center mb-6">
+                      <div>
+                        <h3 className="text-2xl font-bold text-green-400 font-mono tracking-wide">
+                          ADD MANUAL MOD
+                        </h3>
+                        <p className="text-green-300/70 font-mono mt-2">
+                          Add mods by CurseForge ID - mod details will be automatically fetched
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (externalSetShowAddModal) {
+                            externalSetShowAddModal(false);
+                          } else {
+                            setShowAddModModal(false);
+                          }
+                        }}
+                        className="btn btn-ghost btn-sm rounded-xl hover:bg-green-400/10 hover:text-green-400 transition-all duration-200"
+                        aria-label="Close dialog"
+                      >
+                        <XMarkIcon className="h-5 w-5" />
+                      </button>
+                    </div>
 
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text">Mod Name</span>
-              </label>
-              <input
-                type="text"
-                value={manualModName}
-                onChange={(e) => setManualModName(e.target.value)}
-                placeholder="Enter mod display name"
-                className="input input-bordered bg-base-200 border-base-content/20 focus:border-primary"
-              />
-            </div>
+                    <div className="space-y-6">
+                      {/* Mod ID(s) */}
+                      <div className="form-control">
+                        <label className="label">
+                          <span className="label-text text-green-400 font-mono font-semibold">CurseForge Mod ID(s) *</span>
+                        </label>
+                        <textarea
+                          value={manualModId}
+                          onChange={(e) => setManualModId(e.target.value)}
+                          placeholder="Enter CurseForge mod ID or multiple IDs separated by commas&#10;Examples:&#10;• Single mod: 123456&#10;• Multiple mods: 123456, 789012, 345678"
+                          className="textarea textarea-bordered h-24 resize-none bg-gray-800/50 border-green-400/30 text-green-300 font-mono placeholder:text-green-400/40"
+                          required
+                        />
+                        <div className="label">
+                          <span className="label-text-alt text-green-300/60 font-mono">
+                            For bulk adding, separate mod IDs with commas. Mod names and details will be automatically fetched.
+                          </span>
+                        </div>
+                      </div>
 
-            <div className="modal-action">
-              <button
-                onClick={() => {
-                  if (externalSetShowAddModal) {
-                    externalSetShowAddModal(false);
-                  } else {
-                    setShowAddModModal(false);
-                  }
-                }}
-                className="btn btn-ghost"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddManualMod}
-                disabled={!manualModId.trim() || !manualModName.trim()}
-                className="btn btn-primary"
-              >
-                Add Mod
-              </button>
+
+
+                      {/* Action buttons */}
+                      <div className="flex justify-end gap-3 pt-4">
+                        <button
+                          onClick={() => {
+                            if (externalSetShowAddModal) {
+                              externalSetShowAddModal(false);
+                            } else {
+                              setShowAddModModal(false);
+                            }
+                          }}
+                          className="btn btn-ghost text-green-400 font-mono hover:bg-green-400/10"
+                        >
+                          CANCEL
+                        </button>
+                        <button
+                          onClick={handleAddManualMod}
+                          disabled={!manualModId.trim()}
+                          className="btn btn-primary font-mono bg-green-400/20 border-green-400/50 text-green-400 hover:bg-green-400/30 hover:border-green-400"
+                        >
+                          <PlusIcon className="w-4 h-4 mr-2" />
+                          ADD MOD{manualModId.includes(',') ? 'S' : ''}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

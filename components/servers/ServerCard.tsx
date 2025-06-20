@@ -51,39 +51,39 @@ export function ServerCard({
       case 'online':
         return {
           icon: CheckCircleIcon,
-          color: 'text-success',
-          bgColor: 'bg-success/10',
-          borderColor: 'border-success/30',
-          text: 'Online',
-          dotColor: 'bg-success'
+          color: 'text-matrix-500',
+          bgColor: 'bg-cyber-panel',
+          borderColor: 'border-matrix-500',
+          text: 'ONLINE',
+          dotColor: 'bg-matrix-500'
         };
       case 'offline':
         return {
           icon: XCircleIcon,
-          color: 'text-error',
-          bgColor: 'bg-error/10',
-          borderColor: 'border-error/30',
-          text: 'Offline',
-          dotColor: 'bg-error'
+          color: 'text-danger-red',
+          bgColor: 'bg-cyber-panel',
+          borderColor: 'border-danger-red',
+          text: 'OFFLINE',
+          dotColor: 'bg-danger-red'
         };
       case 'starting':
       case 'stopping':
         return {
           icon: ClockIcon,
-          color: 'text-warning',
-          bgColor: 'bg-warning/10',
-          borderColor: 'border-warning/30',
-          text: status === 'starting' ? 'Starting' : 'Stopping',
-          dotColor: 'bg-warning'
+          color: 'text-warning-orange',
+          bgColor: 'bg-cyber-panel',
+          borderColor: 'border-warning-orange',
+          text: status === 'starting' ? 'STARTING' : 'STOPPING',
+          dotColor: 'bg-warning-orange'
         };
       default:
         return {
           icon: ExclamationTriangleIcon,
-          color: 'text-warning',
-          bgColor: 'bg-warning/10',
-          borderColor: 'border-warning/30',
-          text: 'Unknown',
-          dotColor: 'bg-warning'
+          color: 'text-warning-orange',
+          bgColor: 'bg-cyber-panel',
+          borderColor: 'border-warning-orange',
+          text: 'UNKNOWN',
+          dotColor: 'bg-warning-orange'
         };
     }
   };
@@ -102,26 +102,26 @@ export function ServerCard({
       <CardHeader>
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-modern-gradient from-primary to-secondary rounded-xl flex items-center justify-center shadow-lg">
-              <ServerIcon className="h-6 w-6 text-white drop-shadow-sm" />
+            <div className="w-12 h-12 bg-cyber-panel border-2 border-matrix-500 flex items-center justify-center shadow-matrix">
+              <ServerIcon className="h-6 w-6 text-matrix-500 drop-shadow-matrix" />
             </div>
             <div className="flex-1 min-w-0">
-              <CardTitle size="md" className="text-base-content mb-1">
+              <CardTitle size="md" className="text-matrix-500 mb-1">
                 {server.name}
               </CardTitle>
-              <p className="text-sm text-base-content/60 font-mono truncate">
+              <p className="text-sm text-matrix-600 font-mono truncate uppercase tracking-wider">
                 {server.executablePath}:{server.port}
               </p>
             </div>
           </div>
           
           <div className={cn(
-            'flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-sm',
+            'flex items-center gap-2 px-3 py-1.5 border-2 backdrop-blur-sm',
             statusConfig.bgColor,
             statusConfig.borderColor
           )}>
-            <div className={cn('w-2 h-2 rounded-full', statusConfig.dotColor)} />
-            <span className={cn('text-xs font-medium', statusConfig.color)}>
+            <div className={cn('w-2 h-2 animate-pulse', statusConfig.dotColor)} />
+            <span className={cn('text-xs font-mono font-medium uppercase tracking-wider', statusConfig.color)}>
               {statusConfig.text}
             </span>
           </div>
@@ -130,26 +130,26 @@ export function ServerCard({
 
       <CardContent>
         <div className="grid grid-cols-2 gap-4">
-          <div className="flex items-center gap-3 p-4 bg-accent/5 rounded-xl border border-accent/10">
-            <div className="w-10 h-10 bg-accent/10 rounded-lg flex items-center justify-center">
-              <UsersIcon className="h-5 w-5 text-accent" />
+          <div className="flex items-center gap-3 p-4 bg-cyber-panel border border-matrix-700">
+            <div className="w-10 h-10 bg-cyber-panel border border-matrix-600 flex items-center justify-center">
+              <UsersIcon className="h-5 w-5 text-matrix-500" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs text-base-content/60 font-medium mb-1">Players</p>
-              <p className="text-lg font-bold text-accent">
+              <p className="text-xs text-matrix-600 font-mono font-medium mb-1 uppercase tracking-wider">PLAYERS</p>
+              <p className="text-lg font-bold font-mono text-matrix-500">
                 {status.players.current}/{status.players.max}
               </p>
             </div>
           </div>
           
-          <div className="flex items-center gap-3 p-4 bg-primary/5 rounded-xl border border-primary/10">
-            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-              <MapIcon className="h-5 w-5 text-primary" />
+          <div className="flex items-center gap-3 p-4 bg-cyber-panel border border-matrix-700">
+            <div className="w-10 h-10 bg-cyber-panel border border-matrix-600 flex items-center justify-center">
+              <MapIcon className="h-5 w-5 text-matrix-500" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs text-base-content/60 font-medium mb-1">Map</p>
-              <p className="text-sm font-semibold text-base-content truncate">
-                {server.map || 'The Island'}
+              <p className="text-xs text-matrix-600 font-mono font-medium mb-1 uppercase tracking-wider">MAP</p>
+              <p className="text-sm font-semibold font-mono text-matrix-500 truncate uppercase">
+                {server.map || 'THE ISLAND'}
               </p>
             </div>
           </div>
@@ -162,33 +162,33 @@ export function ServerCard({
             <button
               onClick={() => handleServerAction('start')}
               disabled={isLoading || actionLoading === 'start'}
-              className="btn btn-success btn-sm flex-1 shadow-sm"
+              className="flex-1 px-4 py-2 bg-cyber-panel border-2 border-matrix-500 text-matrix-500 font-mono font-medium uppercase tracking-wider text-sm hover:bg-matrix-500 hover:text-cyber-bg transition-all duration-200 cyber-hover flex items-center justify-center gap-2"
             >
               {actionLoading === 'start' ? (
-                <div className="loading loading-spinner loading-xs"></div>
+                <div className="w-4 h-4 border-2 border-matrix-500 border-t-transparent rounded-full animate-spin"></div>
               ) : (
                 <PlayIcon className="h-4 w-4" />
               )}
-              Start Server
+              START SERVER
             </button>
           ) : (
             <button
               onClick={() => handleServerAction('stop')}
               disabled={isLoading || actionLoading === 'stop'}
-              className="btn btn-error btn-sm flex-1 shadow-sm"
+              className="flex-1 px-4 py-2 bg-cyber-panel border-2 border-danger-red text-danger-red font-mono font-medium uppercase tracking-wider text-sm hover:bg-danger-red hover:text-cyber-bg transition-all duration-200 cyber-hover flex items-center justify-center gap-2"
             >
               {actionLoading === 'stop' ? (
-                <div className="loading loading-spinner loading-xs"></div>
+                <div className="w-4 h-4 border-2 border-danger-red border-t-transparent rounded-full animate-spin"></div>
               ) : (
                 <StopIcon className="h-4 w-4" />
               )}
-              Stop Server
+              STOP SERVER
             </button>
           )}
 
           <button
             onClick={() => onEditServer(server.id)}
-            className="btn btn-ghost btn-sm px-3 hover:bg-base-content/5"
+            className="px-3 py-2 bg-cyber-panel border border-matrix-700 text-matrix-600 hover:border-matrix-500 hover:text-matrix-500 transition-all duration-200 cyber-hover"
             title="Edit Server"
           >
             <PencilIcon className="h-4 w-4" />
@@ -196,7 +196,7 @@ export function ServerCard({
 
           <button
             onClick={() => onDeleteServer(server.id)}
-            className="btn btn-ghost btn-sm px-3 text-error hover:bg-error/10 hover:text-error"
+            className="px-3 py-2 bg-cyber-panel border border-matrix-700 text-matrix-600 hover:border-danger-red hover:text-danger-red transition-all duration-200 cyber-hover"
             title="Delete Server"
           >
             <TrashIcon className="h-4 w-4" />

@@ -6,6 +6,7 @@ export interface GlobalSettings {
   siteTitle: string;
   favicon: string; // Can be emoji or base64 image data
   steamCmdPath: string;
+  curseforgeApiKey: string; // CurseForge API key for mod management
   cacheRefreshInterval: number; // Cache refresh interval in hours (default: 5)
   cacheEnabled: boolean; // Whether to enable caching (default: true)
   updatedAt: Date;
@@ -27,6 +28,7 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
   siteTitle: "Saints Ascended",
   favicon: "🦕", // Default dinosaur emoji
   steamCmdPath: "",
+  curseforgeApiKey: "",
   cacheRefreshInterval: 5, // 5 hours default
   cacheEnabled: true, // Enable caching by default
   updatedAt: new Date(),
@@ -96,4 +98,22 @@ export function saveGlobalSettings(settings: GlobalSettings): void {
 export function getGlobalSteamCmdPath(): string {
   const settings = loadGlobalSettings();
   return settings.steamCmdPath;
+}
+
+/**
+ * Get the global CurseForge API key
+ */
+export function getGlobalCurseForgeApiKey(): string {
+  const settings = loadGlobalSettings();
+  return settings.curseforgeApiKey;
+}
+
+/**
+ * Get the effective CurseForge API key (env or global settings)
+ */
+export function getEffectiveCurseForgeApiKey(): string {
+  if (process.env.CURSEFORGE_API_KEY && process.env.CURSEFORGE_API_KEY.trim() !== "") {
+    return process.env.CURSEFORGE_API_KEY.trim();
+  }
+  return getGlobalCurseForgeApiKey();
 }

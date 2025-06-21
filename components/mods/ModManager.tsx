@@ -318,7 +318,7 @@ const ModManager: React.FC<ModManagerProps> = ({
     try {
       // Add timeout to prevent hanging on mod loading
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Mod loading timeout')), 15000); // 15 second timeout
+        setTimeout(() => reject(new Error('Mod loading timeout after 25 seconds')), 25000); // Increased timeout
       });
       
       // Use unified mod manager to get comprehensive mod data with auto-fetch
@@ -360,43 +360,60 @@ const ModManager: React.FC<ModManagerProps> = ({
       
       return convertedMods;
     } catch (error) {
-      console.error(`❌ Error loading mods (attempt ${retryCount + 1}):`, error);
+      console.error("Failed to load mods:", error);
       
-      // Handle timeout specifically
-      if (error instanceof Error && error.message === 'Mod loading timeout') {
-        addConsoleWarning(`⏰ Mod loading timed out after 15 seconds (attempt ${retryCount + 1})`);
-        
-        // For timeouts, use cached data immediately if available
-        if (cachedMods.length > 0) {
-          console.log(`📦 Using ${cachedMods.length} cached mods due to timeout`);
-          setMods(cachedMods);
-          setIsLoadingMods(false);
-          addConsoleInfo("💾 Loaded mods from cache due to slow API response");
-          return cachedMods;
+      // Enhanced error handling with specific error types
+      let errorMessage = 'Failed to load mods';
+      let shouldRetry = false;
+      
+      if (error instanceof Error) {
+        if (error.message.includes('timeout')) {
+          errorMessage = 'Mod loading timed out. This may be due to network issues or server load.';
+          shouldRetry = retryCount < 2; // Allow up to 2 retries for timeouts
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+          errorMessage = 'Network error while loading mods. Please check your connection.';
+          shouldRetry = retryCount < 1; // Allow 1 retry for network errors
+        } else if (error.message.includes('API')) {
+          errorMessage = 'CurseForge API error. The service may be temporarily unavailable.';
+          shouldRetry = false; // Don't retry API errors
+        } else {
+          errorMessage = `Unexpected error: ${error.message}`;
+          shouldRetry = false;
         }
       }
       
-      // Retry logic with exponential backoff (but not for timeouts if we have cache)
-      if (retryCount < 2 && !(error instanceof Error && error.message === 'Mod loading timeout' && cachedMods.length > 0)) {
-        const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
-        console.log(`🔄 Retrying in ${delay}ms...`);
+      // Implement retry logic with exponential backoff
+      if (shouldRetry) {
+        const retryDelay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
+        addConsoleInfo(`⏳ Retrying mod loading in ${retryDelay/1000} seconds... (attempt ${retryCount + 1})`);
         
-        setTimeout(() => {
-          loadMods(cachedMods, retryCount + 1);
-        }, delay);
-        return;
+        setTimeout(async () => {
+          try {
+            await loadMods(cachedMods, retryCount + 1);
+          } catch (retryError) {
+            console.error('Retry failed:', retryError);
+            setIsLoadingMods(false);
+          }
+        }, retryDelay);
+        
+        return cachedMods; // Return cached data while retrying
       }
       
-      // Final fallback: use cached mods if available
+      // If no retry or all retries failed, show error and use cached data
+      addConsoleError(`❌ ${errorMessage}`);
+      toast.error(errorMessage);
+      
+      // Fallback to cached mods if available
       if (cachedMods.length > 0) {
-        console.log(`📦 Using ${cachedMods.length} cached mods as fallback`);
         setMods(cachedMods);
-        setIsLoadingMods(false);
-      } else {
-        // Show error state
-        setIsLoadingMods(false);
-        console.error('❌ No cached mods available, showing empty state');
+        addConsoleInfo(`📦 Using ${cachedMods.length} cached mods as fallback`);
+        if (onModsUpdate) {
+          onModsUpdate(cachedMods);
+        }
       }
+      
+      setIsLoadingMods(false);
+      return cachedMods;
     }
   };
 
@@ -726,7 +743,7 @@ const ModManager: React.FC<ModManagerProps> = ({
         addConsoleInfo(`🔍 Strategy 1: Searching with query "${categoryQuery}" for category "${category}"`);
 
         const response = await fetch(`/api/curseforge/search?${params}`, {
-          signal: AbortSignal.timeout(8000) // 8s timeout
+          signal: AbortSignal.timeout(25000) // 25s timeout (allows for API retries)
         });
         
         if (!response.ok) {
@@ -763,7 +780,7 @@ const ModManager: React.FC<ModManagerProps> = ({
         addConsoleInfo(`🔍 Strategy 2: Empty query search for popular mods`);
 
         const response = await fetch(`/api/curseforge/search?${params}`, {
-          signal: AbortSignal.timeout(8000)
+          signal: AbortSignal.timeout(25000) // 25s timeout (allows for API retries)
         });
         
         if (!response.ok) {

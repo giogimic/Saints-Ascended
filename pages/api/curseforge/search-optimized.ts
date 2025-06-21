@@ -7,6 +7,11 @@ import { modCache } from "@/lib/mod-cache";
 import { convertBigIntsToStrings } from "@/lib/json-helpers";
 import { ErrorHandler } from "@/lib/error-handler";
 
+// Unified timeout and retry configuration
+const API_TIMEOUT = 25000; // 25 seconds for all operations
+const MAX_RETRIES = 3;
+const RETRY_DELAY_BASE = 1000; // 1 second base delay
+
 // Request deduplication to prevent multiple simultaneous requests for the same data
 const pendingRequests = new Map<string, Promise<any>>();
 
@@ -577,4 +582,33 @@ function getWarmingStatus(): Record<string, any> {
     lastWarmed: new Date().toISOString(),
     status: "idle"
   };
+}
+
+/**
+ * Retry function with exponential backoff
+ */
+async function retryWithBackoff<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = MAX_RETRIES,
+  baseDelay: number = RETRY_DELAY_BASE
+): Promise<T> {
+  let lastError: Error;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error as Error;
+      
+      if (attempt === maxRetries) {
+        throw lastError;
+      }
+      
+      // Exponential backoff: 1s, 2s, 4s, etc.
+      const delay = baseDelay * Math.pow(2, attempt);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError!;
 }

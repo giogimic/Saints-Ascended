@@ -5,17 +5,17 @@
  * Run with: node scripts/test-curseforge.js
  */
 
-const https = require('https');
+import https from 'https';
+import { getEffectiveCurseForgeApiKey } from '../lib/global-settings-wrapper.js';
 
 // Configuration
-const API_KEY = process.env.CURSEFORGE_API_KEY;
+const API_KEY = getEffectiveCurseForgeApiKey();
 const GAME_ID = 83374; // ARK: Survival Ascended
 const BASE_URL = 'https://api.curseforge.com/v1';
 
 if (!API_KEY) {
-  console.error('❌ CURSEFORGE_API_KEY environment variable not set');
-  console.log('Please set your CurseForge API key:');
-  console.log('export CURSEFORGE_API_KEY=your_api_key_here');
+  console.error('❌ CurseForge API key not found in environment variables or global settings');
+  console.log('Please set your CurseForge API key in the app\'s Global Settings or environment variables');
   process.exit(1);
 }
 
@@ -103,7 +103,7 @@ async function testAPI() {
     if (gameResponse.status === 200 && categoriesResponse.status === 200 && searchResponse.status === 200) {
       console.log('✅ CurseForge API integration is working correctly!');
       console.log('\n📝 Next steps:');
-      console.log('1. Make sure your .env.local file has CURSEFORGE_API_KEY set');
+      console.log('1. Make sure your API key is set in Global Settings or .env.local file');
       console.log('2. Restart your development server: npm run dev');
       console.log('3. Test the mod manager in the web interface');
     } else {

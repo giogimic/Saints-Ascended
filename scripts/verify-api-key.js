@@ -4,44 +4,17 @@
  * Verify CurseForge API key format and basic connectivity
  */
 
-const https = require("https");
-const fs = require("fs");
-const path = require("path");
-
-// Load .env.local file
-function loadEnvFile() {
-  const envPath = path.join(__dirname, "..", ".env.local");
-  if (fs.existsSync(envPath)) {
-    const envContent = fs.readFileSync(envPath, "utf8");
-    const lines = envContent.split("\n");
-
-    lines.forEach((line) => {
-      const trimmed = line.trim();
-      if (trimmed && !trimmed.startsWith("#")) {
-        const [key, ...valueParts] = trimmed.split("=");
-        if (key && valueParts.length > 0) {
-          const value = valueParts.join("=");
-          process.env[key] = value;
-        }
-      }
-    });
-  }
-}
-
-// Load environment variables
-loadEnvFile();
-
-const API_KEY = process.env.CURSEFORGE_API_KEY;
+import https from "https";
+import { getEffectiveCurseForgeApiKey } from "../lib/global-settings-wrapper.js";
 
 console.log("🔍 CurseForge API Key Verification\n");
 
+const API_KEY = getEffectiveCurseForgeApiKey();
+
 if (!API_KEY) {
-  console.error("❌ CURSEFORGE_API_KEY not found in environment variables");
+  console.error("❌ CurseForge API key not found in Global Settings");
   console.log(
-    "   Make sure .env.local file exists and contains CURSEFORGE_API_KEY=your_key"
-  );
-  console.log(
-    "   Or set the environment variable: export CURSEFORGE_API_KEY=your_key"
+    "   Please set your CurseForge API key in the app's Global Settings interface."
   );
   process.exit(1);
 }
@@ -70,14 +43,12 @@ if (API_KEY.length < 32) {
   console.log("\n⚠️  WARNING: API key appears to be truncated!");
   console.log("   CurseForge API keys should be at least 32 characters long.");
   console.log("   This might be due to:");
-  console.log("   - Environment variable length limits");
-  console.log("   - Build process truncation");
   console.log("   - Incorrect copying from CurseForge console");
+  console.log("   - Incomplete API key in Global Settings");
   console.log("\n   Solutions:");
-  console.log("   1. Check your .env.local file for the complete API key");
-  console.log("   2. Remove any quotes around the API key value");
-  console.log("   3. Ensure the API key is copied completely from CurseForge");
-  console.log("   4. Restart your development server after making changes");
+  console.log("   1. Check your Global Settings for the complete API key");
+  console.log("   2. Ensure the API key is copied completely from CurseForge");
+  console.log("   3. Restart your development server after making changes");
 }
 
 // Test basic connectivity
@@ -106,9 +77,9 @@ function testAPI() {
       res.on("end", () => {
         try {
           const jsonData = JSON.parse(data);
-          resolve({ status: res.statusCode, data: jsonData });
+          resolve({ status: res.statusCode || 0, data: jsonData });
         } catch (error) {
-          resolve({ status: res.statusCode, data: data });
+          resolve({ status: res.statusCode || 0, data: data });
         }
       });
     });

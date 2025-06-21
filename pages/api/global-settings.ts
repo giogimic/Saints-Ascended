@@ -4,6 +4,7 @@ import {
   saveGlobalSettings,
   GlobalSettings,
 } from "@/lib/global-settings";
+import { isValidCurseForgeApiKey } from "@/lib/curseforge-api";
 
 export default async function handler(
   req: NextApiRequest,
@@ -14,26 +15,45 @@ export default async function handler(
       case "GET":
         // Load and return global settings
         const settings = loadGlobalSettings();
-        return res.status(200).json({ data: settings });
+        
+        // Don't expose the API key in GET requests for security
+        const getSafeSettings = {
+          ...settings,
+          curseforgeApiKey: settings.curseforgeApiKey ? '***CONFIGURED***' : ''
+        };
+        
+        return res.status(200).json(getSafeSettings);
 
       case "PUT":
         // Update global settings
-        const updatedSettings: GlobalSettings = {
-          siteTitle: req.body.siteTitle || "Ark Server Manager",
-          favicon: req.body.favicon || "🦕",
-          steamCmdPath: req.body.steamCmdPath || "",
-          cacheRefreshInterval: req.body.cacheRefreshInterval || 5,
-          cacheEnabled:
-            req.body.cacheEnabled !== undefined ? req.body.cacheEnabled : true,
-          updatedAt: new Date(),
+        const currentSettings = loadGlobalSettings();
+        const updates = req.body as Partial<GlobalSettings>;
+        
+        // Validate CurseForge API key if provided
+        if (updates.curseforgeApiKey !== undefined) {
+          if (updates.curseforgeApiKey && !isValidCurseForgeApiKey(updates.curseforgeApiKey)) {
+            return res.status(400).json({ 
+              error: 'Invalid CurseForge API key format. Please provide a valid BCrypt hash or legacy alphanumeric key.' 
+            });
+          }
+        }
+        
+        // Merge updates with current settings
+        const newSettings: GlobalSettings = {
+          ...currentSettings,
+          ...updates,
+          updatedAt: new Date()
         };
 
-        saveGlobalSettings(updatedSettings);
-        return res.status(200).json({
-          success: true,
-          data: updatedSettings,
-          message: "Global settings updated successfully",
-        });
+        saveGlobalSettings(newSettings);
+        
+        // Return success response without exposing the API key
+        const putSafeSettings = {
+          ...newSettings,
+          curseforgeApiKey: newSettings.curseforgeApiKey ? '***CONFIGURED***' : ''
+        };
+        
+        return res.status(200).json(putSafeSettings);
 
       default:
         res.setHeader("Allow", ["GET", "PUT"]);

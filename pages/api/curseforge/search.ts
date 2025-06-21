@@ -26,6 +26,10 @@ setInterval(() => {
   }
 }, 60000); // Every minute
 
+const SEARCH_TIMEOUT = 25000; // Increased from 8000 to 25000ms for better reliability
+const MAX_RETRIES = 3;
+const RETRY_DELAY_BASE = 1000; // 1 second base delay
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -338,7 +342,7 @@ async function performSearch(
         page
       ),
       new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new CurseForgeTimeoutError()), 8000) // 8 second timeout for CurseForge API
+        setTimeout(() => reject(new CurseForgeTimeoutError()), SEARCH_TIMEOUT) // 25 second timeout for CurseForge API (allows for retries)
       )
     ]);
 

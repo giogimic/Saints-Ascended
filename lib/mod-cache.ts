@@ -2,6 +2,9 @@ import { prisma } from "./database";
 import { CurseForgeModData } from "../types/curseforge";
 import { info, warn, error, debug } from './logger';
 
+// Database bypass mode - set to false to enable full database functionality
+const BYPASS_SQLITE_FOR_API = false; // Enable full database functionality
+
 // In-memory cache for mods
 interface ModCacheEntry {
   data: CurseForgeModData;
@@ -44,10 +47,17 @@ class ModCacheService {
   }
 
   private async _initializeDatabase(): Promise<void> {
+    if (BYPASS_SQLITE_FOR_API) {
+      warn('[DB]', 'SQLite bypass mode enabled - using in-memory cache only for testing');
+      this.dbAvailable = false;
+      this.startCacheCleanup();
+      return;
+    }
+
     try {
       // Try to connect to database with timeout
       const connectionTimeout = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Database connection timeout')), 10000);
+        setTimeout(() => reject(new Error('Database connection timeout')), 5000); // Reduced from 10s to 5s
       });
 
       await Promise.race([
@@ -91,10 +101,7 @@ class ModCacheService {
 
   async getMod(modId: number): Promise<CurseForgeModData | null> {
     try {
-      // Ensure database is initialized
-      await this.initializeDatabase();
-
-      // Check in-memory cache first
+      // Check in-memory cache first (always fastest)
       const cached = this.inMemoryCache.get(`mod_${modId}`) as ModCacheEntry;
       if (cached && Date.now() < cached.expiresAt) {
         cached.hitCount++;
@@ -103,10 +110,25 @@ class ModCacheService {
         return cached.data;
       }
 
-      // Try database if available
-      if (this.dbAvailable) {
+      // Skip database operations if bypass mode is enabled or database is unavailable
+      if (BYPASS_SQLITE_FOR_API || !this.dbAvailable) {
+        debug('[CACHE]', `Cache miss for mod ${modId} (${BYPASS_SQLITE_FOR_API ? 'SQLite bypass enabled' : 'database unavailable'})`);
+        return null;
+      }
+
+      // Ensure database is initialized (non-blocking check)
+      if (!this.initializationPromise) {
+        debug('[CACHE]', `Database not initialized for mod ${modId}`);
+        return null;
+      }
+
+      // Try database if available (with timeout protection)
         try {
-          const dbMod = await prisma.mod.findUnique({
+        const dbTimeout = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Database query timeout')), 2000); // 2 second timeout
+        });
+
+        const dbQuery = prisma.mod.findUnique({
             where: { id: modId },
             include: {
               categories: true,
@@ -114,6 +136,8 @@ class ModCacheService {
               authors: true
             }
           });
+
+        const dbMod = await Promise.race([dbQuery, dbTimeout]) as any;
 
           if (dbMod && Date.now() < new Date(dbMod.lastUpdated).getTime() + this.MOD_CACHE_TTL) {
             const modData = this.convertDbToCurseForge(dbMod);
@@ -124,7 +148,6 @@ class ModCacheService {
           }
         } catch (dbError) {
           warn('[CACHE]', `Database error for mod ${modId}, falling back to memory: ${dbError instanceof Error ? dbError.message : String(dbError)}`);
-        }
       }
 
       debug('[CACHE]', `Cache miss for mod ${modId}`);
@@ -137,19 +160,23 @@ class ModCacheService {
 
   async setMod(mod: CurseForgeModData): Promise<void> {
     try {
-      // Ensure database is initialized
-      await this.initializeDatabase();
-
-      // Always store in memory cache
+      // Always store in memory cache (fast and non-blocking)
       this.setModInMemoryCache(mod.id, mod);
 
-      // Store in database if available
+      // Skip database operations if bypass mode is enabled
+      if (BYPASS_SQLITE_FOR_API || !this.dbAvailable) {
+        debug('[CACHE]', `Stored mod ${mod.id} in memory only (SQLite bypass enabled)`);
+        return;
+      }
+
+      // Store in database (make it awaitable for proper error handling)
       if (this.dbAvailable) {
         try {
           await this.storeModInDatabase(mod);
-          debug('[CACHE]', `Stored mod ${mod.id} in database`);
+          debug('[CACHE]', `Successfully stored mod ${mod.id} in database`);
         } catch (dbError) {
           warn('[CACHE]', `Failed to store mod ${mod.id} in database: ${dbError instanceof Error ? dbError.message : String(dbError)}`);
+          // Don't throw - just log the error so memory cache still works
         }
       }
     } catch (err) {
@@ -298,7 +325,7 @@ class ModCacheService {
         },
         create: {
           id: mod.id,
-          gameId: mod.gameId || 432, // ARK: Survival Evolved game ID
+          gameId: mod.gameId || 83374, // ARK: Survival Ascended game ID
           name: mod.name,
           slug: mod.slug || '',
           summary: mod.summary || '',
@@ -320,8 +347,9 @@ class ModCacheService {
         },
       });
 
-      // Store relations
-      await this.storeModRelations(mod);
+      // Store relations (temporarily disabled for debugging)
+      // await this.storeModRelations(mod);
+      debug('[CACHE]', `Stored basic mod data for ${mod.id}, skipping relations for now`);
     } catch (err) {
       throw new Error(`Failed to store mod ${mod.id} in database: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -625,16 +653,28 @@ class ModCacheService {
    * Get multiple mods by IDs
    */
   async getModsByIds(modIds: number[]): Promise<CurseForgeModData[]> {
-    const results: CurseForgeModData[] = [];
-
-    for (const modId of modIds) {
-      const mod = await this.getMod(modId);
-      if (mod) {
-        results.push(mod);
-      }
+    if (!modIds || modIds.length === 0) {
+      return [];
     }
 
-    return results;
+    // Use the CurseForge API bulk endpoint for efficiency
+    try {
+      const { CurseForgeAPI } = await import('./curseforge-api');
+      const mods = await CurseForgeAPI.getModsByIds(modIds);
+      return mods as CurseForgeModData[];
+    } catch (error) {
+      console.error('Failed to get mods by IDs from API, falling back to individual calls:', error);
+      
+      // Fallback to individual calls if bulk fails
+      const results: CurseForgeModData[] = [];
+      for (const modId of modIds) {
+        const mod = await this.getMod(modId);
+        if (mod) {
+          results.push(mod);
+        }
+      }
+      return results;
+    }
   }
 
   /**

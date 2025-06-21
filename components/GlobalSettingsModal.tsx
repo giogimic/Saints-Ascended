@@ -11,6 +11,7 @@ import { toast } from "react-hot-toast";
 import { GlobalSettings } from "@/lib/global-settings";
 import { ErrorHandler, ErrorType, ErrorSeverity } from "@/lib/error-handler";
 import { useGlobalSettings } from "@/lib/global-settings";
+import { isValidCurseForgeApiKey } from "@/lib/curseforge-api";
 
 interface GlobalSettingsModalProps {
   isOpen: boolean;
@@ -40,16 +41,20 @@ export function GlobalSettingsModal({
   onSettingsUpdate,
 }: GlobalSettingsModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  
+  // Ensure we always have a valid settings object
+  const defaultSettings: GlobalSettings = {
+    siteTitle: "Ark Server Manager",
+    favicon: "🦕",
+    steamCmdPath: "",
+    curseforgeApiKey: "",
+    cacheRefreshInterval: 5,
+    cacheEnabled: true,
+    updatedAt: new Date(),
+  };
+
   const [settings, setSettings] = useState<GlobalSettings>(
-    () =>
-      externalSettings || {
-        siteTitle: "Ark Server Manager",
-        favicon: "🦕",
-        steamCmdPath: "",
-        cacheRefreshInterval: 5,
-        cacheEnabled: true,
-        updatedAt: new Date(),
-      }
+    () => externalSettings || defaultSettings
   );
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -58,6 +63,13 @@ export function GlobalSettingsModal({
   const [faviconType, setFaviconType] = useState<"emoji" | "custom">("emoji");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isThemeChange, setIsThemeChange] = useState(false);
+
+  // Update settings when externalSettings changes
+  useEffect(() => {
+    if (externalSettings) {
+      setSettings(externalSettings);
+    }
+  }, [externalSettings]);
 
   useEffect(() => {
     if (isOpen && dialogRef.current) {
@@ -93,7 +105,7 @@ export function GlobalSettingsModal({
       false // Don't show toast for this error
     );
 
-    if (result.success) {
+    if (result.success && result.data) {
       setSettings(result.data);
 
       // Determine favicon type
@@ -107,14 +119,20 @@ export function GlobalSettingsModal({
         setFaviconType("custom");
       }
     } else {
-      console.error("Failed to load global settings:", result.error);
+      console.error("Failed to load global settings:", result.success ? "No data received" : result.error);
       // Keep default settings if loading fails
+      // The settings state already has default values from initialization
     }
 
     setIsLoading(false);
   };
 
   const validateSettings = (): boolean => {
+    // Safety check: ensure settings is not undefined
+    if (!settings) {
+      return false;
+    }
+
     const newErrors: Record<string, string> = {};
 
     if (!settings.siteTitle.trim()) {
@@ -130,11 +148,17 @@ export function GlobalSettingsModal({
     }
 
     if (
+      settings.favicon &&
       faviconType === "custom" &&
       !settings.favicon.startsWith("data:") &&
       !settings.favicon.startsWith("http")
     ) {
       newErrors.favicon = "Custom favicon must be a valid URL or data URL";
+    }
+
+    // Validate CurseForge API key if provided (optional field)
+    if (settings.curseforgeApiKey && !isValidCurseForgeApiKey(settings.curseforgeApiKey)) {
+      newErrors.curseforgeApiKey = "Invalid CurseForge API key format. Please provide a valid BCrypt hash or legacy alphanumeric key.";
     }
 
     setErrors(newErrors);
@@ -143,6 +167,12 @@ export function GlobalSettingsModal({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Safety check: ensure settings is not undefined
+    if (!settings) {
+      toast.error("Settings not loaded");
+      return;
+    }
 
     if (!validateSettings()) {
       toast.error("Please fix the errors in the form");
@@ -239,6 +269,12 @@ export function GlobalSettingsModal({
   };
 
   const handleDownloadSteamCMD = async () => {
+    // Safety check: ensure settings is not undefined
+    if (!settings) {
+      toast.error("Settings not loaded");
+      return;
+    }
+
     if (!settings.steamCmdPath.trim()) {
       toast.error("Please enter a SteamCMD path first");
       return;
@@ -287,6 +323,11 @@ export function GlobalSettingsModal({
       setErrors((prev) => ({ ...prev, [field]: "" }));
     }
   };
+
+  // Safety check: ensure settings is never undefined
+  if (!settings) {
+    return null;
+  }
 
   return isOpen ? (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -458,6 +499,69 @@ export function GlobalSettingsModal({
                             "Download"
                           )}
                         </button>
+                      </div>
+                    </div>
+
+                    {/* CurseForge API Key */}
+                    <div className="form-control">
+                      <label className="label">
+                        <span className="label-text text-primary font-display font-semibold">CurseForge API Key</span>
+                        <span className="label-text-alt text-primary/60">Required for mod management</span>
+                      </label>
+                      <div className="space-y-2">
+                        <input
+                          type="password"
+                          className={`input input-bordered w-full ${errors.curseforgeApiKey ? "input-error" : ""}`}
+                          value={settings.curseforgeApiKey}
+                          onChange={(e) =>
+                            handleInputChange("curseforgeApiKey", e.target.value)
+                          }
+                          placeholder="Enter your CurseForge API key"
+                          disabled={isSaving}
+                          aria-label="CurseForge API key"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const input = document.querySelector('input[type="password"]') as HTMLInputElement;
+                              if (input) {
+                                input.type = input.type === 'password' ? 'text' : 'password';
+                              }
+                            }}
+                            className="btn btn-ghost btn-sm"
+                            aria-label="Toggle API key visibility"
+                          >
+                            👁️ Toggle Visibility
+                          </button>
+                          <a
+                            href="https://console.curseforge.com/#/api-keys"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-outline btn-sm"
+                          >
+                            🔑 Get API Key
+                          </a>
+                        </div>
+                        <p className="text-sm text-primary/60 font-mono">
+                          Get your API key from the{" "}
+                          <a
+                            href="https://console.curseforge.com/#/api-keys"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="link link-primary"
+                          >
+                            CurseForge Developer Console
+                          </a>
+                          . API keys use BCrypt hash format.
+                        </p>
+                        {errors.curseforgeApiKey && (
+                          <label className="label">
+                            <span className="label-text-alt text-error">
+                              {errors.curseforgeApiKey}
+                            </span>
+                          </label>
+                        )}
                       </div>
                     </div>
 

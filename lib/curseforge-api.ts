@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { modCacheClient } from "./mod-cache-client";
+import { getGlobalCurseForgeApiKey } from "./global-settings";
 import {
   CurseForgeModData,
   CurseForgeSearchResponse,
@@ -330,88 +331,30 @@ export class CurseForgeAPI {
   private static isProcessingQueue = false;
   private static readonly MAX_CONCURRENT_REQUESTS = 2; // Reduced for better stability
   private static activeRequests = 0;
-  private static readonly REQUEST_TIMEOUT = 8000; // Reduced from 45s to 8s
+  private static readonly REQUEST_TIMEOUT = 15000; // Increased from 8s to 15s for better reliability
   private static readonly RETRY_DELAYS = [1000, 2000, 4000]; // Reduced delays for faster failure detection
 
   /**
    * Get API key with fallback to reading from .env files
    */
   private static getApiKey(): string {
+    // First, try to get API key from global settings (primary source)
+    const globalApiKey = getGlobalCurseForgeApiKey();
+    if (globalApiKey && isValidCurseForgeApiKey(globalApiKey)) {
+      log(LOG_LEVEL.INFO, `Using API key from global settings (length: ${globalApiKey.length}, format: ${globalApiKey.startsWith('$2') ? 'BCrypt' : 'Legacy'})`);
+      return globalApiKey;
+    }
+
+    // Fallback to environment variable for backward compatibility
     const apiKey = process.env.CURSEFORGE_API_KEY;
-
-    // Try to read from .env.local first, then .env
-    const envFiles = [
-      path.join(process.cwd(), ".env.local"),
-      path.join(process.cwd(), ".env")
-    ];
-
-    for (const envPath of envFiles) {
-      try {
-        if (fs.existsSync(envPath)) {
-          const envContent = fs.readFileSync(envPath, "utf8");
-          const lines = envContent.split("\n");
-          const curseforgeLine = lines.find((line) =>
-            line.trim().startsWith("CURSEFORGE_API_KEY=")
-          );
-          if (curseforgeLine) {
-            const fileKey = curseforgeLine.split("=")[1]?.trim() || "";
-            // Properly remove quotes - handle both single and double quotes
-            const cleanKey = fileKey.replace(/^["'](.*)["']$/, '$1');
-
-            // Validate BCrypt format or fallback to legacy format
-            if (isValidCurseForgeApiKey(cleanKey)) {
-              log(LOG_LEVEL.INFO, `Using API key from ${path.basename(envPath)} file (length: ${cleanKey.length}, format: ${cleanKey.startsWith('$2') ? 'BCrypt' : 'Legacy'})`);
-              return cleanKey;
-            }
-          }
-        }
-      } catch (error) {
-        console.error(`Error reading API key from ${path.basename(envPath)}:`, error);
-      }
+    if (apiKey && isValidCurseForgeApiKey(apiKey)) {
+      log(LOG_LEVEL.INFO, `Using API key from environment variable (length: ${apiKey.length}, format: ${apiKey.startsWith('$2') ? 'BCrypt' : 'Legacy'})`);
+      return apiKey;
     }
 
-    // Fallback to environment variable if file reading failed
-    if (apiKey) {
-      if (isValidCurseForgeApiKey(apiKey)) {
-        log(LOG_LEVEL.INFO, `Using API key from environment variable (length: ${apiKey.length}, format: ${apiKey.startsWith('$2') ? 'BCrypt' : 'Legacy'})`);
-        return apiKey;
-      }
-    }
-
-    // If environment variable is truncated, try to read from files again
-    if (apiKey && apiKey.length < 50 && !isValidCurseForgeApiKey(apiKey)) {
-      log(
-        LOG_LEVEL.WARN,
-        "Environment variable appears truncated, attempting to read from .env files"
-      );
-      for (const envPath of envFiles) {
-        try {
-          if (fs.existsSync(envPath)) {
-            const envContent = fs.readFileSync(envPath, "utf8");
-            const lines = envContent.split("\n");
-            const curseforgeLine = lines.find((line) =>
-              line.trim().startsWith("CURSEFORGE_API_KEY=")
-            );
-            if (curseforgeLine) {
-              const fileKey = curseforgeLine.split("=")[1]?.trim() || "";
-              const cleanKey = fileKey.replace(/^["'](.*)["']$/, '$1');
-
-              if (isValidCurseForgeApiKey(cleanKey)) {
-                log(
-                  LOG_LEVEL.INFO,
-                  `Using API key from ${path.basename(envPath)} file (environment variable was truncated)`
-                );
-                return cleanKey;
-              }
-            }
-          }
-        } catch (error) {
-          console.error(`Error reading API key from ${path.basename(envPath)}:`, error);
-        }
-      }
-    }
-
-    return apiKey || "";
+    // No valid API key found
+    log(LOG_LEVEL.ERROR, "No valid CurseForge API key found in Global Settings or environment variables");
+    throw new CurseForgeAuthenticationError();
   }
 
   /**
@@ -533,16 +476,27 @@ export class CurseForgeAPI {
     // Wait for token bucket
     await this.tokenBucket.consume();
 
-    // Add timeout to prevent hanging requests
+    // Add timeout to prevent hanging requests - use configurable timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    const timeoutId = setTimeout(() => {
+      log(LOG_LEVEL.WARN, `Request to ${endpoint} timed out after ${this.REQUEST_TIMEOUT}ms`);
+      controller.abort();
+    }, this.REQUEST_TIMEOUT);
 
     try {
+      const apiKey = this.getApiKey();
+      if (!apiKey) {
+        throw new CurseForgeAuthenticationError();
+      }
+
+      log(LOG_LEVEL.DEBUG, `Making request to ${this.BASE_URL}${endpoint}`);
+      
       const response = await fetch(`${this.BASE_URL}${endpoint}`, {
         ...options,
         headers: {
           Accept: "application/json",
-          "X-API-Key": this.getApiKey(),
+          "X-API-Key": apiKey,
+          "User-Agent": "Saints-Ascended/1.0",
           ...options.headers,
         },
         signal: controller.signal,
@@ -554,29 +508,35 @@ export class CurseForgeAPI {
       this.updateRateLimitInfo(response);
 
       if (response.ok) {
+        log(LOG_LEVEL.DEBUG, `Successful response from ${endpoint} (${response.status})`);
         return await response.json();
       }
 
       // Handle specific error cases
       if (response.status === 401) {
+        log(LOG_LEVEL.ERROR, `Authentication failed for ${endpoint}`);
         throw new CurseForgeAuthenticationError();
       }
 
       if (response.status === 403) {
+        log(LOG_LEVEL.ERROR, `Access forbidden for ${endpoint}`);
         throw new CurseForgeForbiddenError();
       }
 
       if (response.status === 404) {
+        log(LOG_LEVEL.WARN, `Resource not found: ${endpoint}`);
         throw new CurseForgeAPIError(`${endpoint} not found`, 404, "NOT_FOUND");
       }
 
       if (response.status === 429) {
         const retryAfter = this.getRetryAfterHeader(response);
+        log(LOG_LEVEL.WARN, `Rate limit exceeded for ${endpoint}, retry after ${retryAfter}ms`);
         throw new CurseForgeRateLimitError(retryAfter);
       }
 
       // Handle other errors
       const errorData = await response.json().catch(() => ({}));
+      log(LOG_LEVEL.ERROR, `HTTP error ${response.status} for ${endpoint}: ${errorData.errorMessage || 'Unknown error'}`);
       throw new CurseForgeAPIError(
         errorData.errorMessage || `HTTP ${response.status}`,
         response.status,
@@ -595,27 +555,42 @@ export class CurseForgeAPI {
 
         if (isConnectionError && retryCount < this.MAX_RETRIES) {
           const backoffDelay = Math.pow(2, retryCount) * this.RETRY_DELAY;
-          log(LOG_LEVEL.WARN, `Network error (${errorCause?.code}), retrying in ${backoffDelay}ms (attempt ${retryCount + 1}/${this.MAX_RETRIES})`);
+          log(LOG_LEVEL.WARN, `Network error (${errorCause?.code}) for ${endpoint}, retrying in ${backoffDelay}ms (attempt ${retryCount + 1}/${this.MAX_RETRIES})`);
           
           await this.delay(backoffDelay);
           return this.performRequest(endpoint, options, retryCount + 1);
         }
+
+        log(LOG_LEVEL.ERROR, `Network error for ${endpoint}: ${errorCause?.code || error.message}`);
+        throw new CurseForgeNetworkError(errorCause?.code || error.message);
       }
 
       // Handle AbortError (timeout)
       if (error instanceof Error && error.name === 'AbortError') {
         if (retryCount < this.MAX_RETRIES) {
           const backoffDelay = Math.pow(2, retryCount) * this.RETRY_DELAY;
-          log(LOG_LEVEL.WARN, `Request timeout, retrying in ${backoffDelay}ms (attempt ${retryCount + 1}/${this.MAX_RETRIES})`);
+          log(LOG_LEVEL.WARN, `Request timeout for ${endpoint}, retrying in ${backoffDelay}ms (attempt ${retryCount + 1}/${this.MAX_RETRIES})`);
           
           await this.delay(backoffDelay);
           return this.performRequest(endpoint, options, retryCount + 1);
         }
-        throw new CurseForgeAPIError('Request timeout', 408);
+        
+        log(LOG_LEVEL.ERROR, `Request timeout for ${endpoint} after ${this.MAX_RETRIES} retries`);
+        throw new CurseForgeTimeoutError();
       }
 
-      // Re-throw other errors
+      // Re-throw CurseForge specific errors
+      if (error instanceof CurseForgeAPIError) {
       throw error;
+      }
+
+      // Handle other unexpected errors
+      log(LOG_LEVEL.ERROR, `Unexpected error for ${endpoint}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new CurseForgeAPIError(
+        `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        0,
+        "UNKNOWN_ERROR"
+      );
     }
   }
 
@@ -1007,6 +982,77 @@ export class CurseForgeAPI {
   }
 
   /**
+   * Get multiple mods by IDs using the bulk endpoint
+   * This is more efficient than calling getModDetails for each mod individually
+   */
+  static async getModsByIds(modIds: number[]): Promise<CurseForgeMod[]> {
+    try {
+      if (!modIds || modIds.length === 0) {
+        return [];
+      }
+
+      // Validate mod IDs
+      const validModIds = modIds.filter(id => id && id > 0);
+      if (validModIds.length === 0) {
+        return [];
+      }
+
+      // Check cache first for each mod
+      const cachedMods: CurseForgeMod[] = [];
+      const uncachedModIds: number[] = [];
+
+      for (const modId of validModIds) {
+        const cachedMod = await modCacheClient.getMod(modId);
+        if (cachedMod) {
+          cachedMods.push(cachedMod as CurseForgeMod);
+        } else {
+          uncachedModIds.push(modId);
+        }
+      }
+
+      // If all mods are cached, return them
+      if (uncachedModIds.length === 0) {
+        log(LOG_LEVEL.DEBUG, `All ${validModIds.length} mods found in cache`);
+        return cachedMods;
+      }
+
+      log(LOG_LEVEL.DEBUG, `Fetching ${uncachedModIds.length} mods from API (${cachedMods.length} from cache)`);
+
+      // Fetch uncached mods using bulk endpoint
+      const requestBody = {
+        modIds: uncachedModIds,
+        filterPcOnly: true // Filter for PC-compatible mods only
+      };
+
+      const data = await this.makeRequest<{ data: CurseForgeMod[] }>(
+        `/mods`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+        }
+      );
+
+      // Store fetched mods in cache
+      for (const mod of data.data) {
+        await modCacheClient.setMod(mod as CurseForgeModData);
+      }
+
+      // Combine cached and fetched mods
+      const allMods = [...cachedMods, ...data.data];
+
+      log(LOG_LEVEL.DEBUG, `Successfully fetched ${data.data.length} mods from API, total: ${allMods.length}`);
+
+      return allMods;
+    } catch (error) {
+      console.error(`Failed to get mods by IDs [${modIds.join(', ')}]:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Get mod categories for Ark: Survival Ascended
    */
   static async getCategories(): Promise<Array<{ id: number; name: string }>> {
@@ -1290,11 +1336,24 @@ export class CurseForgeAPI {
    */
   static checkApiKeyConfiguration(): {
     hasApiKey: boolean;
-    source: "env" | "file" | "none";
+    source: "global" | "env" | "file" | "none";
     keyLength: number;
     isValidFormat: boolean;
     message: string;
   } {
+    // Check global settings first
+    const globalApiKey = getGlobalCurseForgeApiKey();
+    if (globalApiKey && isValidCurseForgeApiKey(globalApiKey)) {
+      return {
+        hasApiKey: true,
+        source: "global",
+        keyLength: globalApiKey.length,
+        isValidFormat: true,
+        message: `API key found in global settings (${globalApiKey.startsWith('$2') ? 'BCrypt' : 'Legacy'} format, ${globalApiKey.length} chars)`
+      };
+    }
+
+    // Fallback to environment variable for backward compatibility
     const apiKey = process.env.CURSEFORGE_API_KEY;
     let fileKey = "";
 
@@ -1306,21 +1365,23 @@ export class CurseForgeAPI {
       if (fs.existsSync(envPath)) {
         const envContent = fs.readFileSync(envPath, "utf8");
         const lines = envContent.split("\n");
-        const curseforgeLine = lines.find((line) =>
+        const curseforgeLine = lines.find(line => 
           line.trim().startsWith("CURSEFORGE_API_KEY=")
         );
+
         if (curseforgeLine) {
-          const keyPart = curseforgeLine.split("=")[1]?.trim() || "";
-          fileKey = keyPart.replace(/^["'](.*)["']$/, '$1');
+          const keyValue = curseforgeLine.split("=", 2)[1]?.trim();
+          if (keyValue) {
+            fileKey = keyValue.replace(/^["']|["']$/g, "");
+          }
         }
       }
     } catch (error) {
-      console.error("Error reading API key from .env.local:", error);
+      // Ignore file reading errors
     }
 
-    // Determine which key to use
     let finalKey = "";
-    let source: "env" | "file" | "none" = "none";
+    let source: "global" | "env" | "file" | "none" = "none";
 
     if (fileKey && isValidCurseForgeApiKey(fileKey)) {
       finalKey = fileKey;
@@ -1334,18 +1395,11 @@ export class CurseForgeAPI {
     const isValidFormat = isValidCurseForgeApiKey(finalKey);
 
     let message = "";
-    if (!finalKey) {
-      message =
-        "No API key found. Please add CURSEFORGE_API_KEY to your .env.local file or environment variables.";
-    } else if (finalKey.length < 32) {
-      message =
-        "API key appears to be truncated. Please check your .env.local file or environment variable configuration.";
-    } else if (!isValidFormat) {
-      message =
-        "API key format appears invalid. CurseForge API keys should be either BCrypt hash format ($2a$10$...) or alphanumeric and at least 32 characters long.";
-    } else {
+    if (finalKey) {
       const keyFormat = finalKey.startsWith('$2') ? "BCrypt hash" : "Legacy alphanumeric";
-      message = `API key configured successfully (${source === "file" ? "from .env.local file" : "from environment variable"}, ${keyFormat} format).`;
+      message = `API key found in ${source} (${keyFormat} format, ${finalKey.length} chars)`;
+    } else {
+      message = "No valid API key found. Please configure your CurseForge API key in global settings or environment variables.";
     }
 
     return {
@@ -1353,7 +1407,7 @@ export class CurseForgeAPI {
       source,
       keyLength: finalKey.length,
       isValidFormat,
-      message,
+      message
     };
   }
 

@@ -31,13 +31,15 @@ Saints Ascended is a comprehensive server management tool designed specifically 
    - Run `npm install` to install dependencies
 
 2. **Configure Your Environment**
-   - Copy `.env.example` to `.env.local`
-   - Add your CurseForge API key (get one from [CurseForge Console](https://console.curseforge.com))
-   - Configure your database settings
+   - Run `node scripts/setup-env.js` to set up the environment
+   - Get a CurseForge API key from [CurseForge Console](https://console.curseforge.com)
+   - Set your API key in the app's Global Settings (gear icon in the interface)
+   - No `.env` files needed - everything is managed through the app interface!
 
 3. **Start the Application**
    - Run `npm run dev` to start the development server
    - Open your browser to `http://localhost:3000`
+   - Configure your CurseForge API key in Global Settings
    - Begin managing your ARK servers!
 
 ### Server Deployment
@@ -94,6 +96,24 @@ bun prisma db push
 
 # 6. Start the application
 bun start
+```
+
+### Configuration
+
+#### **CurseForge API Key Setup**
+1. Visit [CurseForge Console](https://console.curseforge.com)
+2. Create an account or log in
+3. Navigate to API Keys section
+4. Create a new API key for your application
+5. Copy the API key (BCrypt hash format)
+6. Open the Saints Ascended app
+7. Go to Global Settings (gear icon)
+8. Paste your API key and save
+
+#### **Verification**
+After setting up your API key, verify it works:
+```bash
+node scripts/verify-api-key.js
 ```
 
 ### For Players

@@ -31,18 +31,12 @@ This guide will help you install and configure the Saints Ascended dashboard for
    cd saints-ascended
    ```
 
-2. **Set up environment variables**
+2. **Set up environment**
    ```sh
-   cp .env.example .env
+   node scripts/setup-env.js
    ```
    
-   **CRITICAL:** Edit the `.env` file and add your CurseForge API key:
-   - Go to https://console.curseforge.com/
-   - Create an account or sign in
-   - Create a new API key
-   - Replace `YOUR_CURSEFORGE_API_KEY_HERE` with your actual API key
-   
-   The application **will NOT work** without a valid CurseForge API key!
+   This will create the necessary directories and set up the database path.
 
 3. **Install dependencies**
    ```sh
@@ -64,39 +58,65 @@ This guide will help you install and configure the Saints Ascended dashboard for
    bun run dev
    ```
 
-6. **Access the dashboard**
-   Open [http://localhost:3000](http://localhost:3000) in your browser.
+6. **Configure CurseForge API Key**
+   - Open [http://localhost:3000](http://localhost:3000) in your browser
+   - Click the gear icon (Global Settings) in the top right
+   - Enter your CurseForge API key and save
+   - **CRITICAL:** The application **will NOT work** without a valid CurseForge API key!
+
+7. **Verify API Key**
+   ```sh
+   node scripts/verify-api-key.js
+   ```
+
+## CurseForge API Key Setup
+
+**Getting Your API Key:**
+1. Go to https://console.curseforge.com/
+2. Create an account or sign in
+3. Navigate to API Keys section
+4. Create a new API key for your application
+5. Copy the API key (BCrypt hash format, starts with `$2a$10$`)
+
+**Setting Your API Key:**
+1. Open the Saints Ascended app in your browser
+2. Click the gear icon (Global Settings) in the top right corner
+3. Paste your CurseForge API key in the designated field
+4. Click "Save Settings"
+5. Verify it works by running `node scripts/verify-api-key.js`
 
 ## Environment Variables
 
-The `.env` file contains critical configuration. Here are the required variables:
+The application now uses Global Settings for configuration, but you can still set these environment variables if needed:
 
 ```bash
 # Database path - points to your SQLite database
 DATABASE_URL="file:./prisma/data/mods.db"
 
-# CurseForge API key - REQUIRED for mod management
+# CurseForge API key - Can be set in Global Settings instead
 CURSEFORGE_API_KEY="your_actual_api_key_here"
 
 # Application environment
 NODE_ENV="development"
 ```
 
+**Note:** The CurseForge API key is now primarily managed through the app's Global Settings interface, making it easier to configure without editing files.
+
 ## Deployment to Another Server
 
 When moving the project to a different server:
 
 1. **Copy the entire project directory**
-2. **Copy your `.env` file** (most important!)
-3. **Run the setup script again:**
+2. **Run the setup script:**
    - Windows: `install/setup.bat`
    - Linux/macOS: `./install/setup.sh`
-4. **Alternative manual deployment:**
+3. **Alternative manual deployment:**
    ```bash
    npm install
    npm run db:deploy
    npm run dev
    ```
+4. **Configure your API key in Global Settings** (gear icon in the app interface)
 
 ## Database Deployment Commands
 
@@ -125,13 +145,14 @@ npm run db:push
 ### Common Issues
 
 1. **"CURSEFORGE_API_KEY not configured" error:**
-   - Check that your `.env` file exists
-   - Verify the API key is correctly set (not the placeholder)
+   - Check that you've set the API key in Global Settings (gear icon)
+   - Verify the API key is correctly copied from CurseForge Console
    - Ensure there are no extra spaces or quotes
+   - Run `node scripts/verify-api-key.js` to test
 
 2. **"Environment variable not found: DATABASE_URL" error:**
+   - Run `node scripts/setup-env.js` to set up the environment
    - Run the appropriate deployment script for your system
-   - Check that the `.env` file exists and has the correct DATABASE_URL
 
 3. **Database migration errors:**
    - Delete `prisma/migrations` folder and run `npm run db:push`
@@ -142,6 +163,11 @@ npm run db:push
    chmod +x install/setup.sh
    chmod +x deploy-db.sh
    ```
+
+5. **API key format issues:**
+   - CurseForge API keys should be in BCrypt hash format (starts with `$2a$10$`)
+   - If you see a warning about the format, it's likely correct - CurseForge uses BCrypt hashes
+   - Run `node scripts/verify-api-key.js` to confirm it works
 
 ## Installer Scripts
 
@@ -168,7 +194,7 @@ npm run db:push
 - Add mods by pasting one or more CurseForge mod IDs (comma-separated).
 - The dashboard will fetch mod info and cache it for instant UI updates.
 - Remove or reorder mods as needed.
-- **Note:** Requires a valid CurseForge API key!
+- **Note:** Requires a valid CurseForge API key configured in Global Settings!
 
 ## Configuration Editing
 

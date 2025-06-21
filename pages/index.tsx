@@ -69,6 +69,7 @@ export default function Dashboard() {
         siteTitle: "Ark Server Manager",
         favicon: "🦕",
         steamCmdPath: "",
+        curseforgeApiKey: "",
         cacheRefreshInterval: 5,
         cacheEnabled: true,
         updatedAt: new Date(),

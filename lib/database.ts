@@ -15,14 +15,33 @@ const createPrismaClient = (): PrismaClient => {
         url: env.database.url,
       },
     },
-    log: env.isDevelopment ? ['query', 'error', 'warn'] : ['error'],
+    log: env.isDevelopment ? ['error', 'warn'] : ['error'],
     errorFormat: 'pretty',
   });
 
   // Handle connection errors gracefully
   client.$connect()
-    .then(() => {
+    .then(async () => {
       console.log(`✅ Database connected successfully (${env.database.type})`);
+      
+      // Apply SQLite performance optimizations
+      if (env.database.type === 'sqlite') {
+        try {
+          // Enable WAL mode for better concurrency
+          await client.$executeRaw`PRAGMA journal_mode = WAL`;
+          // Increase cache size for better performance
+          await client.$executeRaw`PRAGMA cache_size = 10000`;
+          // Reduce sync overhead
+          await client.$executeRaw`PRAGMA synchronous = NORMAL`;
+          // Enable memory-mapped I/O
+          await client.$executeRaw`PRAGMA mmap_size = 268435456`; // 256MB
+          // Optimize for faster queries
+          await client.$executeRaw`PRAGMA temp_store = MEMORY`;
+          console.log('✅ SQLite performance optimizations applied');
+        } catch (pragmaError) {
+          console.warn('⚠️  Failed to apply SQLite optimizations:', pragmaError);
+        }
+      }
     })
     .catch((error) => {
       console.error('❌ Database connection failed:', error);

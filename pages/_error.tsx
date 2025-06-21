@@ -1,6 +1,8 @@
 import { NextPageContext } from 'next';
-import Link from 'next/link';
-import { ExclamationTriangleIcon, HomeIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { Layout } from '@/components/ui/Layout';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/badge';
 
 interface ErrorProps {
   statusCode?: number;
@@ -8,159 +10,144 @@ interface ErrorProps {
   err?: Error;
 }
 
-function Error({ statusCode, hasGetInitialPropsRun: _hasGetInitialPropsRun, err }: ErrorProps) {
-  const isClientSideError = statusCode === undefined;
-  const isServerSideError = statusCode !== undefined && statusCode >= 500;
+function Error({ statusCode, hasGetInitialPropsRun, err }: ErrorProps) {
+  const isClientSideError = !statusCode;
+  const isServerSideError = !!statusCode && statusCode !== 404;
 
   return (
-    <div className="min-h-screen bg-base-100 text-base-content flex flex-col justify-center py-12 px-4">
-      <div className="container mx-auto max-w-2xl">
+    <div className="min-h-screen bg-background text-foreground flex flex-col justify-center py-12 px-4">
+      <div className="max-w-md mx-auto text-center space-y-8">
         {/* Error Icon */}
-        <div className="flex justify-center mb-12">
-          <div className="w-24 h-24 sm:w-32 sm:h-32 bg-error/20 rounded-2xl flex items-center justify-center ring-2 ring-error/30 shadow-glow shadow-error/20">
-            <ExclamationTriangleIcon className="h-12 w-12 sm:h-16 sm:w-16 text-error drop-shadow-glow" />
-          </div>
+        <div className="text-6xl text-destructive animate-pulse">
+          ⚠️
         </div>
-        
-        <div className="text-center space-y-8">
-          {/* Error Header */}
-          <div>
-            <h1 className="text-5xl sm:text-6xl font-bold text-error mb-4 font-display tracking-wide">
-              {statusCode || 'Error'}
-            </h1>
-            <h2 className="text-2xl sm:text-3xl font-semibold text-base-content mb-4">
-              {getErrorMessage(statusCode, isClientSideError)}
-            </h2>
-            <p className="text-lg text-base-content/70 font-mono max-w-md mx-auto">
-              {getErrorDescription(statusCode, isClientSideError, isServerSideError)}
-            </p>
-          </div>
 
-          {/* Development error details */}
-          {process.env.NODE_ENV === 'development' && err && (
-            <div className="card bg-base-200 shadow-xl border border-error/20 rounded-2xl">
-              <div className="card-body p-6">
-                <h3 className="text-lg font-semibold text-error mb-4">
-                  Development Error Details:
-                </h3>
-                <div className="bg-base-300 rounded-xl p-4 overflow-x-auto">
-                  <pre className="text-sm text-error/80 whitespace-pre-wrap font-mono">
-                    {err.stack || err.message}
-                  </pre>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              href="/"
-              className="btn btn-primary btn-lg rounded-xl shadow-lg hover:shadow-glow hover:shadow-primary/30 transition-all duration-300 font-semibold tracking-wide"
-            >
-              <HomeIcon className="h-5 w-5" />
-              Back to Dashboard
-            </Link>
-            
-            <button
-              onClick={() => window.location.reload()}
-              className="btn btn-outline btn-lg rounded-xl hover:bg-secondary hover:border-secondary hover:text-secondary-content transition-all duration-300 font-semibold tracking-wide"
-            >
-              <ArrowPathIcon className="h-5 w-5" />
-              Try Again
-            </button>
-          </div>
+        {/* Error Title */}
+        <div>
+          <h1 className="text-4xl font-bold text-foreground mb-2 font-display tracking-wide">
+            {statusCode || 'CLIENT ERROR'}
+          </h1>
+          <h2 className="text-2xl sm:text-3xl font-semibold text-foreground mb-4">
+            {getErrorTitle(statusCode)}
+          </h2>
+          <p className="text-lg text-muted-foreground font-mono max-w-md mx-auto">
+            {getErrorMessage(statusCode)}
+          </p>
+        </div>
 
-          {/* Error Type Indicator */}
-          <div className="card bg-base-200 shadow-xl border border-base-300 rounded-2xl">
-            <div className="card-body p-6">
-              <div className="flex items-center justify-center gap-4">
-                <div className={`badge badge-lg gap-2 ${
-                  isClientSideError ? 'badge-warning' : 
-                  isServerSideError ? 'badge-error' : 'badge-info'
-                }`}>
-                  <div className="w-2 h-2 rounded-full bg-current"></div>
-                  {isClientSideError ? 'Client Error' : 
-                   isServerSideError ? 'Server Error' : 'Request Error'}
-                </div>
-                <span className="text-base-content/60 font-mono">
-                  Status: {statusCode || 'Unknown'}
-                </span>
-              </div>
+        {/* Error Details Card */}
+        <Card className="bg-card shadow-xl border border-destructive/20 rounded-2xl">
+          <CardContent className="p-6">
+            <h3 className="text-lg font-semibold text-foreground mb-4">Error Details</h3>
+            <div className="bg-muted rounded-xl p-4 overflow-x-auto">
+              <pre className="text-sm font-mono text-muted-foreground">
+                {err?.stack || `HTTP ${statusCode || 'CLIENT'} Error`}
+              </pre>
             </div>
-          </div>
+          </CardContent>
+        </Card>
+
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <Button
+            onClick={() => window.location.reload()}
+            className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl shadow-lg hover:shadow-glow transition-all duration-300 font-semibold tracking-wide"
+            size="lg"
+          >
+            🔄 Reload Page
+          </Button>
+          <Button
+            onClick={() => window.history.back()}
+            variant="outline"
+            className="border-secondary hover:bg-secondary hover:border-secondary hover:text-secondary-foreground transition-all duration-300 font-semibold tracking-wide rounded-xl"
+            size="lg"
+          >
+            ← Go Back
+          </Button>
         </div>
-      </div>
-      
-      {/* Footer */}
-      <div className="mt-16 text-center">
-        <div className="card bg-base-200 shadow-xl border border-base-300 rounded-2xl">
-          <div className="card-body p-4">
-            <p className="text-sm text-base-content/60 font-mono">
-              Ark Server Manager - Error Handler
+
+        {/* Error Type Badge */}
+        <Card className="bg-card shadow-xl border border-border rounded-2xl">
+          <CardContent className="p-6">
+            <h3 className="text-lg font-semibold text-foreground mb-4">Error Classification</h3>
+            <Badge
+              variant={isClientSideError ? "secondary" : isServerSideError ? "destructive" : "default"}
+              className="gap-2 px-4 py-2 text-base"
+            >
+              {isClientSideError ? '🔧' : isServerSideError ? '🛠️' : 'ℹ️'}
+              <span className="capitalize">
+                {isClientSideError ? 'Client Error' :
+                 isServerSideError ? 'Server Error' : 'Application Error'}
+              </span>
+            </Badge>
+            <p className="text-sm text-muted-foreground mt-4">
+              {isClientSideError
+                ? 'This error occurred in your browser. Try refreshing the page.'
+                : isServerSideError
+                ? 'This error occurred on our servers. Our team has been notified.'
+                : 'An unexpected error occurred. Please try again.'}
             </p>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
+
+        {/* Footer */}
+        <Card className="bg-card shadow-xl border border-border rounded-2xl">
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground font-mono">
+              Error Code: {statusCode || 'UNKNOWN'} | Timestamp: {new Date().toISOString()}
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
 }
 
-function getErrorMessage(statusCode?: number, isClientSideError?: boolean): string {
-  if (isClientSideError) {
-    return 'Client-side Error';
-  }
-  
+Error.getInitialProps = ({ res, err }: NextPageContext) => {
+  const statusCode = res ? res.statusCode : err ? err.statusCode : 404;
+  return { statusCode };
+};
+
+function getErrorTitle(statusCode?: number): string {
   switch (statusCode) {
-    case 400:
-      return 'Bad Request';
-    case 401:
-      return 'Unauthorized';
-    case 403:
-      return 'Forbidden';
     case 404:
       return 'Page Not Found';
     case 500:
       return 'Internal Server Error';
-    case 502:
-      return 'Bad Gateway';
+    case 403:
+      return 'Access Forbidden';
+    case 401:
+      return 'Unauthorized';
+    case 400:
+      return 'Bad Request';
     case 503:
       return 'Service Unavailable';
+    case 502:
+      return 'Bad Gateway';
     default:
-      return 'An Error Occurred';
+      return 'Something went wrong';
   }
 }
 
-function getErrorDescription(
-  statusCode?: number, 
-  isClientSideError?: boolean, 
-  isServerSideError?: boolean
-): string {
-  if (isClientSideError) {
-    return 'An unexpected error occurred in your browser. Please try refreshing the page.';
-  }
-  
-  if (isServerSideError) {
-    return 'A server error occurred. Our team has been notified and is working to fix the issue.';
-  }
-  
+function getErrorMessage(statusCode?: number): string {
   switch (statusCode) {
-    case 400:
-      return 'The request was invalid. Please check your input and try again.';
-    case 401:
-      return 'You need to be authenticated to access this resource.';
-    case 403:
-      return 'You do not have permission to access this resource.';
     case 404:
       return 'The page you are looking for could not be found.';
+    case 500:
+      return 'An internal server error occurred. Please try again later.';
+    case 403:
+      return 'You do not have permission to access this resource.';
+    case 401:
+      return 'You must be logged in to access this resource.';
+    case 400:
+      return 'The request was invalid. Please check your input and try again.';
+    case 503:
+      return 'The service is temporarily unavailable. Please try again later.';
+    case 502:
+      return 'Bad gateway error. Please try again later.';
     default:
-      return 'Something went wrong. Please try again or contact support if the problem persists.';
+      return 'An unexpected error occurred. Please try again.';
   }
 }
-
-Error.getInitialProps = async ({ res, err }: NextPageContext) => {
-  const statusCode = res ? res.statusCode : err ? err.statusCode ?? 500 : 404;
-  return { statusCode };
-};
 
 export default Error; 

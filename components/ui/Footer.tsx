@@ -1,26 +1,24 @@
 import React from 'react';
 
-export function Footer() {
+export const Footer: React.FC = () => {
   return (
-    <footer className="bg-base-200/50 border-t border-base-content/10 py-4 w-full">
-      <div className="container mx-auto px-6">
-        <div className="flex flex-col items-center justify-center gap-4 text-center">
-          <div className="flex items-center gap-4 text-sm text-base-content/60">
-            <span>ARK Server Manager v1.0.0</span>
-            <span>•</span>
-            <span>Built with Next.js & DaisyUI</span>
-            <span>•</span>
-            <a 
-              href="https://discord.gg/saintsgaming"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-base-content/60 hover:text-primary transition-colors"
-            >
-              Discord
-            </a>
+    <footer className="bg-card border-t border-border py-6 px-4 mt-auto">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+          <div className="text-sm text-muted-foreground font-mono">
+            <span>Built with Next.js & shadcn/ui</span>
+          </div>
+          
+          <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+            <span className="font-mono">Saints Ascended Server Manager</span>
+            <span className="text-primary">v1.0.0</span>
+          </div>
+          
+          <div className="text-xs text-muted-foreground font-mono">
+            © 2024 Cyberpunk Server Management
           </div>
         </div>
       </div>
     </footer>
   );
-} 
+}; 

@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { Layout } from '@/components/ui/Layout';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/badge';
 import { 
   ArrowLeftIcon, 
   ServerIcon as _ServerIcon, 
@@ -98,42 +101,42 @@ const ServerDetailPage = () => {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'online':
-        return <CheckCircleIcon className="h-6 w-6 text-success drop-shadow-glow" />;
+        return <CheckCircleIcon className="h-6 w-6 text-matrix-400 drop-shadow-glow" />;
       case 'offline':
-        return <ExclamationTriangleIcon className="h-6 w-6 text-error drop-shadow-glow" />;
+        return <ExclamationTriangleIcon className="h-6 w-6 text-destructive drop-shadow-glow" />;
       case 'starting':
       case 'stopping':
-        return <ClockIcon className="h-6 w-6 text-warning drop-shadow-glow animate-pulse" />;
+        return <ClockIcon className="h-6 w-6 text-cyber-warning drop-shadow-glow animate-pulse" />;
       default:
-        return <SignalIcon className="h-6 w-6 text-base-content/50" />;
+        return <SignalIcon className="h-6 w-6 text-muted-foreground" />;
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'online':
-        return 'text-success';
+        return 'text-matrix-400';
       case 'offline':
-        return 'text-error';
+        return 'text-destructive';
       case 'starting':
       case 'stopping':
-        return 'text-warning';
+        return 'text-cyber-warning';
       default:
-        return 'text-base-content/50';
+        return 'text-muted-foreground';
     }
   };
 
   const getStatusBgColor = (status: string) => {
     switch (status) {
       case 'online':
-        return 'bg-success/20 ring-success/30';
+        return 'bg-matrix-500/20 ring-matrix-500/30';
       case 'offline':
-        return 'bg-error/20 ring-error/30';
+        return 'bg-destructive/20 ring-destructive/30';
       case 'starting':
       case 'stopping':
-        return 'bg-warning/20 ring-warning/30';
+        return 'bg-cyber-warning/20 ring-cyber-warning/30';
       default:
-        return 'bg-base-content/10 ring-base-content/20';
+        return 'bg-muted/20 ring-border';
     }
   };
 
@@ -199,27 +202,27 @@ const ServerDetailPage = () => {
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         sidebarOpen={sidebarOpen}
       >
-        <div className="min-h-screen bg-base-100 text-base-content flex items-center justify-center px-4">
-          <div className="card bg-base-200 shadow-xl border border-base-300 rounded-2xl max-w-md w-full">
-            <div className="card-body text-center p-8">
-              <div className="w-16 h-16 bg-error/20 rounded-2xl flex items-center justify-center ring-2 ring-error/30 shadow-glow shadow-error/20 mx-auto mb-6">
-                <ExclamationTriangleIcon className="h-8 w-8 text-error drop-shadow-glow" />
+        <div className="min-h-screen bg-background text-foreground flex items-center justify-center px-4">
+          <Card className="max-w-md w-full shadow-xl border border-destructive/20 rounded-2xl">
+            <CardContent className="text-center p-8">
+              <div className="w-16 h-16 bg-destructive/20 rounded-2xl flex items-center justify-center ring-2 ring-destructive/30 shadow-glow mx-auto mb-6">
+                <ExclamationTriangleIcon className="h-8 w-8 text-destructive drop-shadow-glow" />
               </div>
-              <h1 className="text-2xl font-bold text-base-content mb-4 font-display">
+              <h1 className="text-2xl font-bold text-foreground mb-4 font-display">
                 Invalid Server ID
               </h1>
-              <p className="text-base-content/70 mb-6 font-mono">
+              <p className="text-muted-foreground mb-6 font-mono">
                 The server ID is missing or invalid.
               </p>
-              <button
+              <Button
                 onClick={() => router.push('/')}
-                className="btn btn-primary rounded-xl shadow-lg hover:shadow-glow hover:shadow-primary/30 transition-all duration-300 font-semibold tracking-wide"
+                className="btn-cyber rounded-xl shadow-lg hover:shadow-glow transition-all duration-300 font-semibold tracking-wide"
               >
-                <ArrowLeftIcon className="h-5 w-5" />
+                <ArrowLeftIcon className="h-5 w-5 mr-2" />
                 Return to Dashboard
-              </button>
-            </div>
-          </div>
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </Layout>
     );
@@ -235,10 +238,10 @@ const ServerDetailPage = () => {
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         sidebarOpen={sidebarOpen}
       >
-        <div className="min-h-screen bg-base-100 text-base-content flex items-center justify-center">
+        <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
           <div className="text-center">
-            <span className="loading loading-spinner loading-lg text-primary"></span>
-            <p className="mt-4 text-base-content/70 font-mono">Loading server details...</p>
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="mt-4 text-muted-foreground font-mono">Loading server details...</p>
           </div>
         </div>
       </Layout>
@@ -255,27 +258,27 @@ const ServerDetailPage = () => {
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         sidebarOpen={sidebarOpen}
       >
-        <div className="min-h-screen bg-base-100 text-base-content flex items-center justify-center px-4">
-          <div className="card bg-base-200 shadow-xl border border-base-300 rounded-2xl max-w-md w-full">
-            <div className="card-body text-center p-8">
-              <div className="w-16 h-16 bg-error/20 rounded-2xl flex items-center justify-center ring-2 ring-error/30 shadow-glow shadow-error/20 mx-auto mb-6">
-                <ExclamationTriangleIcon className="h-8 w-8 text-error drop-shadow-glow" />
+        <div className="min-h-screen bg-background text-foreground flex items-center justify-center px-4">
+          <Card className="max-w-md w-full shadow-xl border border-destructive/20 rounded-2xl">
+            <CardContent className="text-center p-8">
+              <div className="w-16 h-16 bg-destructive/20 rounded-2xl flex items-center justify-center ring-2 ring-destructive/30 shadow-glow mx-auto mb-6">
+                <ExclamationTriangleIcon className="h-8 w-8 text-destructive drop-shadow-glow" />
               </div>
-              <h1 className="text-2xl font-bold text-base-content mb-4 font-display">
+              <h1 className="text-2xl font-bold text-foreground mb-4 font-display">
                 Server Not Found
               </h1>
-              <p className="text-base-content/70 font-mono">
+              <p className="text-muted-foreground font-mono">
                 The server you&apos;re looking for doesn&apos;t exist.
               </p>
-              <button
+              <Button
                 onClick={() => router.push('/')}
-                className="btn btn-primary rounded-xl shadow-lg hover:shadow-glow hover:shadow-primary/30 transition-all duration-300 font-semibold tracking-wide"
+                className="btn-cyber rounded-xl shadow-lg hover:shadow-glow transition-all duration-300 font-semibold tracking-wide mt-6"
               >
-                <ArrowLeftIcon className="h-5 w-5" />
+                <ArrowLeftIcon className="h-5 w-5 mr-2" />
                 Return to Dashboard
-              </button>
-            </div>
-          </div>
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </Layout>
     );
@@ -306,81 +309,99 @@ const ServerDetailPage = () => {
           totalPlayers: status?.players?.current || 0
         }}
       >
-        <div className="min-h-screen bg-base-100 text-base-content">
+        <div className="min-h-screen bg-background text-foreground">
           {/* Header */}
-          <div className="bg-base-200/80 backdrop-blur-sm border-b border-base-300 shadow-lg sticky top-0 z-10">
+          <div className="bg-card/80 backdrop-blur-sm border-b border-border shadow-lg sticky top-0 z-10">
             <div className="container mx-auto px-4 py-8">
               <div className="flex items-center gap-4">
-                <button
+                <Button
                   onClick={() => router.push('/')}
-                  className="btn btn-ghost btn-circle hover:bg-base-300 transition-all duration-200"
+                  variant="ghost"
+                  size="icon"
+                  className="btn-cyber-ghost rounded-full hover:bg-muted/50 transition-all duration-200"
                   aria-label="Back to dashboard"
                 >
                   <ArrowLeftIcon className="h-6 w-6" />
-                </button>
+                </Button>
                 <div className="flex-1">
-                  <h1 className="text-4xl font-bold text-base-content font-display tracking-wide">
+                  <h1 className="text-4xl font-bold text-foreground font-display tracking-wide">
                     {server.name}
                   </h1>
-                  <p className="text-base-content/70 font-mono text-lg mt-2">
+                  <p className="text-muted-foreground font-mono text-lg mt-2">
                     {server.executablePath}:{server.port}
                   </p>
                 </div>
-                <div className={`badge badge-lg gap-2 px-4 py-3 rounded-xl font-semibold tracking-wide ${getStatusBgColor(currentStatus)} ${getStatusColor(currentStatus)}`}>
+                <Badge 
+                  className={`gap-2 px-4 py-3 rounded-xl font-semibold tracking-wide text-base ${getStatusBgColor(currentStatus)} ${getStatusColor(currentStatus)}`}
+                >
                   {getStatusIcon(currentStatus)}
-                  <span className="capitalize text-base">{currentStatus}</span>
-                </div>
+                  <span className="capitalize">{currentStatus}</span>
+                </Badge>
               </div>
             </div>
           </div>
 
           {/* Main Content */}
           <div className="container mx-auto px-6 py-12">
-            <div className="max-w-5xl mx-auto">
+            <div className="max-w-5xl mx-auto space-y-8">
               {/* Server Overview */}
-              <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-2xl mb-10">
-                <div className="p-8">
-                  <h2 className="text-2xl font-bold text-matrix-400 font-display tracking-wide">Server Overview</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-xl p-5 border border-matrix-500/30">
-                      <div className="flex items-center gap-3 mb-3">
-                        <UsersIcon className="h-6 w-6 text-accent" />
-                        <h3 className="text-lg font-semibold text-matrix-400">Players</h3>
-                      </div>
-                      <div className="text-3xl font-bold text-accent tracking-wide">
-                        {players.current}/{players.max}
-                      </div>
-                      <div className="text-sm font-mono text-matrix-400 mt-1">
-                        {Math.round((players.current / players.max) * 100)}% capacity
-                      </div>
-                    </div>
-                    <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-xl p-5 border border-matrix-500/30">
-                      <div className="flex items-center gap-3 mb-3">
-                        <SignalIcon className="h-6 w-6 text-primary" />
-                        <h3 className="text-lg font-semibold text-matrix-400">Map</h3>
-                      </div>
-                      <div className="text-xl font-bold text-matrix-400 truncate">{server.map}</div>
-                    </div>
-                    <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-xl p-5 border border-matrix-500/30">
-                      <div className="flex items-center gap-3 mb-3">
-                        <GlobeAltIcon className="h-6 w-6 text-info" />
-                        <h3 className="text-lg font-semibold text-matrix-400">Port</h3>
-                      </div>
-                      <div className="text-xl font-bold text-matrix-400">{server.port}</div>
-                    </div>
+              <Card className="card-cyber">
+                <CardHeader>
+                  <CardTitle className="text-2xl font-bold text-primary font-display tracking-wide">
+                    Server Overview
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <Card className="card-cyber-panel">
+                      <CardContent className="p-5">
+                        <div className="flex items-center gap-3 mb-3">
+                          <UsersIcon className="h-6 w-6 text-accent" />
+                          <h3 className="text-lg font-semibold text-foreground">Players</h3>
+                        </div>
+                        <div className="text-3xl font-bold text-accent tracking-wide">
+                          {players.current}/{players.max}
+                        </div>
+                        <div className="text-sm font-mono text-muted-foreground mt-1">
+                          {Math.round((players.current / players.max) * 100)}% capacity
+                        </div>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card className="card-cyber-panel">
+                      <CardContent className="p-5">
+                        <div className="flex items-center gap-3 mb-3">
+                          <SignalIcon className="h-6 w-6 text-primary" />
+                          <h3 className="text-lg font-semibold text-foreground">Map</h3>
+                        </div>
+                        <div className="text-xl font-bold text-foreground truncate">{server.map}</div>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card className="card-cyber-panel">
+                      <CardContent className="p-5">
+                        <div className="flex items-center gap-3 mb-3">
+                          <GlobeAltIcon className="h-6 w-6 text-neon-blue" />
+                          <h3 className="text-lg font-semibold text-foreground">Port</h3>
+                        </div>
+                        <div className="text-xl font-bold text-foreground">{server.port}</div>
+                      </CardContent>
+                    </Card>
                   </div>
-                  <div className="flex gap-4 mt-8 justify-center">
-                    <button
+                  
+                  <div className="flex gap-4 justify-center">
+                    <Button
                       onClick={() => handleServerAction(currentStatus === 'online' ? 'stop' : 'start')}
                       disabled={!!actionLoading || currentStatus === 'starting' || currentStatus === 'stopping'}
-                      className={`btn btn-md rounded-xl font-semibold tracking-wide transition-all duration-300 px-8 py-3 ${
+                      className={`px-8 py-3 rounded-xl font-semibold tracking-wide transition-all duration-300 ${
                         currentStatus === 'online' 
-                          ? 'btn-error hover:shadow-glow hover:shadow-error/30' 
-                          : 'btn-success hover:shadow-glow hover:shadow-success/30'
+                          ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:shadow-glow' 
+                          : 'bg-matrix-500 text-black hover:bg-matrix-400 hover:shadow-matrix-glow'
                       }`}
+                      size="lg"
                     >
                       {actionLoading ? (
-                        <span className="loading loading-spinner loading-sm"></span>
+                        <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
                       ) : currentStatus === 'online' ? (
                         <div className="flex items-center justify-center gap-3">
                           <StopIcon className="h-5 w-5" />
@@ -392,10 +413,10 @@ const ServerDetailPage = () => {
                           <span>Start Server</span>
                         </div>
                       )}
-                    </button>
+                    </Button>
                   </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
 
               {/* Server Configuration Modal */}
               {showConfigEditor && server && (
@@ -406,135 +427,131 @@ const ServerDetailPage = () => {
                 />
               )}
 
-              {/* Server Information Card */}
-              <div className="card bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-2xl">
-                <div className="card-body p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold text-matrix-400 font-display tracking-wide cyber-text">
-                      Server Information
-                    </h2>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => router.push(`/servers/${id}/edit`)}
-                        className="btn btn-sm btn-outline hover:bg-matrix-900/50 text-matrix-400 border-matrix-500/50 hover:border-matrix-500"
-                        title="Edit server"
-                      >
-                        <PencilIcon className="h-4 w-4" />
-                        Edit
-                      </button>
-                    </div>
-                  </div>
-                  <div className="space-y-6">
-                    <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-xl p-6 border border-matrix-500/30">
-                      <div className="text-base font-medium text-matrix-400 uppercase tracking-wider mb-3">Server ID</div>
-                      <div className="text-lg font-mono text-matrix-400">{server.id}</div>
-                    </div>
-                    <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-xl p-6 border border-matrix-500/30">
-                      <div className="text-base font-medium text-matrix-400 uppercase tracking-wider mb-3">Max Players</div>
-                      <div className="text-lg font-bold text-matrix-400">{server.maxPlayers}</div>
-                    </div>
-                    <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-xl p-6 border border-matrix-500/30">
-                      <div className="text-base font-medium text-matrix-400 uppercase tracking-wider mb-3">Executable Path</div>
-                      <div className="text-lg font-mono text-matrix-400 break-all">{server.executablePath}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Navigation and Details */}
+              {/* Navigation and Details Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
                 {/* Navigation Sidebar */}
                 <div className="lg:col-span-2">
-                  <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-2xl shadow-lg overflow-hidden sticky top-24">
-                    <div className="p-6">
-                      <h2 className="text-2xl font-bold text-matrix-400 mb-6 font-display tracking-wide">Quick Navigation</h2>
-                      <div className="space-y-4">
-                        <button
-                          onClick={() => router.push(`/servers/${server.id}/edit?tab=mods`)}
-                          className="btn btn-outline w-full rounded-xl hover:bg-matrix-900/50 text-matrix-400 hover:border-matrix-500 hover:text-matrix-400 transition-all duration-300 font-semibold tracking-wide text-base py-3"
-                        >
-                          <div className="flex items-center justify-center gap-3 w-full">
-                            <PuzzlePieceIcon className="h-5 w-5" />
-                            <span>Manage Mods</span>
-                          </div>
-                        </button>
-                        <button
-                          onClick={() => router.push(`/servers/${server.id}/edit?tab=cluster`)}
-                          className="btn btn-outline w-full rounded-xl hover:bg-matrix-900/50 text-matrix-400 hover:border-matrix-500 hover:text-matrix-400 transition-all duration-300 font-semibold tracking-wide text-base py-3"
-                        >
-                          <div className="flex items-center justify-center gap-3 w-full">
-                            <GlobeAltIcon className="h-5 w-5" />
-                            <span>Cluster Settings</span>
-                          </div>
-                        </button>
-                        <button
-                          onClick={() => router.push(`/servers/${server.id}/edit?tab=general`)}
-                          className="btn btn-outline w-full rounded-xl hover:bg-matrix-900/50 text-matrix-400 hover:border-matrix-500 hover:text-matrix-400 transition-all duration-300 font-semibold tracking-wide text-base py-3"
-                        >
-                          <div className="flex items-center justify-center gap-3 w-full">
-                            <CogIcon className="h-5 w-5" />
-                            <span>Server Config</span>
-                          </div>
-                        </button>
-                        <button
-                          onClick={() => setShowConfigEditor(!showConfigEditor)}
-                          className={`btn w-full rounded-xl transition-all duration-300 font-semibold tracking-wide text-base py-3 ${
-                            showConfigEditor 
-                              ? 'btn-primary hover:shadow-glow hover:shadow-primary/30' 
-                              : 'btn-outline hover:bg-matrix-900/50 hover:border-matrix-500 hover:text-matrix-400'
-                          }`}
-                        >
-                          <div className="flex items-center justify-center gap-3 w-full">
-                            <WrenchScrewdriverIcon className="h-5 w-5" />
-                            <span>{showConfigEditor ? 'Hide Config' : 'Quick Config'}</span>
-                          </div>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                  <Card className="card-cyber sticky top-24">
+                    <CardHeader>
+                      <CardTitle className="text-2xl font-bold text-primary font-display tracking-wide">
+                        Quick Navigation
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <Button
+                        onClick={() => router.push(`/servers/${server.id}/edit?tab=mods`)}
+                        variant="outline"
+                        className="w-full btn-cyber-outline rounded-xl py-3 text-base"
+                      >
+                        <PuzzlePieceIcon className="h-5 w-5 mr-3" />
+                        Manage Mods
+                      </Button>
+                      
+                      <Button
+                        onClick={() => router.push(`/servers/${server.id}/edit?tab=cluster`)}
+                        variant="outline"
+                        className="w-full btn-cyber-outline rounded-xl py-3 text-base"
+                      >
+                        <GlobeAltIcon className="h-5 w-5 mr-3" />
+                        Cluster Settings
+                      </Button>
+                      
+                      <Button
+                        onClick={() => router.push(`/servers/${server.id}/edit?tab=general`)}
+                        variant="outline"
+                        className="w-full btn-cyber-outline rounded-xl py-3 text-base"
+                      >
+                        <CogIcon className="h-5 w-5 mr-3" />
+                        Server Config
+                      </Button>
+                      
+                      <Button
+                        onClick={() => setShowConfigEditor(!showConfigEditor)}
+                        className={`w-full rounded-xl py-3 text-base ${
+                          showConfigEditor 
+                            ? 'btn-cyber hover:shadow-matrix-glow' 
+                            : 'btn-cyber-outline'
+                        }`}
+                      >
+                        <WrenchScrewdriverIcon className="h-5 w-5 mr-3" />
+                        {showConfigEditor ? 'Hide Config' : 'Quick Config'}
+                      </Button>
+                    </CardContent>
+                  </Card>
                 </div>
 
-                {/* Server Details */}
+                {/* Server Information */}
                 <div className="lg:col-span-3">
-                  <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-2xl shadow-lg overflow-hidden">
-                    <div className="p-8">
-                      <h2 className="text-2xl font-bold text-matrix-400 mb-6 font-display tracking-wide">Server Details</h2>
-                      <div className="space-y-6">
-                        <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-xl p-6 border border-matrix-500/30">
-                          <div className="text-base font-medium text-matrix-400 uppercase tracking-wider mb-3">Server ID</div>
-                          <div className="text-lg font-mono text-matrix-400">{server.id}</div>
-                        </div>
-                        <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-xl p-6 border border-matrix-500/30">
-                          <div className="text-base font-medium text-matrix-400 uppercase tracking-wider mb-3">Max Players</div>
-                          <div className="text-lg font-bold text-matrix-400">{server.maxPlayers}</div>
-                        </div>
-                        <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-xl p-6 border border-matrix-500/30">
-                          <div className="text-base font-medium text-matrix-400 uppercase tracking-wider mb-3">Executable Path</div>
-                          <div className="text-lg font-mono text-matrix-400 break-all">{server.executablePath}</div>
-                        </div>
+                  <Card className="card-cyber">
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-xl font-bold text-primary font-display tracking-wide">
+                          Server Information
+                        </CardTitle>
+                        <Button
+                          onClick={() => router.push(`/servers/${id}/edit`)}
+                          variant="outline"
+                          size="sm"
+                          className="btn-cyber-outline"
+                          title="Edit server"
+                        >
+                          <PencilIcon className="h-4 w-4 mr-2" />
+                          Edit
+                        </Button>
                       </div>
-                    </div>
-                  </div>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <Card className="card-cyber-panel">
+                        <CardContent className="p-6">
+                          <div className="text-base font-medium text-muted-foreground uppercase tracking-wider mb-3">
+                            Server ID
+                          </div>
+                          <div className="text-lg font-mono text-foreground">{server.id}</div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card className="card-cyber-panel">
+                        <CardContent className="p-6">
+                          <div className="text-base font-medium text-muted-foreground uppercase tracking-wider mb-3">
+                            Max Players
+                          </div>
+                          <div className="text-lg font-bold text-foreground">{server.maxPlayers}</div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card className="card-cyber-panel">
+                        <CardContent className="p-6">
+                          <div className="text-base font-medium text-muted-foreground uppercase tracking-wider mb-3">
+                            Executable Path
+                          </div>
+                          <div className="text-lg font-mono text-foreground break-all">{server.executablePath}</div>
+                        </CardContent>
+                      </Card>
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </Layout>
 
-      {showAddServerModal && (
-        <AddServerForm
-          onSuccess={handleAddServerSuccess}
-          onClose={() => setShowAddServerModal(false)}
-        />
-      )}
-      
-      <GlobalSettingsModal
-        settings={globalSettings}
-        onSettingsUpdate={handleGlobalSettingsUpdate}
-        onClose={() => setShowGlobalSettingsModal(false)}
-        isOpen={showGlobalSettingsModal}
-      />
+        {/* Modals */}
+        {showGlobalSettingsModal && (
+          <GlobalSettingsModal
+            isOpen={showGlobalSettingsModal}
+            settings={globalSettings}
+            onSettingsUpdate={handleGlobalSettingsUpdate}
+            onClose={handleGlobalSettingsClose}
+          />
+        )}
+
+        {showAddServerModal && (
+          <AddServerForm
+            onSuccess={handleAddServerSuccess}
+            onClose={handleAddServerCancel}
+          />
+        )}
+      </Layout>
     </>
   );
 };

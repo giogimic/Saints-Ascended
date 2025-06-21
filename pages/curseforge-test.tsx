@@ -1,17 +1,98 @@
 import React, { useState, useEffect } from "react";
 import { Layout } from "../components/ui/Layout";
 import { CurseForgeAPI } from "../lib/curseforge-api";
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'react-hot-toast';
+
+interface ApiKeyConfig {
+  hasApiKey: boolean;
+  isValidFormat: boolean;
+  gameId?: number;
+  gameName?: string;
+}
+
+interface CurseForgeGame {
+  id: number;
+  name: string;
+  slug: string;
+  dateModified: string;
+  assets: {
+    iconUrl: string;
+    tileUrl: string;
+    coverUrl: string;
+  };
+}
+
+interface CurseForgeMod {
+  id: number;
+  gameId: number;
+  name: string;
+  slug: string;
+  summary: string;
+  downloadCount: number;
+  dateCreated: string;
+  dateModified: string;
+  dateReleased: string;
+  isAvailable: boolean;
+  thumbsUpCount: number;
+  logo: {
+    thumbnailUrl: string;
+    url: string;
+  };
+  screenshots: Array<{
+    thumbnailUrl: string;
+    url: string;
+  }>;
+  mainFileId: number;
+  gamePopularityRank: number;
+  primaryCategoryId: number;
+  categories: Array<{
+    categoryId: number;
+    name: string;
+    url: string;
+    avatarUrl: string;
+    parentId: number;
+    rootId: number;
+    projectId: number;
+    avatarId: number;
+    gameId: number;
+  }>;
+  classId: number;
+  authors: Array<{
+    id: number;
+    name: string;
+    url: string;
+  }>;
+  links: {
+    websiteUrl: string;
+    wikiUrl?: string;
+    issuesUrl?: string;
+    sourceUrl?: string;
+  };
+}
 
 export default function CurseForgeTest() {
   const [gameId, setGameId] = useState(CurseForgeAPI.getGameId());
   const [testResult, setTestResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [apiKeyConfig, setApiKeyConfig] = useState<any>(null);
+  const [apiKeyConfig, setApiKeyConfig] = useState<ApiKeyConfig>({
+    hasApiKey: false,
+    isValidFormat: false,
+  });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<CurseForgeMod[]>([]);
+  const [games, setGames] = useState<CurseForgeGame[]>([]);
+  const [selectedGameId, setSelectedGameId] = useState<number | null>(null);
+  const [featuredMods, setFeaturedMods] = useState<CurseForgeMod[]>([]);
 
   // Load API key configuration on component mount
   useEffect(() => {
     checkApiKeyConfig();
+    loadGames();
   }, []);
 
   const checkApiKeyConfig = async () => {
@@ -19,10 +100,73 @@ export default function CurseForgeTest() {
       const response = await fetch("/api/curseforge/check-api-key");
       if (response.ok) {
         const data = await response.json();
-        setApiKeyConfig(data.data);
+        setApiKeyConfig(data);
       }
     } catch (error) {
       console.error("Failed to check API key config:", error);
+    }
+  };
+
+  const loadGames = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/curseforge/games');
+      const data = await response.json();
+      if (data.success) {
+        setGames(data.data || []);
+      }
+    } catch (error) {
+      console.error('Failed to load games:', error);
+      toast.error('Failed to load games');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      toast.error('Please enter a search query');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const gameParam = selectedGameId ? `&gameId=${selectedGameId}` : '';
+      const response = await fetch(`/api/curseforge/search?searchFilter=${encodeURIComponent(searchQuery)}${gameParam}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setSearchResults(data.data || []);
+        toast.success(`Found ${data.data?.length || 0} mods`);
+      } else {
+        toast.error(data.error || 'Search failed');
+      }
+    } catch (error) {
+      console.error('Search failed:', error);
+      toast.error('Search failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadFeaturedMods = async () => {
+    try {
+      setLoading(true);
+      const gameParam = selectedGameId ? `?gameId=${selectedGameId}` : '';
+      const response = await fetch(`/api/curseforge/featured${gameParam}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setFeaturedMods(data.data || []);
+        toast.success(`Loaded ${data.data?.length || 0} featured mods`);
+      } else {
+        toast.error(data.error || 'Failed to load featured mods');
+      }
+    } catch (error) {
+      console.error('Failed to load featured mods:', error);
+      toast.error('Failed to load featured mods');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -71,6 +215,8 @@ export default function CurseForgeTest() {
       if (response.ok) {
         setError(null);
         setTestResult({ message: `Game ID updated to ${gameId}` });
+        setSelectedGameId(gameId);
+        checkApiKeyConfig();
       } else {
         const data = await response.json();
         setError(`Failed to update game ID: ${data.error}`);
@@ -87,116 +233,235 @@ export default function CurseForgeTest() {
       globalSettings={null}
       showSidebar={false}
     >
-      <div className="container mx-auto p-6">
-        <h1 className="text-3xl font-bold mb-6">CurseForge API Test</h1>
-
-        {/* API Key Configuration Status */}
-        <div className="card bg-base-200 p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">API Key Configuration</h2>
-
-          {apiKeyConfig && (
-            <div
-              className={`alert ${apiKeyConfig.hasApiKey && apiKeyConfig.isValidFormat ? "alert-success" : "alert-error"} mb-4`}
-            >
-              <div>
-                <h3 className="font-bold">API Key Status</h3>
-                <div className="text-sm">
-                  <p>
-                    <strong>Status:</strong>{" "}
-                    {apiKeyConfig.hasApiKey ? "Configured" : "Not Configured"}
-                  </p>
-                  <p>
-                    <strong>Source:</strong>{" "}
-                    {apiKeyConfig.source === "file"
-                      ? ".env.local file"
-                      : apiKeyConfig.source === "env"
-                        ? "Environment variable"
-                        : "None"}
-                  </p>
-                  <p>
-                    <strong>Length:</strong> {apiKeyConfig.keyLength} characters
-                  </p>
-                  <p>
-                    <strong>Format:</strong>{" "}
-                    {apiKeyConfig.isValidFormat ? "Valid" : "Invalid"}
-                  </p>
-                  <p>
-                    <strong>Message:</strong> {apiKeyConfig.message}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="form-control mb-4">
-            <label className="label">
-              <span className="label-text">Game ID</span>
-            </label>
-            <div className="join">
-              <input
-                type="number"
-                value={gameId}
-                onChange={(e) => setGameId(parseInt(e.target.value) || 0)}
-                className="input input-bordered join-item"
-                placeholder="Enter game ID"
-                title="Game ID"
-              />
-              <button
-                onClick={updateGameId}
-                className="btn btn-primary join-item"
-              >
-                Update
-              </button>
-            </div>
-            <label className="label">
-              <span className="label-text-alt">
-                Common IDs: 443 (ARK:SE), 70886, 83374, 929420
-              </span>
-            </label>
-          </div>
-
-          <div className="alert alert-info">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              className="stroke-current shrink-0 w-6 h-6"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              ></path>
-            </svg>
-            <div>
-              <h3 className="font-bold">API Key Requirements</h3>
-              <div className="text-xs">
-                <p>
-                  You need a valid CurseForge API key with proper permissions.
-                  For third-party apps, you need to apply for access.
-                </p>
-                <p className="mt-2">
-                  <strong>To fix truncated API key issues:</strong>
-                </p>
-                <ul className="list-disc list-inside mt-1">
-                  <li>Ensure your .env.local file contains the full API key</li>
-                  <li>Remove any quotes around the API key value</li>
-                  <li>Check that the API key is at least 32 characters long</li>
-                  <li>Restart the development server after making changes</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={checkApiKeyConfig}
-            className="btn btn-outline btn-sm"
-          >
-            Refresh API Key Status
-          </button>
+      <div className="container mx-auto px-6 py-8 space-y-8">
+        <div className="text-center">
+          <h1 className="text-4xl font-bold text-foreground mb-4 font-display">
+            CurseForge API Test
+          </h1>
+          <p className="text-muted-foreground font-mono">
+            Test the CurseForge API integration
+          </p>
         </div>
 
+        {/* API Key Status */}
+        <Card className="card-cyber">
+          <CardHeader>
+            <CardTitle>API Key Status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Badge 
+              variant={apiKeyConfig.hasApiKey && apiKeyConfig.isValidFormat ? "default" : "destructive"}
+              className="mb-4"
+            >
+              {apiKeyConfig.hasApiKey && apiKeyConfig.isValidFormat ? "✅ Valid API Key" : "❌ Invalid or Missing API Key"}
+            </Badge>
+            
+            {apiKeyConfig.gameId && (
+              <div className="mt-4">
+                <p className="text-sm text-muted-foreground">
+                  Current Game: {apiKeyConfig.gameName || 'Unknown'} (ID: {apiKeyConfig.gameId})
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Search Section */}
+        <Card className="card-cyber">
+          <CardHeader>
+            <CardTitle>Search Mods</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-4 mb-4">
+              <Input
+                type="text"
+                placeholder="Search for mods..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1"
+                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              />
+              <Button 
+                onClick={handleSearch} 
+                disabled={loading}
+                className="btn-cyber"
+              >
+                {loading ? '🔄' : '🔍'} Search
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Search Results */}
+        {searchResults.length > 0 && (
+          <Card className="card-cyber">
+            <CardHeader>
+              <CardTitle>Search Results ({searchResults.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {searchResults.map((mod) => (
+                  <Card key={mod.id} className="card-cyber-panel">
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        {mod.logo && (
+                          <img
+                            src={mod.logo.thumbnailUrl}
+                            alt={mod.name}
+                            className="w-12 h-12 rounded border border-border"
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-foreground truncate">
+                            {mod.name}
+                          </h3>
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {mod.summary}
+                          </p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <Badge variant="secondary" className="text-xs">
+                              {mod.downloadCount.toLocaleString()} downloads
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Games Section */}
+        <Card className="card-cyber">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Available Games</CardTitle>
+              <Button 
+                onClick={loadGames} 
+                disabled={loading}
+                variant="outline"
+                className="btn-cyber-outline"
+              >
+                🔄 Refresh
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {games.map((game) => (
+                <Card key={game.id} className="card-cyber-panel">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      {game.assets?.iconUrl && (
+                        <img
+                          src={game.assets.iconUrl}
+                          alt={game.name}
+                          className="w-12 h-12 rounded border border-border"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-foreground">
+                          {game.name}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          ID: {game.id}
+                        </p>
+                        <Button
+                          onClick={() => setGameId(game.id)}
+                          size="sm"
+                          className="mt-2 btn-cyber"
+                        >
+                          Select Game
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Featured Mods Section */}
+        <Card className="card-cyber">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Featured Mods</CardTitle>
+              <Button 
+                onClick={loadFeaturedMods} 
+                disabled={loading}
+                className="btn-cyber"
+              >
+                Load Featured
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {featuredMods.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {featuredMods.map((mod) => (
+                  <Card key={mod.id} className="card-cyber-panel">
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        {mod.logo && (
+                          <img
+                            src={mod.logo.thumbnailUrl}
+                            alt={mod.name}
+                            className="w-12 h-12 rounded border border-border"
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-foreground truncate">
+                            {mod.name}
+                          </h3>
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {mod.summary}
+                          </p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <Badge variant="secondary" className="text-xs">
+                              ⭐ {mod.thumbsUpCount}
+                            </Badge>
+                            <Badge variant="secondary" className="text-xs">
+                              📥 {mod.downloadCount.toLocaleString()}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">
+                  No featured mods loaded. Click "Load Featured" to fetch them.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Debug Information */}
+        <Card className="card-cyber">
+          <CardHeader>
+            <CardTitle>Debug Information</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre className="overflow-auto bg-muted p-4 rounded text-sm">
+              {JSON.stringify({
+                apiKeyConfig,
+                selectedGameId,
+                searchResultsCount: searchResults.length,
+                featuredModsCount: featuredMods.length,
+                gamesCount: games.length,
+              }, null, 2)}
+            </pre>
+          </CardContent>
+        </Card>
+
+        {/* Test Endpoints */}
         <div className="card bg-base-200 p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">Test Endpoints</h2>
 

@@ -5,6 +5,8 @@ import {
   CurseForgeRateLimitError,
   CurseForgeAuthenticationError,
   CurseForgeForbiddenError,
+  CurseForgeTimeoutError,
+  CurseForgeNetworkError,
 } from "@/lib/curseforge-api";
 import { modCache } from "@/lib/mod-cache";
 import { convertBigIntsToStrings } from "@/lib/json-helpers";
@@ -12,6 +14,17 @@ import { info, warn, error, debug } from '../../../lib/logger';
 
 // Request deduplication to prevent multiple simultaneous requests for the same data
 const pendingRequests = new Map<string, Promise<any>>();
+
+// Clean up old pending requests every minute
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, promise] of pendingRequests.entries()) {
+    // Remove requests older than 2 minutes
+    if (promise && (promise as any).timestamp && now - (promise as any).timestamp > 120000) {
+      pendingRequests.delete(key);
+    }
+  }
+}, 60000); // Every minute
 
 export default async function handler(
   req: NextApiRequest,
@@ -23,67 +36,80 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  // Extract and validate parameters outside try block for error handling access
+  const {
+    query, // ModManager sends 'query'
+    searchFilter = "", // Legacy parameter
+    categoryId,
+    sortBy, // ModManager sends 'sortBy'
+    sortField = "popularity", // Legacy parameter
+    sortOrder = "desc",
+    pageSize = "50",
+    index = "0",
+    forceRefresh = "false",
+  } = req.query;
+
+  // Use query parameter from ModManager, fallback to searchFilter
+  const searchQuery = (query as string) || (searchFilter as string) || "";
+
+  // Map sortBy to sortField for compatibility
+  const mappedSortField =
+    sortBy === "downloads"
+      ? "popularity"
+      : sortBy === "featured"
+        ? "name"
+        : (sortField as string);
+
+  // Validate sortField
+  const validSortFields = ["name", "popularity", "size", "updated"];
+  if (!validSortFields.includes(mappedSortField)) {
+    return res.status(400).json({ error: "Invalid sort field" });
+  }
+
+  // Validate sortOrder
+  const validSortOrders = ["asc", "desc"];
+  if (!validSortOrders.includes(sortOrder as string)) {
+    return res.status(400).json({ error: "Invalid sort order" });
+  }
+
+  // Validate pageSize
+  const pageSizeNum = parseInt(pageSize as string);
+  if (isNaN(pageSizeNum) || pageSizeNum < 1 || pageSizeNum > 50) {
+    return res.status(400).json({ error: "Invalid page size (1-50)" });
+  }
+
+  // Validate index
+  const indexNum = parseInt(index as string);
+  if (isNaN(indexNum) || indexNum < 0) {
+    return res.status(400).json({ error: "Invalid index" });
+  }
+
+  const shouldForceRefresh = forceRefresh === "true";
+
   try {
-    const {
-      query, // ModManager sends 'query'
-      searchFilter = "", // Legacy parameter
-      categoryId,
-      sortBy, // ModManager sends 'sortBy'
-      sortField = "popularity", // Legacy parameter
-      sortOrder = "desc",
-      pageSize = "50",
-      index = "0",
-      forceRefresh = "false",
-    } = req.query;
 
-    // Use query parameter from ModManager, fallback to searchFilter
-    const searchQuery = (query as string) || (searchFilter as string) || "";
+    // Normalize categoryId for key generation
+    const categoryIdStr = Array.isArray(categoryId) ? categoryId[0] : (categoryId || 'none');
 
-    // Map sortBy to sortField for compatibility
-    const mappedSortField =
-      sortBy === "downloads"
-        ? "popularity"
-        : sortBy === "featured"
-          ? "name"
-          : (sortField as string);
-
-    // Validate sortField
-    const validSortFields = ["name", "popularity", "size", "updated"];
-    if (!validSortFields.includes(mappedSortField)) {
-      return res.status(400).json({ error: "Invalid sort field" });
-    }
-
-    // Validate sortOrder
-    const validSortOrders = ["asc", "desc"];
-    if (!validSortOrders.includes(sortOrder as string)) {
-      return res.status(400).json({ error: "Invalid sort order" });
-    }
-
-    // Validate pageSize
-    const pageSizeNum = parseInt(pageSize as string);
-    if (isNaN(pageSizeNum) || pageSizeNum < 1 || pageSizeNum > 50) {
-      return res
-        .status(400)
-        .json({ error: "Page size must be between 1 and 50" });
-    }
-
-    // Check if we should force refresh
-    const shouldForceRefresh = forceRefresh === "true";
-
-    // Create request key for deduplication
-    const requestKey = `search_${searchQuery}_${categoryId}_${mappedSortField}_${sortOrder}_${pageSizeNum}_${index}_${shouldForceRefresh}`;
+    // Create unique request key for deduplication
+    const requestKey = `search_${searchQuery}_${categoryIdStr}_${mappedSortField}_${sortOrder}_${pageSizeNum}_${indexNum}_${shouldForceRefresh}_${Date.now()}`;
 
     // Check if this request is already pending
-    if (pendingRequests.has(requestKey)) {
-      info('[API]', 'Request already pending for key: ' + requestKey);
-      const result = await pendingRequests.get(requestKey);
-      return res.status(200).json(result);
+    const pendingKey = `search_${searchQuery}_${categoryIdStr}_${mappedSortField}_${sortOrder}_${pageSizeNum}_${indexNum}_${shouldForceRefresh}`;
+    if (pendingRequests.has(pendingKey)) {
+      info('[API]', 'Request already pending, waiting for result');
+      try {
+        const result = await pendingRequests.get(pendingKey);
+        return res.status(200).json(result);
+      } catch (pendingError) {
+        warn('[API]', 'Pending request failed: ' + (pendingError instanceof Error ? pendingError.message : String(pendingError)));
+      }
     }
 
-    // Create new request with timeout handling
+    // Create new request promise
     const requestPromise = performSearch(
       searchQuery,
-      categoryId,
+      categoryIdStr,
       mappedSortField,
       sortOrder as "asc" | "desc",
       pageSizeNum,
@@ -91,97 +117,167 @@ export default async function handler(
       shouldForceRefresh
     );
 
-    pendingRequests.set(requestKey, requestPromise);
+    pendingRequests.set(pendingKey, requestPromise);
 
     try {
       const result = await requestPromise;
-      return res.status(200).json(result);
+      res.status(200).json(result);
     } finally {
-      // Clean up pending request
-      pendingRequests.delete(requestKey);
+      pendingRequests.delete(pendingKey);
     }
 
-  } catch (error) {
-    info('[API] /api/curseforge/search error', error instanceof Error ? error.message : String(error));
+  } catch (err) {
+    error('[API]', 'Search error: ' + (err instanceof Error ? err.message : String(err)));
 
-    // Handle timeout specifically - return empty results instead of error
-    if (error instanceof Error && error.message === 'Request timeout') {
-      console.warn('⚠️ CurseForge API timeout - returning empty results');
-      
-      // For development/testing, provide some mock data if no real data is available
-      const mockData = process.env.NODE_ENV === 'development' ? [
-        {
-          id: 1,
-          name: "Sample Mod 1",
-          slug: "sample-mod-1",
-          summary: "A sample mod for testing purposes when CurseForge API is unavailable",
-          downloadCount: 1000,
-          dateModified: new Date().toISOString(),
-          logo: { thumbnailUrl: "/placeholder-mod.png" },
-          authors: [{ name: "Test Author" }],
-          categories: [{ name: "Testing" }]
-        },
-        {
-          id: 2,
-          name: "Sample Mod 2", 
-          slug: "sample-mod-2",
-          summary: "Another sample mod for testing the UI",
-          downloadCount: 500,
-          dateModified: new Date().toISOString(),
-          logo: { thumbnailUrl: "/placeholder-mod.png" },
-          authors: [{ name: "Test Author" }],
-          categories: [{ name: "Testing" }]
+    // Handle specific error types with enhanced fallback mechanisms
+    if (err instanceof CurseForgeRateLimitError) {
+      // Try to return cached results as fallback for rate limiting
+      try {
+        const fallbackResult = await modCache.searchMods(
+          searchQuery,
+          undefined,
+          mappedSortField,
+          sortOrder as "asc" | "desc",
+          1,
+          pageSizeNum
+        );
+        if (fallbackResult.data && fallbackResult.data.length > 0) {
+          const safeData = convertBigIntsToStrings(fallbackResult.data);
+          warn('[API]', 'Rate limited, returning cached data as fallback');
+          return res.status(200).json({ 
+            data: safeData, 
+            source: "cache-fallback", 
+            warning: "Rate limited, using cached data",
+            retryAfter: err.retryAfter 
+          });
         }
-      ] : [];
-      
-      return res.status(200).json({
-        data: mockData,
-        totalCount: mockData.length,
-        source: "timeout_fallback",
-        message: mockData.length > 0 
-          ? "CurseForge API is slow - showing sample data for testing"
-          : "CurseForge API is currently slow - cached results will be available soon"
+      } catch (fallbackError) {
+        warn('[API]', 'Fallback cache also failed during rate limit: ' + (fallbackError instanceof Error ? fallbackError.message : String(fallbackError)));
+      }
+
+      return res.status(429).json({ 
+        error: "Rate limit exceeded", 
+        retryAfter: err.retryAfter,
+        details: "Too many requests. Please wait before making more requests.",
+        fallbackAvailable: false
       });
     }
 
-    // Handle specific CurseForge API errors
-    if (error instanceof CurseForgeAuthenticationError) {
-      return res.status(401).json({
-        error: "Authentication failed. Please check your CurseForge API key.",
-        details: error.message,
+    if (err instanceof CurseForgeAuthenticationError) {
+      return res.status(401).json({ 
+        error: "Authentication failed", 
+        details: "Invalid API key or authentication required.",
+        suggestion: "Please check your CurseForge API key configuration."
       });
     }
 
-    if (error instanceof CurseForgeForbiddenError) {
-      return res.status(403).json({
-        error: "Access forbidden. Please check your API key permissions.",
-        details: error.message,
+    if (err instanceof CurseForgeForbiddenError) {
+      return res.status(403).json({ 
+        error: "Access forbidden", 
+        details: "Insufficient permissions to access this resource.",
+        suggestion: "Please verify your API key has the required permissions."
       });
     }
 
-    if (error instanceof CurseForgeRateLimitError) {
-      return res.status(429).json({
-        error: "Rate limit exceeded. Please wait before making more requests.",
-        retryAfter: error.retryAfter,
-        details: error.message,
+    if (err instanceof CurseForgeTimeoutError) {
+      // Try to return cached results for timeout errors
+      try {
+        const fallbackResult = await modCache.searchMods(
+          searchQuery,
+          undefined,
+          mappedSortField,
+          sortOrder as "asc" | "desc",
+          1,
+          pageSizeNum
+        );
+        if (fallbackResult.data && fallbackResult.data.length > 0) {
+          const safeData = convertBigIntsToStrings(fallbackResult.data);
+          warn('[API]', 'Timeout occurred, returning cached data as fallback');
+          return res.status(200).json({ 
+            data: safeData, 
+            source: "cache-fallback", 
+            warning: "Request timeout, using cached data" 
+          });
+        }
+      } catch (fallbackError) {
+        warn('[API]', 'Fallback cache also failed during timeout: ' + (fallbackError instanceof Error ? fallbackError.message : String(fallbackError)));
+      }
+
+      return res.status(408).json({ 
+        error: "Request timeout", 
+        details: "The request took too long to complete. Please try again.",
+        suggestion: "Try reducing the page size or searching for more specific terms."
       });
     }
 
-    if (error instanceof CurseForgeAPIError) {
-      return res.status(error.statusCode).json({
-        error: "CurseForge API error",
-        statusCode: error.statusCode,
-        details: error.message,
+    if (err instanceof CurseForgeNetworkError) {
+      // Try to return cached results for network errors
+      try {
+        const fallbackResult = await modCache.searchMods(
+          searchQuery,
+          undefined,
+          mappedSortField,
+          sortOrder as "asc" | "desc",
+          1,
+          pageSizeNum
+        );
+        if (fallbackResult.data && fallbackResult.data.length > 0) {
+          const safeData = convertBigIntsToStrings(fallbackResult.data);
+          warn('[API]', 'Network error, returning cached data as fallback');
+          return res.status(200).json({ 
+            data: safeData, 
+            source: "cache-fallback", 
+            warning: "Network error, using cached data" 
+          });
+        }
+      } catch (fallbackError) {
+        warn('[API]', 'Fallback cache also failed during network error: ' + (fallbackError instanceof Error ? fallbackError.message : String(fallbackError)));
+      }
+
+      return res.status(503).json({ 
+        error: "Network error", 
+        details: "Unable to connect to CurseForge API. Please check your internet connection.",
+        suggestion: "Please try again in a few moments."
       });
     }
 
-    // Handle generic errors - return empty results instead of error
-    console.warn('⚠️ CurseForge API error - returning empty results:', error instanceof Error ? error.message : String(error));
-    return res.status(200).json({ 
-      data: [], 
-      totalCount: 0,
-      source: "error_fallback",
-      message: "CurseForge API is currently unavailable - please try again later"
+    if (err instanceof CurseForgeAPIError) {
+      return res.status(err.statusCode || 500).json({ 
+        error: "CurseForge API error", 
+        details: err.message,
+        errorCode: err.errorCode,
+        suggestion: "Please try again or contact support if the issue persists."
+      });
+    }
+
+    // Generic error fallback with cache attempt
+    try {
+      const fallbackResult = await modCache.searchMods(
+        searchQuery,
+        undefined,
+        mappedSortField,
+        sortOrder as "asc" | "desc",
+        1,
+        pageSizeNum
+      );
+      if (fallbackResult.data && fallbackResult.data.length > 0) {
+        const safeData = convertBigIntsToStrings(fallbackResult.data);
+        warn('[API]', 'Generic error, returning cached data as fallback');
+        return res.status(200).json({ 
+          data: safeData, 
+          source: "cache-fallback", 
+          warning: "API error, using cached data" 
+        });
+      }
+    } catch (fallbackError) {
+      warn('[API]', 'Fallback cache also failed during generic error: ' + (fallbackError instanceof Error ? fallbackError.message : String(fallbackError)));
+    }
+
+    // Final fallback
+    res.status(500).json({ 
+      error: "Internal server error", 
+      details: "An unexpected error occurred while searching for mods.",
+      suggestion: "Please try again with different search terms or contact support."
     });
   }
 }
@@ -191,7 +287,7 @@ export default async function handler(
  */
 async function performSearch(
   searchQuery: string,
-  categoryId: string | string[] | undefined,
+  categoryId: string,
   mappedSortField: string,
   sortOrder: "asc" | "desc",
   pageSizeNum: number,
@@ -219,49 +315,67 @@ async function performSearch(
     }
   }
 
-  // Fetch from CurseForge API
+  // Fetch from CurseForge API with timeout and retry
   const page = Math.floor(Number(index) / Number(pageSizeNum)) + 1;
   
   info('[API]', 'Fetching from CurseForge API: ' + JSON.stringify({searchQuery, categoryId, mappedSortField, sortOrder, pageSize: pageSizeNum, page}));
   
-  // Create timeout promise for this specific API call
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error('Request timeout')), 30000); // 30 second timeout
-  });
-  
-  // Race between the API call and timeout
-  const result = await Promise.race([
-    CurseForgeAPI.searchMods(
+  try {
+    const result = await CurseForgeAPI.searchMods(
       String(searchQuery),
-      categoryId ? Number(categoryId) : undefined,
+      categoryId && categoryId !== 'none' ? Number(categoryId) : undefined,
       mappedSortField as any,
       sortOrder as any,
       Number(pageSizeNum),
       page
-    ),
-    timeoutPromise
-  ]) as { mods: any[]; totalCount: number; fromCache?: boolean };
+    );
 
-  info('[API]', 'Result: ' + JSON.stringify({mods: result.mods?.length, totalCount: result.totalCount, fromCache: result.fromCache}));
+    info('[API]', 'Result: ' + JSON.stringify({mods: result.mods?.length, totalCount: result.totalCount, fromCache: result.fromCache}));
 
-  // Cache the results
-  if (result && result.mods && result.mods.length > 0) {
+    // Cache the results
+    if (result && result.mods && result.mods.length > 0) {
+      try {
+        await modCache.setSearchResults(
+          searchQuery,
+          undefined,
+          mappedSortField,
+          sortOrder,
+          1,
+          pageSizeNum,
+          result.mods,
+          result.totalCount
+        );
+      } catch (cacheError) {
+        warn('[API] Failed to cache results:', cacheError instanceof Error ? cacheError.message : String(cacheError));
+      }
+    }
+
+    const safeMods = convertBigIntsToStrings(result?.mods || []);
+    return { data: safeMods, source: "api" };
+
+  } catch (apiError) {
+    error('[API]', 'CurseForge API error: ' + (apiError instanceof Error ? apiError.message : String(apiError)));
+    
+    // Try to return cached results as fallback, even if expired
     try {
-      await modCache.setSearchResults(
+      const fallbackResult = await modCache.searchMods(
         searchQuery,
         undefined,
         mappedSortField,
         sortOrder,
         1,
-        pageSizeNum,
-        result.mods,
-        result.totalCount
+        pageSizeNum
       );
-    } catch (cacheError) {
-      warn('[API] Failed to cache results:', cacheError instanceof Error ? cacheError.message : String(cacheError));
+      if (fallbackResult.data && fallbackResult.data.length > 0) {
+        const safeData = convertBigIntsToStrings(fallbackResult.data);
+        warn('[API]', 'Returning stale cached data as fallback: ' + JSON.stringify({mods: fallbackResult.data.length}));
+        return { data: safeData, source: "cache-fallback", warning: "Using cached data due to API error" };
+      }
+    } catch (fallbackError) {
+      warn('[API]', 'Fallback cache also failed: ' + (fallbackError instanceof Error ? fallbackError.message : String(fallbackError)));
     }
-  }
 
-  const safeMods = convertBigIntsToStrings(result?.mods || []);
-  return { data: safeMods, source: "api" };
+    // Re-throw the original API error if no fallback available
+    throw apiError;
+  }
 }

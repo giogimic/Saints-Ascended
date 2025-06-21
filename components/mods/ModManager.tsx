@@ -607,39 +607,216 @@ const ModManager: React.FC<ModManagerProps> = ({
   const loadModsForCategory = async (category: string) => {
     if (category === "Installed") return; // Skip for installed mods - they're cached locally
 
+    // Check if we already have cached data for this category
+    const cached = categoryDataCache.get(category);
+    if (cached && !cached.isLoading) {
+      if (Date.now() - cached.timestamp < CATEGORY_CACHE_TTL) {
+        // Use cached data if it's still fresh
+        setSearchResults(cached.data);
+        setSearchError(cached.error);
+        addConsoleInfo(`✅ Loaded ${cached.data.length} mods for "${category}" from cache`);
+        return;
+      } else {
+        // Data is stale, but we can show it while loading fresh data
+        setSearchResults(cached.data);
+        if (cached.error) {
+          setSearchError(cached.error);
+        }
+        addConsoleInfo(`⏳ Showing stale data for "${category}" while refreshing...`);
+      }
+    }
+
+    // Check if loading is already in progress
+    if (cached && cached.isLoading) {
+      addConsoleInfo(`⏳ Category "${category}" is already loading...`);
+      return;
+    }
+
     setIsSearching(true);
     setSearchError(null);
 
-    try {
-      // Use the optimized search endpoint which handles caching
-      const params = new URLSearchParams({
-        category: category,
-        sortBy: "popularity",
-        sortOrder: "desc",
-        pageSize: "20"
-      });
+    // Mark as loading in cache
+    categoryDataCache.set(category, {
+      data: cached?.data || [],
+      timestamp: cached?.timestamp || 0,
+      isLoading: true,
+      error: null
+    });
 
-      const response = await fetch(`/api/curseforge/search-optimized?${params}`);
+    try {
+      // Use multiple strategies for better reliability
+      const result = await loadModsWithFallback(category);
       
-      if (!response.ok) {
-        throw new Error(`Failed to load ${category} mods: ${response.status} ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        setSearchResults(data.data || []);
-        addConsoleInfo(`✅ Loaded ${data.data?.length || 0} mods for "${category}" from ${data.source || 'API'}`);
+      if (result.success && result.data) {
+        setSearchResults(result.data);
+        setSearchError(null);
+        
+        // Update cache with fresh data
+        categoryDataCache.set(category, {
+          data: result.data,
+          timestamp: Date.now(),
+          isLoading: false,
+          error: null
+        });
+        
+        addConsoleSuccess(`✅ Loaded ${result.data.length} mods for "${category}" from ${result.source}`);
       } else {
-        throw new Error(data.error || `Failed to load ${category} mods`);
+        throw new Error(result.error);
       }
     } catch (error) {
       console.error(`Error loading mods for ${category}:`, error);
-      setSearchError(error instanceof Error ? error.message : `Failed to load ${category} mods`);
-      addConsoleError(`❌ Failed to load ${category} mods: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const errorMessage = error instanceof Error ? error.message : `Failed to load ${category} mods`;
+      setSearchError(errorMessage);
+      
+      // Update cache with error state
+      categoryDataCache.set(category, {
+        data: cached?.data || [],
+        timestamp: cached?.timestamp || 0,
+        isLoading: false,
+        error: errorMessage
+      });
+      
+      addConsoleError(`❌ Failed to load ${category} mods: ${errorMessage}`);
     } finally {
       setIsSearching(false);
     }
+  };
+
+  // Load mods with multiple fallback strategies
+  const loadModsWithFallback = async (category: string): Promise<{
+    success: boolean;
+    data?: CurseForgeModData[];
+    source?: string;
+    error?: string;
+  }> => {
+    const strategies = [
+      // Strategy 1: Optimized search endpoint with longer timeout
+      async () => {
+        const params = new URLSearchParams({
+          category: category,
+          sortBy: "popularity",
+          sortOrder: "desc",
+          pageSize: "20",
+          comprehensive: "true"
+        });
+
+        const response = await fetch(`/api/curseforge/search-optimized?${params}`, {
+          signal: AbortSignal.timeout(30000) // 30 second timeout
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          return {
+            success: true,
+            data: data.data || [],
+            source: 'optimized-search'
+          };
+        } else {
+          throw new Error(data.error || 'Unknown error from optimized search');
+        }
+      },
+      
+      // Strategy 2: Regular search endpoint with moderate timeout
+      async () => {
+        const params = new URLSearchParams({
+          query: category === "Popular" ? "" : category,
+          sortBy: "popularity",
+          sortOrder: "desc",
+          pageSize: "20"
+        });
+
+        const response = await fetch(`/api/curseforge/search?${params}`, {
+          signal: AbortSignal.timeout(25000) // 25 second timeout
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        return {
+          success: true,
+          data: data.data || [],
+          source: 'regular-search'
+        };
+      },
+      
+      // Strategy 3: Categories endpoint as final fallback
+      async () => {
+        const response = await fetch('/api/curseforge/categories', {
+          signal: AbortSignal.timeout(20000) // 20 second timeout
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        return {
+          success: true,
+          data: data.data || [],
+          source: 'categories-fallback'
+        };
+      }
+    ];
+
+    // Cache for successful results (5 minutes TTL)
+    const cachedResult = categoryDataCache.get(category);
+    
+    if (cachedResult && Date.now() - cachedResult.timestamp < 5 * 60 * 1000) {
+      addConsoleInfo(`📋 Using cached data for category "${category}"`);
+      return {
+        success: true,
+        data: cachedResult.data,
+        source: 'cache'
+      };
+    }
+
+    // Try each strategy with exponential backoff
+    for (let i = 0; i < strategies.length; i++) {
+      try {
+        addConsoleInfo(`🔄 Trying strategy ${i + 1} for category "${category}"`);
+        
+        const result = await strategies[i]();
+        
+                 if (result.success && result.data && result.data.length > 0) {
+           // Cache successful result
+           categoryDataCache.set(category, {
+             data: result.data,
+             timestamp: Date.now(),
+             isLoading: false,
+             error: null
+           });
+          
+          addConsoleInfo(`✅ Strategy ${i + 1} succeeded for "${category}" - found ${result.data.length} mods`);
+          return result;
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        addConsoleError(`❌ Strategy ${i + 1} failed for "${category}": ${errorMessage}`);
+        
+        // Wait between strategies (exponential backoff)
+        if (i < strategies.length - 1) {
+          const delay = Math.pow(2, i) * 1000; // 1s, 2s, 4s...
+          addConsoleInfo(`⏳ Waiting ${delay / 1000}s before next strategy...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    // All strategies failed
+    addConsoleError(`💥 All strategies failed for category "${category}"`);
+    return {
+      success: false,
+      error: `Failed to load mods for category "${category}" after trying all available methods`
+    };
   };
 
   // Load multiple categories for better performance

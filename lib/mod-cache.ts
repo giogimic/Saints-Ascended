@@ -27,31 +27,107 @@ class ModCacheService {
   private readonly SEARCH_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
   private readonly MAX_CACHE_SIZE = 2000;
   private readonly MAX_SEARCH_CACHE_SIZE = 500;
+  private initializationPromise: Promise<void> | null = null;
+  private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor() {
     this.initializeDatabase();
   }
 
   private async initializeDatabase(): Promise<void> {
-    try {
-      this.dbAvailable = false; // Temporarily disable database
-      info('[DB]', 'Database temporarily disabled for debugging');
-    } catch (err) {
-      warn('[DB]', 'Failed to initialize database: ' + (err instanceof Error ? err.message : String(err)));
-      this.dbAvailable = false;
+    if (this.initializationPromise) {
+      return this.initializationPromise;
     }
+
+    this.initializationPromise = this._initializeDatabase();
+    return this.initializationPromise;
+  }
+
+  private async _initializeDatabase(): Promise<void> {
+    try {
+      // Try to connect to database with timeout
+      const connectionTimeout = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Database connection timeout')), 10000);
+      });
+
+      await Promise.race([
+        prisma.$connect(),
+        connectionTimeout
+      ]);
+      
+      // Test database connection with a simple query
+      await prisma.$queryRaw`SELECT 1`;
+      
+      // Verify the mod table exists and is accessible
+      const testQuery = await prisma.mod.findFirst({
+        take: 1,
+        select: { id: true }
+      });
+      
+      this.dbAvailable = true;
+      info('[DB]', 'Database connection established successfully');
+      
+      // Start cache cleanup interval
+      this.startCacheCleanup();
+    } catch (err) {
+      warn('[DB]', 'Database connection failed, using in-memory cache only: ' + (err instanceof Error ? err.message : String(err)));
+      this.dbAvailable = false;
+      
+      // Still start cache cleanup for in-memory cache
+      this.startCacheCleanup();
+    }
+  }
+
+  private startCacheCleanup(): void {
+    // Clean up expired cache entries every 5 minutes
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+    }
+    
+    this.cleanupInterval = setInterval(() => {
+      this.clearExpiredMemoryCache();
+    }, 5 * 60 * 1000);
   }
 
   async getMod(modId: number): Promise<CurseForgeModData | null> {
     try {
+      // Ensure database is initialized
+      await this.initializeDatabase();
+
       // Check in-memory cache first
       const cached = this.inMemoryCache.get(`mod_${modId}`) as ModCacheEntry;
       if (cached && Date.now() < cached.expiresAt) {
         cached.hitCount++;
         cached.lastAccessed = Date.now();
+        debug('[CACHE]', `Memory cache hit for mod ${modId}`);
         return cached.data;
       }
 
+      // Try database if available
+      if (this.dbAvailable) {
+        try {
+          const dbMod = await prisma.mod.findUnique({
+            where: { id: modId },
+            include: {
+              categories: true,
+              screenshots: true,
+              authors: true
+            }
+          });
+
+          if (dbMod && Date.now() < new Date(dbMod.lastUpdated).getTime() + this.MOD_CACHE_TTL) {
+            const modData = this.convertDbToCurseForge(dbMod);
+            // Store in memory cache for faster future access
+            this.setModInMemoryCache(modId, modData);
+            debug('[CACHE]', `Database cache hit for mod ${modId}`);
+            return modData;
+          }
+        } catch (dbError) {
+          warn('[CACHE]', `Database error for mod ${modId}, falling back to memory: ${dbError instanceof Error ? dbError.message : String(dbError)}`);
+        }
+      }
+
+      debug('[CACHE]', `Cache miss for mod ${modId}`);
       return null;
     } catch (err) {
       error('[CACHE]', 'Error retrieving mod from cache: ' + (err instanceof Error ? err.message : String(err)));
@@ -61,8 +137,21 @@ class ModCacheService {
 
   async setMod(mod: CurseForgeModData): Promise<void> {
     try {
-      // Store in memory cache only
+      // Ensure database is initialized
+      await this.initializeDatabase();
+
+      // Always store in memory cache
       this.setModInMemoryCache(mod.id, mod);
+
+      // Store in database if available
+      if (this.dbAvailable) {
+        try {
+          await this.storeModInDatabase(mod);
+          debug('[CACHE]', `Stored mod ${mod.id} in database`);
+        } catch (dbError) {
+          warn('[CACHE]', `Failed to store mod ${mod.id} in database: ${dbError instanceof Error ? dbError.message : String(dbError)}`);
+        }
+      }
     } catch (err) {
       error('[CACHE]', 'Error storing mod in cache: ' + (err instanceof Error ? err.message : String(err)));
     }
@@ -79,53 +168,61 @@ class ModCacheService {
     page: number = 1,
     pageSize: number = 50
   ): Promise<{ data: CurseForgeModData[]; totalCount: number }> {
-    const cacheKey = this.generateSearchCacheKey(
-      query,
-      category,
-      sortBy,
-      sortOrder,
-      page,
-      pageSize
-    );
+    try {
+      // Ensure database is initialized
+      await this.initializeDatabase();
 
-    // Check in-memory cache first
-    const memoryEntry = this.inMemoryCache.get(cacheKey) as SearchCacheEntry;
-    if (memoryEntry && Date.now() < memoryEntry.expiresAt) {
-      // Update hit count and last accessed
-      memoryEntry.hitCount++;
-      memoryEntry.lastAccessed = Date.now();
-      return {
-        data: memoryEntry.data,
-        totalCount: memoryEntry.totalCount,
-      };
+      const cacheKey = this.generateSearchCacheKey(
+        query,
+        category,
+        sortBy,
+        sortOrder,
+        page,
+        pageSize
+      );
+
+      // Check in-memory cache first
+      const memoryEntry = this.inMemoryCache.get(cacheKey) as SearchCacheEntry;
+      if (memoryEntry && Date.now() < memoryEntry.expiresAt) {
+        // Update hit count and last accessed
+        memoryEntry.hitCount++;
+        memoryEntry.lastAccessed = Date.now();
+        debug('[CACHE]', `Memory search cache hit for: ${cacheKey}`);
+        return {
+          data: memoryEntry.data,
+          totalCount: memoryEntry.totalCount,
+        };
+      }
+
+      // Try database search if available
+      if (this.dbAvailable) {
+        try {
+          const searchResults = await this.performDatabaseSearch(
+            query,
+            category,
+            sortBy,
+            sortOrder,
+            page,
+            pageSize
+          );
+
+          if (searchResults.data.length > 0) {
+            // Store results in memory cache
+            this.setSearchInMemoryCache(cacheKey, searchResults.data, searchResults.totalCount);
+            debug('[CACHE]', `Database search results for: ${cacheKey}, found ${searchResults.data.length} mods`);
+            return searchResults;
+          }
+        } catch (dbError) {
+          warn('[CACHE]', `Database search error: ${dbError instanceof Error ? dbError.message : String(dbError)}`);
+        }
+      }
+
+      debug('[CACHE]', `No cached results found for: ${cacheKey}`);
+      return { data: [], totalCount: 0 };
+    } catch (err) {
+      error('[CACHE]', 'Error in searchMods: ' + (err instanceof Error ? err.message : String(err)));
+      return { data: [], totalCount: 0 };
     }
-
-    // If not in cache, perform search
-    const searchResults = await this.performDatabaseSearch(
-      query,
-      category,
-      sortBy,
-      sortOrder,
-      page,
-      pageSize
-    );
-
-    // Store results in cache
-    await this.setSearchResults(
-      query,
-      category,
-      sortBy,
-      sortOrder,
-      page,
-      pageSize,
-      searchResults.data,
-      searchResults.totalCount
-    );
-
-    // Update search analytics
-    await this.updateSearchAnalytics(query, category, searchResults.totalCount);
-
-    return searchResults;
   }
 
   /**
@@ -141,17 +238,93 @@ class ModCacheService {
     results: CurseForgeModData[],
     totalCount: number
   ): Promise<void> {
-    const cacheKey = this.generateSearchCacheKey(
-      query,
-      category,
-      sortBy,
-      sortOrder,
-      page,
-      pageSize
-    );
+    try {
+      // Ensure database is initialized
+      await this.initializeDatabase();
 
-    // Store in memory cache
-    this.setSearchInMemoryCache(cacheKey, results, totalCount);
+      const cacheKey = this.generateSearchCacheKey(
+        query,
+        category,
+        sortBy,
+        sortOrder,
+        page,
+        pageSize
+      );
+
+      // Store in memory cache
+      this.setSearchInMemoryCache(cacheKey, results, totalCount);
+
+      // Store individual mods in cache
+      for (const mod of results) {
+        await this.setMod(mod);
+      }
+
+      // Update search analytics if database is available
+      if (this.dbAvailable) {
+        try {
+          await this.updateSearchAnalytics(query, category, totalCount);
+        } catch (dbError) {
+          warn('[CACHE]', `Failed to update search analytics: ${dbError instanceof Error ? dbError.message : String(dbError)}`);
+        }
+      }
+
+      debug('[CACHE]', `Cached search results for: ${cacheKey}, ${results.length} mods`);
+    } catch (err) {
+      error('[CACHE]', 'Error storing search results: ' + (err instanceof Error ? err.message : String(err)));
+    }
+  }
+
+  /**
+   * Store mod in database with error handling
+   */
+  private async storeModInDatabase(mod: CurseForgeModData): Promise<void> {
+    if (!this.dbAvailable) return;
+
+    try {
+      const expiresAt = new Date(Date.now() + this.MOD_CACHE_TTL);
+      const popularityScore = this.calculatePopularityScore(mod);
+      const searchKeywords = this.generateSearchKeywords(mod);
+
+      await prisma.mod.upsert({
+        where: { id: mod.id },
+        update: {
+          name: mod.name,
+          summary: mod.summary || '',
+          downloadCount: mod.downloadCount || 0,
+          popularityScore,
+          searchKeywords,
+          lastUpdated: new Date(mod.dateModified || Date.now()),
+          isAvailable: true,
+        },
+        create: {
+          id: mod.id,
+          gameId: mod.gameId || 432, // ARK: Survival Evolved game ID
+          name: mod.name,
+          slug: mod.slug || '',
+          summary: mod.summary || '',
+          status: mod.status || 4,
+          downloadCount: mod.downloadCount || 0,
+          isFeatured: mod.isFeatured || false,
+          primaryCategoryId: mod.primaryCategoryId || 0,
+          classId: mod.classId || 0,
+          dateCreated: new Date(mod.dateCreated || Date.now()),
+          dateModified: new Date(mod.dateModified || Date.now()),
+          dateReleased: mod.dateReleased ? new Date(mod.dateReleased) : null,
+          allowModDistribution: mod.allowModDistribution ?? true,
+          gamePopularityRank: mod.gamePopularityRank || null,
+          isAvailable: true,
+          thumbsUpCount: mod.thumbsUpCount || 0,
+          popularityScore,
+          searchKeywords,
+          lastUpdated: new Date(mod.dateModified || Date.now()),
+        },
+      });
+
+      // Store relations
+      await this.storeModRelations(mod);
+    } catch (err) {
+      throw new Error(`Failed to store mod ${mod.id} in database: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   /**

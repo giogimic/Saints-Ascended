@@ -20,39 +20,37 @@ export class CurseForgeAPIError extends Error {
 }
 
 export class CurseForgeRateLimitError extends CurseForgeAPIError {
-  constructor(retryAfter?: number) {
-    super(
-      "Rate limit exceeded. Please wait before making more requests.",
-      429,
-      "RATE_LIMIT_EXCEEDED",
-      retryAfter
-    );
+  constructor(retryAfter: number = 60) {
+    super("Rate limit exceeded", 429, "RATE_LIMIT", retryAfter);
     this.name = "CurseForgeRateLimitError";
   }
 }
 
 export class CurseForgeAuthenticationError extends CurseForgeAPIError {
-  constructor(
-    message: string = "Authentication failed. Please check your API key."
-  ) {
-    super(message, 401, "AUTHENTICATION_FAILED");
+  constructor() {
+    super("Authentication failed", 401, "AUTH_FAILED");
     this.name = "CurseForgeAuthenticationError";
   }
 }
 
 export class CurseForgeForbiddenError extends CurseForgeAPIError {
-  constructor(
-    message: string = "Access forbidden. Please check your API key permissions."
-  ) {
-    super(message, 403, "ACCESS_FORBIDDEN");
+  constructor() {
+    super("Access forbidden", 403, "FORBIDDEN");
     this.name = "CurseForgeForbiddenError";
   }
 }
 
-export class CurseForgeNotFoundError extends CurseForgeAPIError {
-  constructor(resource: string = "Resource") {
-    super(`${resource} not found.`, 404, "NOT_FOUND");
-    this.name = "CurseForgeNotFoundError";
+export class CurseForgeTimeoutError extends CurseForgeAPIError {
+  constructor() {
+    super("Request timeout", 408, "TIMEOUT");
+    this.name = "CurseForgeTimeoutError";
+  }
+}
+
+export class CurseForgeNetworkError extends CurseForgeAPIError {
+  constructor(message: string) {
+    super(`Network error: ${message}`, 0, "NETWORK_ERROR");
+    this.name = "CurseForgeNetworkError";
   }
 }
 
@@ -295,16 +293,23 @@ export class CurseForgeAPI {
   private static readonly BACKGROUND_FETCH_THROTTLE = 30000; // 30 seconds between fetches (reduced from 60)
 
   // Request batching to prevent overwhelming the API
+  // Enhanced request deduplication and queue management
   private static pendingRequests: Map<string, Promise<any>> = new Map();
   private static requestQueue: Array<{ 
     key: string; 
     resolve: (value: any) => void; 
     reject: (reason: any) => void; 
-    request: () => Promise<any> 
+    request: () => Promise<any>;
+    retryCount: number;
+    timestamp: number;
   }> = [];
+  
+  // Queue processing with better concurrency control
   private static isProcessingQueue = false;
-  private static readonly MAX_CONCURRENT_REQUESTS = 3; // Limit concurrent requests
+  private static readonly MAX_CONCURRENT_REQUESTS = 2; // Reduced for better stability
   private static activeRequests = 0;
+  private static readonly REQUEST_TIMEOUT = 45000; // 45 seconds timeout
+  private static readonly RETRY_DELAYS = [2000, 5000, 10000]; // Exponential backoff delays
 
   /**
    * Get API key with fallback to reading from .env files
@@ -422,7 +427,9 @@ export class CurseForgeAPI {
           key: requestKey,
           resolve,
           reject,
-          request: () => this.executeRequest<T>(endpoint, options, retryCount)
+          request: () => this.executeRequest<T>(endpoint, options, retryCount),
+          retryCount: 0,
+          timestamp: Date.now()
         });
         
         // Start processing queue if not already processing
@@ -536,7 +543,7 @@ export class CurseForgeAPI {
       }
 
       if (response.status === 404) {
-        throw new CurseForgeNotFoundError(endpoint);
+        throw new CurseForgeAPIError(`${endpoint} not found`, 404, "NOT_FOUND");
       }
 
       if (response.status === 429) {

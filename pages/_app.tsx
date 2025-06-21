@@ -7,14 +7,20 @@ import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { GlobalSettingsProvider } from "@/components/GlobalSettingsProvider";
 import { ModalProvider } from "@/components/ModalProvider";
 
-// Import cache refresh service and Strategy 2 optimizations (server-side only)
+// Initialize server-side services only on the server and not during build
 if (typeof window === "undefined") {
-  import("@/lib/cache-refresh-service");
-  // Strategy 2: Start optimized cache warming service
-  import("@/lib/mod-service-optimized").then(({ modServiceOptimized }) => {
-    modServiceOptimized.startCacheWarming();
-    console.log("Strategy 2: Cache warming service started");
-  });
+  // Check if we're in a build context (during Next.js build process)
+  const isBuildTime = process.env.NODE_ENV === 'production' && 
+                     (process.env.NEXT_PHASE === 'phase-production-build' || 
+                      process.env.NEXT_PHASE === 'phase-production-optimize');
+
+  if (!isBuildTime) {
+    import("@/lib/server-init").then(({ initializeServerServices }) => {
+      initializeServerServices().catch((error) => {
+        console.error("Failed to initialize server services:", error);
+      });
+    });
+  }
 }
 
 export default function App({ Component, pageProps }: AppProps) {

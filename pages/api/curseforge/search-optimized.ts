@@ -7,6 +7,9 @@ import { modCache } from "@/lib/mod-cache";
 import { convertBigIntsToStrings } from "@/lib/json-helpers";
 import { ErrorHandler } from "@/lib/error-handler";
 
+// Request deduplication to prevent multiple simultaneous requests for the same data
+const pendingRequests = new Map<string, Promise<any>>();
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -80,9 +83,27 @@ export default async function handler(
       });
     }
 
-    // Handle single category search
+    // Handle single category search with request deduplication
     if (category) {
-      const result = await searchSingleCategory(
+      const requestKey = `category_${category}_${query}_${sortBy}_${sortOrder}_${pageSizeNum}_${pageNum}_${shouldForceRefresh}_${useComprehensive}`;
+      
+      // Check if this request is already pending
+      if (pendingRequests.has(requestKey)) {
+        console.log(`[search-optimized] Request already pending for key: ${requestKey}`);
+        const result = await pendingRequests.get(requestKey);
+        const safeResult = convertBigIntsToStrings(result);
+        
+        return res.status(200).json({
+          success: true,
+          data: safeResult,
+          source: "optimized-single-dedup",
+          category,
+          query: query || "all"
+        });
+      }
+
+      // Create new request
+      const requestPromise = searchSingleCategory(
         category as string, 
         query as string,
         sortBy as string,
@@ -92,15 +113,24 @@ export default async function handler(
         shouldForceRefresh,
         useComprehensive
       );
-      const safeResult = convertBigIntsToStrings(result);
-      
-      return res.status(200).json({
-        success: true,
-        data: safeResult,
-        source: "optimized-single",
-        category,
-        query: query || "all"
-      });
+
+      pendingRequests.set(requestKey, requestPromise);
+
+      try {
+        const result = await requestPromise;
+        const safeResult = convertBigIntsToStrings(result);
+        
+        return res.status(200).json({
+          success: true,
+          data: safeResult,
+          source: "optimized-single",
+          category,
+          query: query || "all"
+        });
+      } finally {
+        // Clean up pending request
+        pendingRequests.delete(requestKey);
+      }
     }
 
     // Handle general search
@@ -218,60 +248,94 @@ async function searchSingleCategory(
 
     // Use comprehensive search if enabled
     if (useComprehensive) {
-      const mods = await CurseForgeAPI.searchModsComprehensive(
-        query || categoryConfig.query || "",
-        categoryConfig.categoryId,
-        sortBy as any,
-        sortOrder,
-        pageSize
-      );
+      try {
+        // Add timeout to prevent hanging
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('CurseForge API timeout')), 15000); // 15 second timeout
+        });
+        
+        const mods = await Promise.race([
+          CurseForgeAPI.searchModsComprehensive(
+            query || categoryConfig.query || "",
+            categoryConfig.categoryId,
+            sortBy as any,
+            sortOrder,
+            pageSize
+          ),
+          timeoutPromise
+        ]);
 
-      // Cache the results
-      if (mods && Array.isArray(mods) && mods.length > 0) {
-        await modCache.setSearchResults(
-          query || categoryConfig.query || "",
-          categoryConfig.categoryId?.toString(),
-          sortBy,
-          sortOrder,
-          page,
-          pageSize,
-          mods,
-          mods.length
-        );
+        // Cache the results
+        if (mods && Array.isArray(mods) && mods.length > 0) {
+          await modCache.setSearchResults(
+            query || categoryConfig.query || "",
+            categoryConfig.categoryId?.toString(),
+            sortBy,
+            sortOrder,
+            page,
+            pageSize,
+            mods,
+            mods.length
+          );
+        }
+
+        return mods || [];
+      } catch (apiError) {
+        // Handle timeout and API errors gracefully
+        if (apiError instanceof Error && apiError.message === 'CurseForge API timeout') {
+          console.warn(`⚠️ CurseForge API timeout for category ${category} - returning empty results`);
+          return [];
+        }
+        throw apiError;
       }
-
-      return mods || [];
     } else {
-      // Use regular search
-      const searchResult = await CurseForgeAPI.searchMods(
-        query || categoryConfig.query || "",
-        categoryConfig.categoryId,
-        sortBy as any,
-        sortOrder,
-        pageSize,
-        page,
-        false
-      );
+      try {
+        // Use regular search with timeout
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('CurseForge API timeout')), 15000); // 15 second timeout
+        });
+        
+        const searchResult = await Promise.race([
+          CurseForgeAPI.searchMods(
+            query || categoryConfig.query || "",
+            categoryConfig.categoryId,
+            sortBy as any,
+            sortOrder,
+            pageSize,
+            page,
+            false
+          ),
+          timeoutPromise
+        ]);
 
-      // Cache the results
-      if (searchResult.mods && Array.isArray(searchResult.mods) && searchResult.mods.length > 0) {
-        await modCache.setSearchResults(
-          query || categoryConfig.query || "",
-          categoryConfig.categoryId?.toString(),
-          sortBy,
-          sortOrder,
-          page,
-          pageSize,
-          searchResult.mods,
-          searchResult.totalCount
-        );
+        // Cache the results
+        if (searchResult.mods && Array.isArray(searchResult.mods) && searchResult.mods.length > 0) {
+          await modCache.setSearchResults(
+            query || categoryConfig.query || "",
+            categoryConfig.categoryId?.toString(),
+            sortBy,
+            sortOrder,
+            page,
+            pageSize,
+            searchResult.mods,
+            searchResult.totalCount
+          );
+        }
+
+        return searchResult.mods || [];
+      } catch (apiError) {
+        // Handle timeout and API errors gracefully
+        if (apiError instanceof Error && apiError.message === 'CurseForge API timeout') {
+          console.warn(`⚠️ CurseForge API timeout for category ${category} - returning empty results`);
+          return [];
+        }
+        throw apiError;
       }
-
-      return searchResult.mods || [];
     }
   } catch (error) {
     console.error(`Error searching category ${category}:`, error);
-    throw error;
+    // Return empty array instead of throwing to prevent UI breaks
+    return [];
   }
 }
 
@@ -310,64 +374,110 @@ async function performGeneralSearch(
 
     // Use comprehensive search if enabled
     if (useComprehensive) {
-      const mods = await CurseForgeAPI.searchModsComprehensive(
-        query,
-        undefined,
-        sortBy as any,
-        sortOrder,
-        pageSize
-      );
+      try {
+        // Add timeout to prevent hanging
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('CurseForge API timeout')), 15000); // 15 second timeout
+        });
+        
+        const mods = await Promise.race([
+          CurseForgeAPI.searchModsComprehensive(
+            query,
+            undefined,
+            sortBy as any,
+            sortOrder,
+            pageSize
+          ),
+          timeoutPromise
+        ]);
 
-      // Cache the results
-      if (mods && Array.isArray(mods) && mods.length > 0) {
-        await modCache.setSearchResults(
-          query,
-          undefined,
-          sortBy,
-          sortOrder,
-          page,
-          pageSize,
-          mods,
-          mods.length
-        );
+        // Cache the results
+        if (mods && Array.isArray(mods) && mods.length > 0) {
+          await modCache.setSearchResults(
+            query,
+            undefined,
+            sortBy,
+            sortOrder,
+            page,
+            pageSize,
+            mods,
+            mods.length
+          );
+        }
+
+        return {
+          mods: mods || [],
+          totalCount: mods?.length || 0,
+          hasMore: false
+        };
+      } catch (apiError) {
+        // Handle timeout and API errors gracefully
+        if (apiError instanceof Error && apiError.message === 'CurseForge API timeout') {
+          console.warn(`⚠️ CurseForge API timeout for query "${query}" - returning empty results`);
+          return {
+            mods: [],
+            totalCount: 0,
+            hasMore: false
+          };
+        }
+        throw apiError;
       }
-
-      return {
-        mods: mods || [],
-        totalCount: mods?.length || 0,
-        hasMore: false
-      };
     } else {
-      // Use regular search
-      const searchResult = await CurseForgeAPI.searchMods(
-        query,
-        undefined,
-        sortBy as any,
-        sortOrder,
-        pageSize,
-        page,
-        false
-      );
+      try {
+        // Use regular search with timeout
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('CurseForge API timeout')), 15000); // 15 second timeout
+        });
+        
+        const searchResult = await Promise.race([
+          CurseForgeAPI.searchMods(
+            query,
+            undefined,
+            sortBy as any,
+            sortOrder,
+            pageSize,
+            page,
+            false
+          ),
+          timeoutPromise
+        ]);
 
-      // Cache the results
-      if (searchResult.mods && Array.isArray(searchResult.mods) && searchResult.mods.length > 0) {
-        await modCache.setSearchResults(
-          query,
-          undefined,
-          sortBy,
-          sortOrder,
-          page,
-          pageSize,
-          searchResult.mods,
-          searchResult.totalCount
-        );
+        // Cache the results
+        if (searchResult.mods && Array.isArray(searchResult.mods) && searchResult.mods.length > 0) {
+          await modCache.setSearchResults(
+            query,
+            undefined,
+            sortBy,
+            sortOrder,
+            page,
+            pageSize,
+            searchResult.mods,
+            searchResult.totalCount
+          );
+        }
+
+        return searchResult;
+      } catch (apiError) {
+        // Handle timeout and API errors gracefully
+        if (apiError instanceof Error && apiError.message === 'CurseForge API timeout') {
+          console.warn(`⚠️ CurseForge API timeout for query "${query}" - returning empty results`);
+          return {
+            mods: [],
+            totalCount: 0,
+            hasMore: false
+          };
+        }
+        throw apiError;
       }
-
-      return searchResult;
     }
   } catch (error) {
     console.error("Error performing general search:", error);
-    throw error;
+    // Return empty results instead of throwing to prevent UI breaks
+    return {
+      mods: [],
+      totalCount: 0,
+      hasMore: false
+    };
   }
 }
 

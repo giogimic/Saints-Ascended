@@ -6,6 +6,7 @@
 .pnp.js
 .yarn/install-state.gz
 /bun.lockb
+bun.lock
 
 # testing
 /coverage
@@ -66,6 +67,21 @@ next-env.d.ts
 *.log
 /temp/
 /tmp/
+/scripts/*.cjs
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+/prisma/data/*.db
+/prisma/data/*.sqlite
+/prisma/data/*.sqlite3
+/prisma/prisma/*.db
+/prisma/prisma/*.sqlite
+/prisma/prisma/*.sqlite3
+mods.db
+development.db
+dev.db
 
 # OS generated files
 .DS_Store
@@ -75,8 +91,18 @@ next-env.d.ts
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Generated files
 /generated/prisma
-mods.db
 
 # Context folder - not for project use
 /Context Do Not Use In Project/
+
+# Package manager lock files (keep only one)
+# Uncomment the one you're NOT using:
+# package-lock.json  # if using bun
+# bun.lock          # if using npm
+
+# Test files and scripts
+/scripts/test-*.cjs
+/scripts/test-*.js

@@ -1,196 +1,487 @@
 // lib/mod-cache-client.ts
-// Strategy 1: Client-side caching with TTL for mod search results
+// Client-safe mod cache that uses API calls instead of direct database access
 
-interface CachedSearchResult {
-  data: any[];
+import { CurseForgeModData } from "../types/curseforge";
+
+// In-memory cache for client-side use
+interface ModCacheEntry {
+  data: CurseForgeModData;
   timestamp: number;
-  ttl: number; // Time to live in milliseconds
+  expiresAt: number;
+  hitCount: number;
+  lastAccessed: number;
 }
 
-interface BatchRequest {
-  category: string;
-  params: URLSearchParams;
-  resolve: (data: any) => void;
-  reject: (error: Error) => void;
+interface SearchCacheEntry {
+  data: CurseForgeModData[];
+  totalCount: number;
+  timestamp: number;
+  expiresAt: number;
+  hitCount: number;
+  lastAccessed: number;
 }
 
 class ModCacheClient {
-  private cache = new Map<string, CachedSearchResult>();
-  private batchQueue: BatchRequest[] = [];
-  private batchTimeout: NodeJS.Timeout | null = null;
-  private readonly BATCH_DELAY = 50; // 50ms batch delay
-  private readonly DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes
-  private readonly CACHE_SIZE_LIMIT = 100; // Maximum cache entries
+  private modCache: Map<number, ModCacheEntry> = new Map();
+  private searchCache: Map<string, SearchCacheEntry> = new Map();
+  
+  // Request deduplication - prevent multiple simultaneous requests for the same data
+  private pendingRequests: Map<string, Promise<any>> = new Map();
 
-  // Generate cache key from search parameters
-  private getCacheKey(category: string, params: URLSearchParams): string {
-    const sortedParams = Array.from(params.entries()).sort();
-    return `${category}:${sortedParams.map(([k, v]) => `${k}=${v}`).join('&')}`;
-  }
+  // Cache TTLs (in milliseconds)
+  private readonly MOD_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+  private readonly SEARCH_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+  private readonly MAX_CACHE_SIZE = 2000;
+  private readonly MAX_SEARCH_CACHE_SIZE = 500;
 
-  // Check if cached data is still valid
-  private isValidCache(cached: CachedSearchResult): boolean {
-    return Date.now() - cached.timestamp < cached.ttl;
-  }
+  // Base URL for API calls
+  private readonly baseUrl: string;
 
-  // Clean up expired cache entries
-  private cleanupExpiredEntries(): void {
-    const now = Date.now();
-    for (const [key, cached] of this.cache.entries()) {
-      if (now - cached.timestamp >= cached.ttl) {
-        this.cache.delete(key);
-      }
+  // Check if we're in a build context (during Next.js build process)
+  private readonly isBuildTime: boolean;
+
+  constructor() {
+    // Determine base URL based on environment
+    if (typeof window === "undefined") {
+      // Server-side: use localhost or environment variable
+      this.baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+    } else {
+      // Client-side: use relative URLs
+      this.baseUrl = "";
+    }
+
+    // Check if we're in a build context (during Next.js build process)
+    this.isBuildTime = process.env.NODE_ENV === 'production' && 
+                      (process.env.NEXT_PHASE === 'phase-production-build' || 
+                       process.env.NEXT_PHASE === 'phase-production-optimize');
+
+    // Start cache cleanup interval only if not in build time
+    if (!this.isBuildTime) {
+      setInterval(() => this.clearExpiredCache(), 5 * 60 * 1000); // Every 5 minutes
     }
   }
 
-  // Limit cache size by removing oldest entries
-  private limitCacheSize(): void {
-    if (this.cache.size > this.CACHE_SIZE_LIMIT) {
-      const entries = Array.from(this.cache.entries());
-      entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+  /**
+   * Get mod from cache or API
+   */
+  async getMod(modId: number): Promise<CurseForgeModData | null> {
+    try {
+      // Check in-memory cache first
+      const cached = this.modCache.get(modId);
+      if (cached && Date.now() < cached.expiresAt) {
+        cached.hitCount++;
+        cached.lastAccessed = Date.now();
+        return cached.data;
+      }
+
+      // Check if request is already pending
+      const requestKey = `mod_${modId}`;
+      if (this.pendingRequests.has(requestKey)) {
+        return await this.pendingRequests.get(requestKey);
+      }
+
+      // Create new request
+      const requestPromise = this.fetchModFromAPI(modId);
+      this.pendingRequests.set(requestKey, requestPromise);
+
+      try {
+        const result = await requestPromise;
+        return result;
+      } finally {
+        // Clean up pending request
+        this.pendingRequests.delete(requestKey);
+      }
+    } catch (error) {
+      console.error("Error retrieving mod from cache:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Fetch mod from API
+   */
+  private async fetchModFromAPI(modId: number): Promise<CurseForgeModData | null> {
+    // Return early during build time to prevent API calls
+    if (this.isBuildTime) {
+      console.log(`[modCacheClient] Skipping mod API call during build time for modId: ${modId}`);
+      return null;
+    }
+
+    const response = await fetch(`${this.baseUrl}/api/curseforge/mods/${modId}`);
+    if (response.ok) {
+      const modData = await response.json();
       
-      // Remove oldest 20% of entries
-      const removeCount = Math.floor(this.CACHE_SIZE_LIMIT * 0.2);
-      for (let i = 0; i < removeCount; i++) {
-        this.cache.delete(entries[i][0]);
-      }
+      // Store in cache
+      this.setModInCache(modId, modData);
+      return modData;
     }
-  }
-
-  // Get cached data or return null if not found/expired
-  getCached(category: string, params: URLSearchParams): any[] | null {
-    const key = this.getCacheKey(category, params);
-    const cached = this.cache.get(key);
-    
-    if (cached && this.isValidCache(cached)) {
-      return cached.data;
-    }
-    
-    // Clean up expired entry
-    if (cached) {
-      this.cache.delete(key);
-    }
-    
     return null;
   }
 
-  // Set cache data with TTL
-  setCache(category: string, params: URLSearchParams, data: any[], ttl: number = this.DEFAULT_TTL): void {
-    const key = this.getCacheKey(category, params);
-    
-    this.cache.set(key, {
-      data,
-      timestamp: Date.now(),
-      ttl
-    });
+  /**
+   * Store mod in cache
+   */
+  async setMod(mod: CurseForgeModData): Promise<void> {
+    try {
+      // Store in memory cache
+      this.setModInCache(mod.id, mod);
 
-    // Periodic cleanup
-    this.cleanupExpiredEntries();
-    this.limitCacheSize();
+      // Also store via API for server-side persistence
+      await fetch(`${this.baseUrl}/api/curseforge/mods`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mod)
+      });
+    } catch (error) {
+      console.error("Error storing mod in cache:", error);
+    }
   }
 
-  // Batch multiple requests together
-  async searchWithBatching(category: string, params: URLSearchParams): Promise<any[]> {
+  /**
+   * Search mods with caching
+   */
+  async searchMods(
+    query: string,
+    category: string | undefined,
+    sortBy: string,
+    sortOrder: string,
+    page: number,
+    pageSize: number
+  ): Promise<{ data: CurseForgeModData[]; totalCount: number } | null> {
+    const cacheKey = this.generateSearchCacheKey(
+      query,
+      category,
+      sortBy,
+      sortOrder,
+      page,
+      pageSize
+    );
+
     // Check cache first
-    const cached = this.getCached(category, params);
-    if (cached) {
-      return cached;
+    const cachedResult = this.getSearchFromCache(cacheKey);
+    if (cachedResult) {
+      this.updateSearchCacheStats(cacheKey);
+      console.log(`[modCacheClient] Cache hit for key: ${cacheKey}`);
+      return cachedResult;
+    }
+    console.log(`[modCacheClient] Cache miss for key: ${cacheKey}`);
+
+    // Check if request is already pending
+    if (this.pendingRequests.has(cacheKey)) {
+      console.log(`[modCacheClient] Request already pending for key: ${cacheKey}`);
+      return await this.pendingRequests.get(cacheKey);
     }
 
-    // Add to batch queue
-    return new Promise<any[]>((resolve, reject) => {
-      this.batchQueue.push({ category, params, resolve, reject });
-      
-      // Set batch timeout if not already set
-      if (!this.batchTimeout) {
-        this.batchTimeout = setTimeout(() => {
-          this.processBatch();
-        }, this.BATCH_DELAY);
-      }
-    });
+    // Create new request
+    const requestPromise = this.fetchSearchFromAPI(cacheKey, query, category, sortBy, sortOrder, page, pageSize);
+    this.pendingRequests.set(cacheKey, requestPromise);
+
+    try {
+      const result = await requestPromise;
+      return result;
+    } finally {
+      // Clean up pending request
+      this.pendingRequests.delete(cacheKey);
+    }
   }
 
-  // Process batched requests
-  private async processBatch(): Promise<void> {
-    if (this.batchQueue.length === 0) return;
-
-    const batch = [...this.batchQueue];
-    this.batchQueue.length = 0;
-    this.batchTimeout = null;
-
-    // Group by unique requests to avoid duplicates
-    const uniqueRequests = new Map<string, BatchRequest[]>();
-    
-    for (const request of batch) {
-      const key = this.getCacheKey(request.category, request.params);
-      if (!uniqueRequests.has(key)) {
-        uniqueRequests.set(key, []);
-      }
-      uniqueRequests.get(key)!.push(request);
+  /**
+   * Fetch search results from API with retry mechanism
+   */
+  private async fetchSearchFromAPI(
+    cacheKey: string,
+    query: string,
+    category: string | undefined,
+    sortBy: string,
+    sortOrder: string,
+    page: number,
+    pageSize: number
+  ): Promise<{ data: CurseForgeModData[]; totalCount: number } | null> {
+    // Return early during build time to prevent API calls
+    if (this.isBuildTime) {
+      console.log(`[modCacheClient] Skipping API call during build time for key: ${cacheKey}`);
+      return { data: [], totalCount: 0 };
     }
 
-    // Execute unique requests
-    const promises = Array.from(uniqueRequests.entries()).map(async ([key, requests]) => {
-      const { category, params } = requests[0];
-      
+    const maxRetries = 2;
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      let url = '';
       try {
-        const response = await fetch(`/api/curseforge/search?${params}`);
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `Failed to load ${category} mods`);
+        const params = new URLSearchParams({
+          searchFilter: query,
+          sortField: sortBy,
+          sortOrder: sortOrder,
+          pageSize: pageSize.toString(),
+          index: ((page - 1) * pageSize).toString(),
+        });
+
+        if (category) {
+          params.append("categoryId", category);
         }
 
-        const data = await response.json();
+        url = `${this.baseUrl}/api/curseforge/search?${params}`;
+        console.log(`[modCacheClient] Fetching from API (attempt ${attempt}/${maxRetries}): ${url}`);
         
-        if (data.data) {
-          // Cache the result
-          this.setCache(category, params, data.data);
-          
-          // Resolve all matching requests
-          requests.forEach(req => req.resolve(data.data));
+        // Add timeout to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // Increased to 30 seconds
+        
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+        console.log(`[modCacheClient] Fetch response status: ${response.status}`);
+
+        if (response.ok) {
+          const result = await response.json();
+          this.setSearchInCache(cacheKey, result.mods || [], result.totalCount || 0);
+          return { data: result.mods || [], totalCount: result.totalCount || 0 };
         } else {
-          throw new Error(data.error || `Failed to load ${category} mods`);
+          console.warn(`[modCacheClient] API request failed with status ${response.status} (attempt ${attempt})`);
+          if (attempt === maxRetries) {
+            return null;
+          }
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
         }
       } catch (error) {
-        // Reject all matching requests
-        requests.forEach(req => req.reject(error as Error));
+        // Handle network errors gracefully
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        lastError = error instanceof Error ? error : new Error(errorMessage);
+        
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.warn(`[modCacheClient] Request timeout for: ${url} (attempt ${attempt})`);
+        } else {
+          console.warn(`[modCacheClient] Failed to fetch mods from API: ${errorMessage} (attempt ${attempt})`);
+        }
+        
+        if (attempt === maxRetries) {
+          console.error(`[modCacheClient] All ${maxRetries} attempts failed for key: ${cacheKey}`);
+          return null;
+        }
+        
+        // Wait before retry with exponential backoff
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
       }
-    });
+    }
 
-    await Promise.allSettled(promises);
+    return null;
   }
 
-  // Pre-fetch popular categories for better UX
-  async prefetchPopularCategories(): Promise<void> {
-    const popularCategories = [
-      { category: "Popular", params: new URLSearchParams({ query: "", sortBy: "popularity", sortOrder: "desc", pageSize: "20" }) },
-      { category: "QoL", params: new URLSearchParams({ query: "quality of life", sortBy: "popularity", sortOrder: "desc", pageSize: "20" }) },
-      { category: "Maps", params: new URLSearchParams({ categoryId: "17", sortBy: "popularity", sortOrder: "desc", pageSize: "20" }) }
-    ];
+  /**
+   * Get search results from cache
+   */
+  private getSearchFromCache(cacheKey: string): { data: CurseForgeModData[]; totalCount: number } | null {
+    const entry = this.searchCache.get(cacheKey);
+    if (entry && Date.now() < entry.expiresAt) {
+      return {
+        data: entry.data,
+        totalCount: entry.totalCount,
+      };
+    }
+    return null;
+  }
 
-    // Pre-fetch in background without waiting
-    popularCategories.forEach(({ category, params }) => {
-      // Only pre-fetch if not already cached
-      if (!this.getCached(category, params)) {
-        this.searchWithBatching(category, params).catch(() => {
-          // Silently fail pre-fetching
-        });
+  /**
+   * Update search cache statistics
+   */
+  private updateSearchCacheStats(cacheKey: string): void {
+    const entry = this.searchCache.get(cacheKey);
+    if (entry) {
+      entry.hitCount++;
+      entry.lastAccessed = Date.now();
+    }
+  }
+
+  /**
+   * Set search results in cache
+   */
+  async setSearchResults(
+    query: string,
+    category: string | undefined,
+    sortBy: string,
+    sortOrder: string,
+    page: number,
+    pageSize: number,
+    results: CurseForgeModData[],
+    totalCount: number
+  ): Promise<void> {
+    const cacheKey = this.generateSearchCacheKey(
+      query,
+      category,
+      sortBy,
+      sortOrder,
+      page,
+      pageSize
+    );
+
+    this.setSearchInCache(cacheKey, results, totalCount);
+  }
+
+  /**
+   * Get popular mods for a category
+   */
+  async getPopularMods(category: string, limit: number = 20): Promise<CurseForgeModData[]> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/curseforge/popular?category=${category}&limit=${limit}`);
+      if (response.ok) {
+        const result = await response.json();
+        return result.mods || [];
       }
+      return [];
+    } catch (error) {
+      console.error("Error fetching popular mods:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Clear expired cache entries
+   */
+  private clearExpiredCache(): void {
+    const now = Date.now();
+
+    // Clear expired mod cache entries
+    for (const [key, entry] of this.modCache.entries()) {
+      if (now >= entry.expiresAt) {
+        this.modCache.delete(key);
+      }
+    }
+
+    // Clear expired search cache entries
+    for (const [key, entry] of this.searchCache.entries()) {
+      if (now >= entry.expiresAt) {
+        this.searchCache.delete(key);
+      }
+    }
+
+    // Enforce cache size limits
+    this.enforceCacheSizeLimits();
+  }
+
+  /**
+   * Enforce cache size limits
+   */
+  private enforceCacheSizeLimits(): void {
+    // Enforce mod cache size limit
+    if (this.modCache.size > this.MAX_CACHE_SIZE) {
+      const entries = Array.from(this.modCache.entries());
+      entries.sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
+      
+      const toRemove = entries.slice(0, this.modCache.size - this.MAX_CACHE_SIZE);
+      toRemove.forEach(([key]) => this.modCache.delete(key));
+    }
+
+    // Enforce search cache size limit
+    if (this.searchCache.size > this.MAX_SEARCH_CACHE_SIZE) {
+      const entries = Array.from(this.searchCache.entries());
+      entries.sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
+      
+      const toRemove = entries.slice(0, this.searchCache.size - this.MAX_SEARCH_CACHE_SIZE);
+      toRemove.forEach(([key]) => this.searchCache.delete(key));
+    }
+  }
+
+  /**
+   * Set mod in memory cache
+   */
+  private setModInCache(modId: number, mod: CurseForgeModData): void {
+    this.modCache.set(modId, {
+      data: mod,
+      timestamp: Date.now(),
+      expiresAt: Date.now() + this.MOD_CACHE_TTL,
+      hitCount: 1,
+      lastAccessed: Date.now(),
     });
   }
 
-  // Clear all cache
-  clearCache(): void {
-    this.cache.clear();
+  /**
+   * Set search results in memory cache
+   */
+  private setSearchInCache(
+    cacheKey: string,
+    results: CurseForgeModData[],
+    totalCount: number
+  ): void {
+    this.searchCache.set(cacheKey, {
+      data: results,
+      totalCount,
+      timestamp: Date.now(),
+      expiresAt: Date.now() + this.SEARCH_CACHE_TTL,
+      hitCount: 1,
+      lastAccessed: Date.now(),
+    });
   }
 
-  // Get cache statistics
-  getCacheStats(): { size: number; keys: string[] } {
+  /**
+   * Generate cache key for search
+   */
+  private generateSearchCacheKey(
+    query: string,
+    category: string | undefined,
+    sortBy: string,
+    sortOrder: string,
+    page: number,
+    pageSize: number
+  ): string {
+    // Match the server-side key format exactly
+    const categoryId = category || 'undefined';
+    const index = ((page - 1) * pageSize).toString();
+    return `search_${query}_${categoryId}_${sortBy}_${sortOrder}_${pageSize}_${index}_false`;
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getCacheStats(): {
+    memoryMods: number;
+    memorySearches: number;
+  } {
     return {
-      size: this.cache.size,
-      keys: Array.from(this.cache.keys())
+      memoryMods: this.modCache.size,
+      memorySearches: this.searchCache.size,
     };
+  }
+
+  /**
+   * Clear all cache
+   */
+  clearCache(): void {
+    this.modCache.clear();
+    this.searchCache.clear();
+    console.log("[modCacheClient] Cache cleared");
+  }
+
+  /**
+   * Clear pending requests
+   */
+  clearPendingRequests(): void {
+    this.pendingRequests.clear();
+    console.log("[modCacheClient] Pending requests cleared");
+  }
+
+  /**
+   * Clear all cache and pending requests
+   */
+  clearAll(): void {
+    this.clearCache();
+    this.clearPendingRequests();
+    console.log("[modCacheClient] All cache and pending requests cleared");
+  }
+
+  /**
+   * Clear specific mod from cache
+   */
+  clearModCache(modId: number): void {
+    this.modCache.delete(modId);
+    console.log(`[modCacheClient] Mod cache cleared for ID: ${modId}`);
   }
 }
 

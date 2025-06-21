@@ -1,5 +1,6 @@
 import { prisma } from "./database";
 import { CurseForgeModData } from "../types/curseforge";
+import { info, warn, error, debug } from './logger';
 
 // In-memory cache for mods
 interface ModCacheEntry {
@@ -20,150 +21,50 @@ interface SearchCacheEntry {
 }
 
 class ModCacheService {
-  private modCache: Map<number, ModCacheEntry> = new Map();
-  private searchCache: Map<string, SearchCacheEntry> = new Map();
-  private inMemoryCache: Map<string, any> = new Map();
+  private inMemoryCache: Map<string, ModCacheEntry | SearchCacheEntry> = new Map();
   private dbAvailable: boolean = false;
-
-  // Enhanced cache TTLs (in milliseconds)
   private readonly MOD_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
   private readonly SEARCH_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
-  private readonly POPULAR_MODS_TTL = 6 * 60 * 60 * 1000; // 6 hours
-  private readonly MAX_CACHE_SIZE = 2000; // Increased cache size
-  private readonly MAX_SEARCH_CACHE_SIZE = 500; // Separate limit for search cache
+  private readonly MAX_CACHE_SIZE = 2000;
+  private readonly MAX_SEARCH_CACHE_SIZE = 500;
 
   constructor() {
+    this.initializeDatabase();
+  }
+
+  private async initializeDatabase(): Promise<void> {
     try {
-      this.dbAvailable = true;
-      console.log("Prisma database connection initialized");
-    } catch (error) {
-      console.warn(
-        "Failed to initialize Prisma database, falling back to in-memory cache:",
-        error
-      );
+      this.dbAvailable = false; // Temporarily disable database
+      info('[DB]', 'Database temporarily disabled for debugging');
+    } catch (err) {
+      warn('[DB]', 'Failed to initialize database: ' + (err instanceof Error ? err.message : String(err)));
       this.dbAvailable = false;
     }
   }
 
-  /**
-   * Enhanced mod retrieval with popularity scoring and analytics
-   */
   async getMod(modId: number): Promise<CurseForgeModData | null> {
     try {
-      if (!this.dbAvailable) {
-        // Fall back to in-memory cache
-        return this.inMemoryCache.get(`mod_${modId}`) || null;
+      // Check in-memory cache first
+      const cached = this.inMemoryCache.get(`mod_${modId}`) as ModCacheEntry;
+      if (cached && Date.now() < cached.expiresAt) {
+        cached.hitCount++;
+        cached.lastAccessed = Date.now();
+        return cached.data;
       }
 
-      const mod = await prisma.mod.findUnique({
-        where: { id: modId },
-        include: {
-          links: true,
-          categories: true,
-          authors: true,
-          logo: true,
-          screenshots: true,
-          latestFiles: {
-            include: {
-              hashes: true,
-              gameVersions: true,
-              sortableGameVersions: true,
-              dependencies: true,
-              modules: true,
-            },
-          },
-          latestFilesIndexes: true,
-        },
-      });
-
-      if (!mod) {
-        return null;
-      }
-
-      // Convert database model to CurseForge format
-      const curseForgeMod = this.convertDbToCurseForge(mod);
-
-      // Update access analytics
-      await this.updateModAccessAnalytics(modId);
-
-      // Store in memory cache with enhanced metadata
-      this.setModInMemoryCache(modId, curseForgeMod);
-
-      return curseForgeMod;
-    } catch (error) {
-      console.error("Error retrieving mod from cache:", error);
-      // Fall back to in-memory cache
-      return this.inMemoryCache.get(`mod_${modId}`) || null;
+      return null;
+    } catch (err) {
+      error('[CACHE]', 'Error retrieving mod from cache: ' + (err instanceof Error ? err.message : String(err)));
+      return null;
     }
   }
 
-  /**
-   * Enhanced mod storage with popularity scoring and search keywords
-   */
   async setMod(mod: CurseForgeModData): Promise<void> {
     try {
-      if (!this.dbAvailable) {
-        // Fall back to in-memory cache
-        this.inMemoryCache.set(`mod_${mod.id}`, {
-          ...mod,
-          lastFetched: new Date(),
-        });
-        return;
-      }
-
-      // Calculate popularity score
-      const popularityScore = this.calculatePopularityScore(mod);
-      
-      // Generate search keywords
-      const searchKeywords = this.generateSearchKeywords(mod);
-
-      // Store in database with enhanced fields
-      await (prisma.mod as any).upsert({
-        where: { id: mod.id },
-        update: {
-          name: mod.name,
-          summary: mod.summary,
-          downloadCount: mod.downloadCount,
-          thumbsUpCount: mod.thumbsUpCount,
-          logoUrl: mod.logo?.thumbnailUrl,
-          author: mod.authors?.[0]?.name,
-          lastUpdated: new Date(),
-          websiteUrl: mod.links?.websiteUrl,
-          category: mod.categories?.[0]?.name,
-          tags: mod.categories?.map((cat) => cat.name).join(", "),
-          searchKeywords: this.generateSearchKeywords(mod),
-          popularityScore: this.calculatePopularityScore(mod),
-        },
-        create: {
-          id: mod.id,
-          name: mod.name,
-          summary: mod.summary,
-          downloadCount: mod.downloadCount,
-          thumbsUpCount: mod.thumbsUpCount,
-          logoUrl: mod.logo?.thumbnailUrl,
-          author: mod.authors?.[0]?.name,
-          lastUpdated: new Date(),
-          websiteUrl: mod.links?.websiteUrl,
-          category: mod.categories?.[0]?.name,
-          tags: mod.categories?.map((cat) => cat.name).join(", "),
-          searchKeywords: this.generateSearchKeywords(mod),
-          popularityScore: this.calculatePopularityScore(mod),
-        },
-      });
-
-      // Store related data
-      await this.storeModRelations(mod);
-
-      // Update popular mods tracking
-      await this.updatePopularModsTracking(mod);
-
-    } catch (error) {
-      console.error("Error storing mod in cache:", error);
-      // Fall back to in-memory cache
-      this.inMemoryCache.set(`mod_${mod.id}`, {
-        ...mod,
-        lastFetched: new Date(),
-      });
+      // Store in memory cache only
+      this.setModInMemoryCache(mod.id, mod);
+    } catch (err) {
+      error('[CACHE]', 'Error storing mod in cache: ' + (err instanceof Error ? err.message : String(err)));
     }
   }
 
@@ -188,7 +89,7 @@ class ModCacheService {
     );
 
     // Check in-memory cache first
-    const memoryEntry = this.searchCache.get(cacheKey);
+    const memoryEntry = this.inMemoryCache.get(cacheKey) as SearchCacheEntry;
     if (memoryEntry && Date.now() < memoryEntry.expiresAt) {
       // Update hit count and last accessed
       memoryEntry.hitCount++;
@@ -197,34 +98,6 @@ class ModCacheService {
         data: memoryEntry.data,
         totalCount: memoryEntry.totalCount,
       };
-    }
-
-    // Check database cache
-    try {
-      const dbCache = await prisma.modCache.findUnique({
-        where: { query: cacheKey },
-      });
-
-      if (dbCache && new Date() < dbCache.expiresAt) {
-        // Update hit count and last accessed
-        await (prisma.modCache as any).update({
-          where: { id: dbCache.id },
-          data: {
-            hitCount: { increment: 1 },
-            lastAccessed: new Date(),
-          },
-        });
-
-        // Parse and return results
-        const modIds = JSON.parse(dbCache.results) as number[];
-        const totalCount = (dbCache as any).totalCount || modIds.length;
-
-        // Get mods from cache or database
-        const mods = await this.getModsByIds(modIds);
-        return { data: mods, totalCount };
-      }
-    } catch (error) {
-      console.error("Error checking database cache:", error);
     }
 
     // If not in cache, perform search
@@ -279,33 +152,6 @@ class ModCacheService {
 
     // Store in memory cache
     this.setSearchInMemoryCache(cacheKey, results, totalCount);
-
-    // Store in database cache
-    try {
-      if (this.dbAvailable) {
-        const modIds = results.map((mod) => mod.id);
-        await (prisma.modCache as any).upsert({
-          where: { query: cacheKey },
-          update: {
-            results: JSON.stringify(modIds),
-            totalCount,
-            expiresAt: new Date(Date.now() + this.SEARCH_CACHE_TTL),
-            hitCount: { increment: 1 },
-            lastAccessed: new Date(),
-          },
-          create: {
-            query: cacheKey,
-            results: JSON.stringify(modIds),
-            totalCount,
-            expiresAt: new Date(Date.now() + this.SEARCH_CACHE_TTL),
-            hitCount: 1,
-            lastAccessed: new Date(),
-          },
-        });
-      }
-    } catch (error) {
-      console.error("Error storing search results in database:", error);
-    }
   }
 
   /**
@@ -396,8 +242,8 @@ class ModCacheService {
         data: curseForgeMods,
         totalCount,
       };
-    } catch (error) {
-      console.error("Error performing database search:", error);
+    } catch (err) {
+      error("Error performing database search:", err instanceof Error ? err.message : String(err));
       return { data: [], totalCount: 0 };
     }
   }
@@ -476,8 +322,8 @@ class ModCacheService {
           avgResultCount: resultCount,
         },
       });
-    } catch (error) {
-      console.error("Error updating search analytics:", error);
+    } catch (err) {
+      error("Error updating search analytics:", err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -493,8 +339,8 @@ class ModCacheService {
         where: { id: modId },
         data: { lastUpdated: new Date() },
       });
-    } catch (error) {
-      console.error("Error updating mod access analytics:", error);
+    } catch (err) {
+      error("Error updating mod access analytics:", err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -527,8 +373,8 @@ class ModCacheService {
           },
         });
       }
-    } catch (error) {
-      console.error("Error updating popular mods tracking:", error);
+    } catch (err) {
+      error("Error updating popular mods tracking:", err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -547,8 +393,8 @@ class ModCacheService {
 
       const modIds = popularMods.map((pm: any) => pm.modId);
       return await this.getModsByIds(modIds);
-    } catch (error) {
-      console.error("Error getting popular mods:", error);
+    } catch (err) {
+      error("Error getting popular mods:", err instanceof Error ? err.message : String(err));
       return [];
     }
   }
@@ -575,8 +421,8 @@ class ModCacheService {
 
       // Clear memory cache
       this.clearExpiredMemoryCache();
-    } catch (error) {
-      console.error("Error clearing expired cache:", error);
+    } catch (err) {
+      error("Error clearing expired cache:", err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -587,32 +433,18 @@ class ModCacheService {
     const now = Date.now();
 
     // Clear expired mod cache
-    for (const [key, entry] of this.modCache.entries()) {
+    for (const [key, entry] of this.inMemoryCache.entries()) {
       if (now > entry.expiresAt) {
-        this.modCache.delete(key);
-      }
-    }
-
-    // Clear expired search cache
-    for (const [key, entry] of this.searchCache.entries()) {
-      if (now > entry.expiresAt) {
-        this.searchCache.delete(key);
+        this.inMemoryCache.delete(key);
       }
     }
 
     // Enforce size limits
-    if (this.modCache.size > this.MAX_CACHE_SIZE) {
-      const entries = Array.from(this.modCache.entries());
+    if (this.inMemoryCache.size > this.MAX_CACHE_SIZE) {
+      const entries = Array.from(this.inMemoryCache.entries());
       entries.sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
-      const toDelete = entries.slice(0, this.modCache.size - this.MAX_CACHE_SIZE);
-      toDelete.forEach(([key]) => this.modCache.delete(key));
-    }
-
-    if (this.searchCache.size > this.MAX_SEARCH_CACHE_SIZE) {
-      const entries = Array.from(this.searchCache.entries());
-      entries.sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
-      const toDelete = entries.slice(0, this.searchCache.size - this.MAX_SEARCH_CACHE_SIZE);
-      toDelete.forEach(([key]) => this.searchCache.delete(key));
+      const toDelete = entries.slice(0, this.inMemoryCache.size - this.MAX_CACHE_SIZE);
+      toDelete.forEach(([key]) => this.inMemoryCache.delete(key));
     }
   }
 
@@ -642,29 +474,29 @@ class ModCacheService {
     databaseSearches: number;
   } {
     return {
-      memoryMods: this.modCache.size,
-      memorySearches: this.searchCache.size,
+      memoryMods: this.inMemoryCache.size,
+      memorySearches: 0, // Search cache is not stored in memory
       databaseMods: 0, // Would need to query database
       databaseSearches: 0, // Would need to query database
     };
   }
 
   private setModInMemoryCache(modId: number, mod: CurseForgeModData): void {
-    if (this.modCache.size >= this.MAX_CACHE_SIZE) {
+    if (this.inMemoryCache.size >= this.MAX_CACHE_SIZE) {
       // Remove oldest entry
-      const oldestKey = this.modCache.keys().next().value;
+      const oldestKey = this.inMemoryCache.keys().next().value;
       if (oldestKey !== undefined) {
-        this.modCache.delete(oldestKey);
+        this.inMemoryCache.delete(oldestKey);
       }
     }
 
-    this.modCache.set(modId, {
+    this.inMemoryCache.set(`mod_${modId}`, {
       data: mod,
       timestamp: Date.now(),
       expiresAt: Date.now() + this.MOD_CACHE_TTL,
       hitCount: 0,
       lastAccessed: Date.now(),
-    });
+    } as ModCacheEntry);
   }
 
   private setSearchInMemoryCache(
@@ -672,22 +504,22 @@ class ModCacheService {
     results: CurseForgeModData[],
     totalCount: number
   ): void {
-    if (this.searchCache.size >= this.MAX_CACHE_SIZE) {
+    if (this.inMemoryCache.size >= this.MAX_CACHE_SIZE) {
       // Remove oldest entry
-      const oldestKey = this.searchCache.keys().next().value;
+      const oldestKey = this.inMemoryCache.keys().next().value;
       if (oldestKey !== undefined) {
-        this.searchCache.delete(oldestKey);
+        this.inMemoryCache.delete(oldestKey);
       }
     }
 
-    this.searchCache.set(cacheKey, {
+    this.inMemoryCache.set(cacheKey, {
       data: results,
       totalCount,
       timestamp: Date.now(),
       expiresAt: Date.now() + this.SEARCH_CACHE_TTL,
       hitCount: 0,
       lastAccessed: Date.now(),
-    });
+    } as SearchCacheEntry);
   }
 
   private generateSearchCacheKey(
@@ -1058,8 +890,8 @@ class ModCacheService {
           });
         }
       }
-    } catch (error) {
-      console.error("Error storing mod relations:", error);
+    } catch (err) {
+      error("Error storing mod relations:", err instanceof Error ? err.message : String(err));
     }
   }
 

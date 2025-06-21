@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { modCache } from "./mod-cache";
+import { modCacheClient } from "./mod-cache-client";
 import {
   CurseForgeModData,
   CurseForgeSearchResponse,
@@ -271,6 +271,13 @@ function log(level: number, message: string, ...args: any[]): void {
   }
 }
 
+// Rate limiting configuration
+const RATE_LIMIT_CONFIG = {
+  tokens: 100, // Increased from 1 to 100 tokens per minute
+  windowMs: 60 * 1000, // 1 minute window
+  maxConcurrent: 3, // Maximum 3 concurrent requests
+};
+
 export class CurseForgeAPI {
   private static readonly BASE_URL = "https://api.curseforge.com/v1";
   private static GAME_ID = 83374; // ARK: Survival Ascended
@@ -278,59 +285,41 @@ export class CurseForgeAPI {
   private static readonly RETRY_DELAY = 1000; // 1 second
   private static rateLimitInfo: RateLimitInfo | null = null;
 
-  // Token bucket: 60 tokens per minute = 1 token per second
-  private static tokenBucket = new TokenBucket(60, 1 / 60000); // 1 token per 60000ms (1 minute)
+  // Token bucket: 100 tokens per minute = ~1.67 tokens per second (more reasonable rate)
+  private static tokenBucket = new TokenBucket(100, 100 / 60000); // 100 tokens per 60000ms (1 minute)
 
   // Background fetching throttling
   private static backgroundFetching = false;
   private static backgroundFetchInterval: NodeJS.Timeout | null = null;
   private static lastBackgroundFetch = 0;
-  private static readonly BACKGROUND_FETCH_THROTTLE = 30000; // 30 seconds between fetches
+  private static readonly BACKGROUND_FETCH_THROTTLE = 30000; // 30 seconds between fetches (reduced from 60)
+
+  // Request batching to prevent overwhelming the API
+  private static pendingRequests: Map<string, Promise<any>> = new Map();
+  private static requestQueue: Array<{ 
+    key: string; 
+    resolve: (value: any) => void; 
+    reject: (reason: any) => void; 
+    request: () => Promise<any> 
+  }> = [];
+  private static isProcessingQueue = false;
+  private static readonly MAX_CONCURRENT_REQUESTS = 3; // Limit concurrent requests
+  private static activeRequests = 0;
 
   /**
-   * Get API key with fallback to reading from .env.local file
+   * Get API key with fallback to reading from .env files
    */
   private static getApiKey(): string {
     const apiKey = process.env.CURSEFORGE_API_KEY;
 
-    // Always try to read from .env.local file first for better reliability
-    try {
-      const envPath = path.join(process.cwd(), ".env.local");
-      if (fs.existsSync(envPath)) {
-        const envContent = fs.readFileSync(envPath, "utf8");
-        const lines = envContent.split("\n");
-        const curseforgeLine = lines.find((line) =>
-          line.trim().startsWith("CURSEFORGE_API_KEY=")
-        );
-        if (curseforgeLine) {
-          const fileKey = curseforgeLine.split("=")[1]?.trim() || "";
-          // Remove quotes if present
-          const cleanKey = fileKey.replace(/^\"|'|\"$/g, "");
+    // Try to read from .env.local first, then .env
+    const envFiles = [
+      path.join(process.cwd(), ".env.local"),
+      path.join(process.cwd(), ".env")
+    ];
 
-          if (cleanKey && cleanKey.length >= 32) {
-            log(LOG_LEVEL.INFO, "Using API key from .env.local file");
-            return cleanKey;
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error reading API key from .env.local:", error);
-    }
-
-    // Fallback to environment variable if file reading failed
-    if (apiKey && apiKey.length >= 32) {
-      log(LOG_LEVEL.INFO, "Using API key from environment variable");
-      return apiKey;
-    }
-
-    // If environment variable is truncated, try to read from file again with different approach
-    if (apiKey && apiKey.length < 50) {
-      log(
-        LOG_LEVEL.WARN,
-        "Environment variable appears truncated, attempting to read from .env.local file"
-      );
+    for (const envPath of envFiles) {
       try {
-        const envPath = path.join(process.cwd(), ".env.local");
         if (fs.existsSync(envPath)) {
           const envContent = fs.readFileSync(envPath, "utf8");
           const lines = envContent.split("\n");
@@ -339,19 +328,57 @@ export class CurseForgeAPI {
           );
           if (curseforgeLine) {
             const fileKey = curseforgeLine.split("=")[1]?.trim() || "";
-            const cleanKey = fileKey.replace(/^["']|["']$/g, "");
+            // Remove quotes if present
+            const cleanKey = fileKey.replace(/^\"|'|\"$/g, "");
 
-            if (cleanKey && cleanKey.length > apiKey.length) {
-              log(
-                LOG_LEVEL.INFO,
-                "Using API key from .env.local file (environment variable was truncated)"
-              );
+            // Support both traditional API keys (32+ chars) and bcrypt-formatted keys (60 chars)
+            if (cleanKey && (cleanKey.length >= 32 || cleanKey.startsWith("$2a$"))) {
+              log(LOG_LEVEL.INFO, `Using API key from ${path.basename(envPath)} file (length: ${cleanKey.length})`);
               return cleanKey;
             }
           }
         }
       } catch (error) {
-        console.error("Error reading API key from .env.local:", error);
+        console.error(`Error reading API key from ${path.basename(envPath)}:`, error);
+      }
+    }
+
+    // Fallback to environment variable if file reading failed
+    if (apiKey && (apiKey.length >= 32 || apiKey.startsWith("$2a$"))) {
+      log(LOG_LEVEL.INFO, `Using API key from environment variable (length: ${apiKey.length})`);
+      return apiKey;
+    }
+
+    // If environment variable is truncated, try to read from files again
+    if (apiKey && apiKey.length < 50 && !apiKey.startsWith("$2a$")) {
+      log(
+        LOG_LEVEL.WARN,
+        "Environment variable appears truncated, attempting to read from .env files"
+      );
+      for (const envPath of envFiles) {
+        try {
+          if (fs.existsSync(envPath)) {
+            const envContent = fs.readFileSync(envPath, "utf8");
+            const lines = envContent.split("\n");
+            const curseforgeLine = lines.find((line) =>
+              line.trim().startsWith("CURSEFORGE_API_KEY=")
+            );
+            if (curseforgeLine) {
+              const fileKey = curseforgeLine.split("=")[1]?.trim() || "";
+              const cleanKey = fileKey.replace(/^["']|["']$/g, "");
+
+              if (cleanKey && (cleanKey.length > apiKey.length || cleanKey.startsWith("$2a$"))) {
+                log(
+                  LOG_LEVEL.INFO,
+                  `Using API key from ${path.basename(envPath)} file (environment variable was truncated)`
+                );
+                return cleanKey;
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`Error reading API key from ${path.basename(envPath)}:`, error);
+        }
       }
     }
 
@@ -380,45 +407,126 @@ export class CurseForgeAPI {
     options: RequestInit = {},
     retryCount = 0
   ): Promise<T> {
-    const apiKey = this.getApiKey();
-    if (!apiKey) {
-      throw new CurseForgeAuthenticationError(
-        "CURSEFORGE_API_KEY not configured"
-      );
+    // Create a unique key for this request
+    const requestKey = `${endpoint}_${JSON.stringify(options)}`;
+    
+    // Check if this exact request is already pending
+    if (this.pendingRequests.has(requestKey)) {
+      return this.pendingRequests.get(requestKey) as Promise<T>;
     }
 
-    // Use token bucket rate limiter
-    await this.tokenBucket.consume(1);
+    // If we're at max concurrent requests, queue this request
+    if (this.activeRequests >= this.MAX_CONCURRENT_REQUESTS) {
+      return new Promise<T>((resolve, reject) => {
+        this.requestQueue.push({
+          key: requestKey,
+          resolve,
+          reject,
+          request: () => this.executeRequest<T>(endpoint, options, retryCount)
+        });
+        
+        // Start processing queue if not already processing
+        if (!this.isProcessingQueue) {
+          this.processRequestQueue();
+        }
+      });
+    }
 
-    // Check rate limits before making request
-    if (this.rateLimitInfo && this.rateLimitInfo.remaining <= 0) {
-      const now = Date.now();
-      if (now < this.rateLimitInfo.reset) {
-        const waitTime = this.rateLimitInfo.reset - now;
-        throw new CurseForgeRateLimitError(waitTime);
+    // Execute the request immediately
+    return this.executeRequest<T>(endpoint, options, retryCount);
+  }
+
+  /**
+   * Execute the actual request with rate limiting and error handling
+   */
+  private static async executeRequest<T>(
+    endpoint: string,
+    options: RequestInit = {},
+    retryCount = 0
+  ): Promise<T> {
+    const requestKey = `${endpoint}_${JSON.stringify(options)}`;
+    
+    // Create the promise and store it
+    const requestPromise = this.performRequest<T>(endpoint, options, retryCount);
+    this.pendingRequests.set(requestKey, requestPromise);
+    this.activeRequests++;
+
+    try {
+      const result = await requestPromise;
+      return result;
+    } finally {
+      // Clean up
+      this.pendingRequests.delete(requestKey);
+      this.activeRequests--;
+      
+      // Process next request in queue
+      if (this.requestQueue.length > 0) {
+        this.processRequestQueue();
       }
     }
+  }
+
+  /**
+   * Process the request queue
+   */
+  private static async processRequestQueue(): Promise<void> {
+    if (this.isProcessingQueue || this.requestQueue.length === 0) {
+      return;
+    }
+
+    this.isProcessingQueue = true;
+
+    while (this.requestQueue.length > 0 && this.activeRequests < this.MAX_CONCURRENT_REQUESTS) {
+      const queuedRequest = this.requestQueue.shift();
+      if (queuedRequest) {
+        try {
+          const result = await queuedRequest.request();
+          queuedRequest.resolve(result);
+        } catch (error) {
+          queuedRequest.reject(error);
+        }
+      }
+    }
+
+    this.isProcessingQueue = false;
+  }
+
+  /**
+   * Perform the actual HTTP request
+   */
+  private static async performRequest<T>(
+    endpoint: string,
+    options: RequestInit = {},
+    retryCount = 0
+  ): Promise<T> {
+    // Wait for token bucket
+    await this.tokenBucket.consume();
+
+    // Add timeout to prevent hanging requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
     try {
       const response = await fetch(`${this.BASE_URL}${endpoint}`, {
         ...options,
         headers: {
           Accept: "application/json",
-          "x-api-key": apiKey,
-          "User-Agent": "Saints-Ascended-Server-Manager/1.0",
+          "X-API-Key": this.getApiKey(),
           ...options.headers,
         },
+        signal: controller.signal,
       });
 
-      // Update rate limit info from headers
+      clearTimeout(timeoutId);
+
+      // Update rate limit info
       this.updateRateLimitInfo(response);
 
-      // Handle different HTTP status codes
-      if (response.status === 429) {
-        const retryAfter = this.getRetryAfterHeader(response);
-        throw new CurseForgeRateLimitError(retryAfter);
+      if (response.ok) {
+        return await response.json();
       }
 
+      // Handle specific error cases
       if (response.status === 401) {
         throw new CurseForgeAuthenticationError();
       }
@@ -428,43 +536,54 @@ export class CurseForgeAPI {
       }
 
       if (response.status === 404) {
-        throw new CurseForgeNotFoundError();
+        throw new CurseForgeNotFoundError(endpoint);
       }
 
-      if (!response.ok) {
-        // Try to parse error response
-        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-        try {
-          const errorData: CurseForgeErrorResponse = await response.json();
-          errorMessage = errorData.errorMessage || errorMessage;
-        } catch {
-          // If we can't parse the error response, use the default message
-        }
-
-        throw new CurseForgeAPIError(errorMessage, response.status);
+      if (response.status === 429) {
+        const retryAfter = this.getRetryAfterHeader(response);
+        throw new CurseForgeRateLimitError(retryAfter);
       }
 
-      const data = await response.json();
-      return data;
+      // Handle other errors
+      const errorData = await response.json().catch(() => ({}));
+      throw new CurseForgeAPIError(
+        errorData.errorMessage || `HTTP ${response.status}`,
+        response.status,
+        errorData.errorCode
+      );
     } catch (error) {
-      // Handle retry logic for rate limits and server errors
-      if (
-        (error instanceof CurseForgeRateLimitError ||
-          (error instanceof CurseForgeAPIError && error.statusCode >= 500)) &&
-        retryCount < this.MAX_RETRIES
-      ) {
-        const delay =
-          error instanceof CurseForgeRateLimitError
-            ? error.retryAfter || this.RETRY_DELAY
-            : this.RETRY_DELAY * Math.pow(2, retryCount); // Exponential backoff
+      clearTimeout(timeoutId);
 
-        console.log(
-          `Retrying request in ${delay}ms (attempt ${retryCount + 1}/${this.MAX_RETRIES})`
-        );
-        await this.delay(delay);
-        return this.makeRequest<T>(endpoint, options, retryCount + 1);
+      // Handle network errors with retry logic
+      if (error instanceof TypeError && error.message.includes('fetch failed')) {
+        const errorCause = (error as any).cause;
+        const isConnectionError = errorCause?.code === 'ECONNRESET' || 
+                                errorCause?.code === 'ENOTFOUND' ||
+                                errorCause?.code === 'ETIMEDOUT' ||
+                                errorCause?.code === 'ECONNREFUSED';
+
+        if (isConnectionError && retryCount < this.MAX_RETRIES) {
+          const backoffDelay = Math.pow(2, retryCount) * this.RETRY_DELAY;
+          log(LOG_LEVEL.WARN, `Network error (${errorCause?.code}), retrying in ${backoffDelay}ms (attempt ${retryCount + 1}/${this.MAX_RETRIES})`);
+          
+          await this.delay(backoffDelay);
+          return this.performRequest(endpoint, options, retryCount + 1);
+        }
       }
 
+      // Handle AbortError (timeout)
+      if (error instanceof Error && error.name === 'AbortError') {
+        if (retryCount < this.MAX_RETRIES) {
+          const backoffDelay = Math.pow(2, retryCount) * this.RETRY_DELAY;
+          log(LOG_LEVEL.WARN, `Request timeout, retrying in ${backoffDelay}ms (attempt ${retryCount + 1}/${this.MAX_RETRIES})`);
+          
+          await this.delay(backoffDelay);
+          return this.performRequest(endpoint, options, retryCount + 1);
+        }
+        throw new CurseForgeAPIError('Request timeout', 408);
+      }
+
+      // Re-throw other errors
       throw error;
     }
   }
@@ -510,7 +629,7 @@ export class CurseForgeAPI {
     pageSize: number = 20,
     page: number = 1,
     includeAllCategories: boolean = false
-  ): Promise<{ mods: CurseForgeMod[]; totalCount: number; hasMore: boolean }> {
+  ): Promise<{ mods: CurseForgeMod[]; totalCount: number; hasMore: boolean; fromCache: boolean }> {
     try {
       // Check cache first with enhanced key
       const cacheKey = this.generateEnhancedCacheKey(
@@ -523,7 +642,7 @@ export class CurseForgeAPI {
         includeAllCategories
       );
       
-      const cachedResult = await modCache.searchMods(
+      const cachedResult = await modCacheClient.searchMods(
         searchFilter,
         categoryId?.toString(),
         sortField,
@@ -532,54 +651,45 @@ export class CurseForgeAPI {
         pageSize
       );
 
-      if (cachedResult.data.length > 0) {
+      // Defensive check for cache hit
+      if (cachedResult && Array.isArray(cachedResult.data) && cachedResult.data.length > 0) {
         log(LOG_LEVEL.DEBUG, `Cache hit for enhanced search: ${cacheKey}`);
         const mods = this.normalizeModData(cachedResult.data);
         return {
           mods,
-          totalCount: cachedResult.totalCount,
-          hasMore: cachedResult.data.length === pageSize
+          totalCount: cachedResult.totalCount || mods.length,
+          hasMore: cachedResult.data.length === pageSize,
+          fromCache: true,
         };
       }
 
-      log(LOG_LEVEL.DEBUG, `Cache miss for enhanced search: ${cacheKey}, fetching from API`);
+      // If cache miss, try to fetch from API
+      const apiResult = await modCacheClient.searchMods(
+        searchFilter,
+        categoryId?.toString(),
+        sortField,
+        sortOrder,
+        page,
+        pageSize
+      );
 
-      // Enhanced API request with better parameters
-      const SORT_FIELD_MAP: Record<SortField, number> = {
-        name: 1,
-        popularity: 2,
-        size: 3,
-        updated: 4,
-      };
-
-      const params = new URLSearchParams({
-        gameId: this.GAME_ID.toString(),
-        searchFilter: searchFilter.trim(),
-        sortField: SORT_FIELD_MAP[sortField].toString(),
-        sortOrder: sortOrder,
-        pageSize: Math.min(pageSize, 50).toString(), // API limit
-        index: ((page - 1) * pageSize).toString(),
-      });
-
-      if (categoryId && !includeAllCategories) {
-        params.append("categoryId", categoryId.toString());
+      // Handle case where API request failed (returns null)
+      if (!apiResult) {
+        log(LOG_LEVEL.WARN, "API request failed, returning empty results");
+        return {
+          mods: [],
+          totalCount: 0,
+          hasMore: false,
+          fromCache: false,
+        };
       }
 
-      // Add additional parameters for better coverage
-      params.append("classId", "5"); // Mods class
-      params.append("gameVersionTypeId", "68441"); // Latest game version
-
-      const data: CurseForgeSearchResponse =
-        await this.makeRequest<CurseForgeSearchResponse>(
-          `/mods/search?${params}`
-        );
-
       // Normalize and deduplicate results
-      const normalizedMods = this.normalizeModData(data.data as CurseForgeModData[]);
+      const normalizedMods = this.normalizeModData(apiResult.data as CurseForgeModData[]);
       const deduplicatedMods = this.deduplicateMods(normalizedMods);
 
       // Store in cache with enhanced metadata
-      await modCache.setSearchResults(
+      await modCacheClient.setSearchResults(
         searchFilter,
         categoryId?.toString(),
         sortField,
@@ -587,18 +697,19 @@ export class CurseForgeAPI {
         page,
         pageSize,
         deduplicatedMods as CurseForgeModData[],
-        data.pagination.totalCount
+        apiResult.totalCount
       );
 
       // Store individual mods in cache for faster future access
       for (const mod of deduplicatedMods) {
-        await modCache.setMod(mod as CurseForgeModData);
+        await modCacheClient.setMod(mod as CurseForgeModData);
       }
 
       return {
         mods: deduplicatedMods,
-        totalCount: data.pagination.totalCount,
-        hasMore: data.pagination.index + data.pagination.resultCount < data.pagination.totalCount
+        totalCount: apiResult.totalCount,
+        hasMore: deduplicatedMods.length === pageSize && deduplicatedMods.length < apiResult.totalCount,
+        fromCache: false,
       };
     } catch (error) {
       console.error("Failed to search CurseForge mods:", error);
@@ -837,7 +948,7 @@ export class CurseForgeAPI {
   static async getModDetails(modId: number): Promise<CurseForgeMod> {
     try {
       // Check cache first
-      const cachedMod = await modCache.getMod(modId);
+      const cachedMod = await modCacheClient.getMod(modId);
 
       if (cachedMod) {
         log(LOG_LEVEL.DEBUG, `Cache hit for mod: ${modId}`);
@@ -855,7 +966,7 @@ export class CurseForgeAPI {
       );
 
       // Store in cache
-      await modCache.setMod(data.data as CurseForgeModData);
+      await modCacheClient.setMod(data.data as CurseForgeModData);
 
       return data.data;
     } catch (error) {
@@ -907,7 +1018,7 @@ export class CurseForgeAPI {
   static getTokenBucketStatus(): { tokens: number; capacity: number } {
     return {
       tokens: this.tokenBucket.getTokens(),
-      capacity: 60,
+      capacity: 100,
     };
   }
 
@@ -930,6 +1041,11 @@ export class CurseForgeAPI {
     this.backgroundFetching = true;
     log(LOG_LEVEL.INFO, "Starting background mod fetching service");
 
+    // Start the background fetching process immediately, then set interval
+    this.fetchNextBatchOfMods().catch(error => {
+      console.error("Error in initial background mod fetch:", error);
+    });
+
     // Start the background fetching process with longer intervals
     this.backgroundFetchInterval = setInterval(async () => {
       try {
@@ -937,7 +1053,7 @@ export class CurseForgeAPI {
       } catch (error) {
         console.error("Error in background mod fetching:", error);
       }
-    }, 30000); // Check every 30 seconds instead of 5 seconds
+    }, 60000); // Check every 60 seconds instead of 30 seconds
   }
 
   /**
@@ -976,6 +1092,7 @@ export class CurseForgeAPI {
 
     // Check if we have tokens available
     if (!this.canMakeRequest()) {
+      log(LOG_LEVEL.DEBUG, "Background: No tokens available, skipping fetch");
       return; // Wait for more tokens
     }
 
@@ -984,30 +1101,44 @@ export class CurseForgeAPI {
       const nextMods = await this.getNextModsToFetch();
 
       if (nextMods.length === 0) {
-        // No more mods to fetch, we can stop or wait
+        log(LOG_LEVEL.DEBUG, "Background: No more mods to fetch");
         return;
       }
 
-      // Fetch mod details for each mod in the batch
+      log(LOG_LEVEL.INFO, `Background: Fetching ${nextMods.length} mods`);
+
+      // Process mods sequentially with delays to prevent overwhelming the system
       for (const modId of nextMods) {
         if (!this.canMakeRequest()) {
           // Wait for more tokens before continuing
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          log(LOG_LEVEL.DEBUG, "Background: Waiting for tokens...");
+          await new Promise((resolve) => setTimeout(resolve, 2000)); // Increased delay
           continue;
         }
 
         try {
-          const modDetails = await this.getModDetails(modId);
+          // Add timeout to individual mod requests
+          const modDetails = await Promise.race([
+            this.getModDetails(modId),
+            new Promise<never>((_, reject) => 
+              setTimeout(() => reject(new Error('Mod fetch timeout')), 10000)
+            )
+          ]) as CurseForgeMod;
 
           // Store in cache
-          await modCache.setMod(modDetails as CurseForgeModData);
+          await modCacheClient.setMod(modDetails as CurseForgeModData);
 
           log(
             LOG_LEVEL.DEBUG,
             `Background: Fetched mod ${modId} - ${modDetails.name}`
           );
+
+          // Add delay between mod fetches to prevent overwhelming the system
+          await new Promise((resolve) => setTimeout(resolve, 1000));
         } catch (error) {
           console.error(`Background: Failed to fetch mod ${modId}:`, error);
+          // Add delay even on error to prevent rapid retries
+          await new Promise((resolve) => setTimeout(resolve, 2000));
         }
       }
     } catch (error) {
@@ -1061,7 +1192,7 @@ export class CurseForgeAPI {
       for (const modId of uniqueModIds.slice(0, 5)) {
         // Reduced from 10 to 5
         // Limit batch size
-        const cached = await modCache.getMod(modId);
+        const cached = await modCacheClient.getMod(modId);
         if (!cached) {
           uncachedModIds.push(modId);
         }
@@ -1168,6 +1299,34 @@ export class CurseForgeAPI {
       keyLength: finalKey.length,
       isValidFormat,
       message,
+    };
+  }
+
+  /**
+   * Clear all pending requests and queue
+   */
+  static clearPendingRequests(): void {
+    this.pendingRequests.clear();
+    this.requestQueue = [];
+    this.activeRequests = 0;
+    this.isProcessingQueue = false;
+    console.log("[CurseForgeAPI] All pending requests and queue cleared");
+  }
+
+  /**
+   * Get queue status for debugging
+   */
+  static getQueueStatus(): {
+    pendingRequests: number;
+    queueLength: number;
+    activeRequests: number;
+    isProcessingQueue: boolean;
+  } {
+    return {
+      pendingRequests: this.pendingRequests.size,
+      queueLength: this.requestQueue.length,
+      activeRequests: this.activeRequests,
+      isProcessingQueue: this.isProcessingQueue
     };
   }
 }

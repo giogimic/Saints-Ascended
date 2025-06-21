@@ -26,6 +26,42 @@ import { useModal } from "@/context/ModalContext";
 import { ErrorHandler } from "@/lib/error-handler";
 import { unifiedModManager, UnifiedModData } from "@/lib/unified-mod-manager";
 
+// Global cache for category data to prevent duplicate API calls
+const categoryDataCache = new Map<string, {
+  data: CurseForgeModData[];
+  timestamp: number;
+  isLoading: boolean;
+  error: string | null;
+}>();
+
+// Cache TTL: 5 minutes
+const CATEGORY_CACHE_TTL = 5 * 60 * 1000;
+
+// Cleanup function to clear expired cache entries
+const cleanupExpiredCache = () => {
+  const now = Date.now();
+  for (const [key, value] of categoryDataCache.entries()) {
+    if (now - value.timestamp > CATEGORY_CACHE_TTL) {
+      categoryDataCache.delete(key);
+    }
+  }
+};
+
+// Run cleanup every 2 minutes
+setInterval(cleanupExpiredCache, 2 * 60 * 1000);
+
+// Function to clear all cache
+const clearAllCategoryCache = () => {
+  categoryDataCache.clear();
+  console.log('[ModManager] Cleared all category cache');
+};
+
+// Function to clear specific category cache
+const clearCategoryCache = (category: string) => {
+  categoryDataCache.delete(category);
+  console.log(`[ModManager] Cleared cache for category: ${category}`);
+};
+
 interface ModManagerProps {
   serverId: string;
   onModsUpdate: (mods: ModInfo[]) => void;
@@ -231,13 +267,65 @@ const ModManager: React.FC<ModManagerProps> = ({
     loadMods(cachedMods || []); 
     loadLaunchOptions();
     loadBackgroundFetchStatus();
+    
+    // Automatically start background fetching if not already running
+    const autoStartBackgroundFetch = async () => {
+      try {
+        // First check current status
+        const statusResponse = await fetch('/api/curseforge/background-fetch');
+        if (statusResponse.ok) {
+          const statusData = await statusResponse.json();
+          if (!statusData.data?.isRunning) {
+            // Start background fetching automatically
+            const startResponse = await fetch('/api/curseforge/background-fetch', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'start' })
+            });
+            
+            if (startResponse.ok) {
+              console.log('✅ Background fetch service started automatically');
+              // Reload status after starting
+              loadBackgroundFetchStatus();
+            } else {
+              console.warn('⚠️ Failed to start background fetch service');
+            }
+          } else {
+            console.log('✅ Background fetch service already running');
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error starting background fetch service:', error);
+      }
+    };
+
+    // Start background fetch with a small delay to ensure other services are ready
+    const timer = setTimeout(autoStartBackgroundFetch, 1000);
+    
+    // Set up periodic status refresh
+    const statusInterval = setInterval(loadBackgroundFetchStatus, 10000); // Refresh every 10 seconds
+    
+    return () => {
+      clearTimeout(timer);
+      clearInterval(statusInterval);
+    };
   }, [serverId]);
 
   // Load mods with unified manager for comprehensive data
-  const loadMods = async (cachedMods: ModInfo[] = []) => {
+  const loadMods = async (cachedMods: ModInfo[] = [], retryCount = 0) => {
+    setIsLoadingMods(true);
+    
     try {
+      // Add timeout to prevent hanging on mod loading
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Mod loading timeout')), 15000); // 15 second timeout
+      });
+      
       // Use unified mod manager to get comprehensive mod data with auto-fetch
-      const enhancedMods = await unifiedModManager.getServerMods(serverId);
+      const enhancedMods = await Promise.race([
+        unifiedModManager.getServerMods(serverId),
+        timeoutPromise
+      ]) as UnifiedModData[];
       
       // Convert UnifiedModData to ModInfo for compatibility
       const convertedMods: ModInfo[] = enhancedMods.map(mod => ({
@@ -250,7 +338,7 @@ const ModManager: React.FC<ModManagerProps> = ({
         loadOrder: mod.loadOrder,
         dependencies: mod.dependencies,
         incompatibilities: mod.incompatibilities,
-        size: mod.size,
+        size: typeof mod.size === 'number' ? mod.size : (mod.fileSize || 0),
         lastUpdated: mod.lastUpdated
       }));
 
@@ -262,24 +350,53 @@ const ModManager: React.FC<ModManagerProps> = ({
       setLaunchOptions(launchOptions);
       saveLaunchOptionsToCache(launchOptions);
       
-      addConsoleInfo(`🔄 Refreshed ${convertedMods.length} installed mods with comprehensive data`);
+      addConsoleSuccess(`✅ Loaded ${convertedMods.length} installed mods with comprehensive data`);
       
       if (onModsUpdate) {
         onModsUpdate(convertedMods);
       }
       
+      setIsLoadingMods(false); // Clear loading state on successful completion
+      
       return convertedMods;
     } catch (error) {
-      console.error("Failed to load mods:", error);
-      addConsoleError(`❌ Failed to load mods: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error(`❌ Error loading mods (attempt ${retryCount + 1}):`, error);
       
-      // Fallback to cached mods if available
-      if (cachedMods.length > 0) {
-        setMods(cachedMods);
-        addConsoleWarning(`⚠️ Using cached mods as fallback`);
+      // Handle timeout specifically
+      if (error instanceof Error && error.message === 'Mod loading timeout') {
+        addConsoleWarning(`⏰ Mod loading timed out after 15 seconds (attempt ${retryCount + 1})`);
+        
+        // For timeouts, use cached data immediately if available
+        if (cachedMods.length > 0) {
+          console.log(`📦 Using ${cachedMods.length} cached mods due to timeout`);
+          setMods(cachedMods);
+          setIsLoadingMods(false);
+          addConsoleInfo("💾 Loaded mods from cache due to slow API response");
+          return cachedMods;
+        }
       }
       
-      return cachedMods;
+      // Retry logic with exponential backoff (but not for timeouts if we have cache)
+      if (retryCount < 2 && !(error instanceof Error && error.message === 'Mod loading timeout' && cachedMods.length > 0)) {
+        const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
+        console.log(`🔄 Retrying in ${delay}ms...`);
+        
+        setTimeout(() => {
+          loadMods(cachedMods, retryCount + 1);
+        }, delay);
+        return;
+      }
+      
+      // Final fallback: use cached mods if available
+      if (cachedMods.length > 0) {
+        console.log(`📦 Using ${cachedMods.length} cached mods as fallback`);
+        setMods(cachedMods);
+        setIsLoadingMods(false);
+      } else {
+        // Show error state
+        setIsLoadingMods(false);
+        console.error('❌ No cached mods available, showing empty state');
+      }
     }
   };
 
@@ -293,42 +410,6 @@ const ModManager: React.FC<ModManagerProps> = ({
       }
     } catch (error) {
       console.error("Failed to load background fetch status:", error);
-    }
-  };
-
-  // Start background fetching
-  const startBackgroundFetching = async () => {
-    try {
-      const response = await fetch('/api/curseforge/background-fetch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'start' })
-      });
-      if (response.ok) {
-        loadBackgroundFetchStatus();
-        toast.success("Background fetching started");
-      }
-    } catch (error) {
-      console.error("Failed to start background fetching:", error);
-      toast.error("Failed to start background fetching");
-    }
-  };
-
-  // Stop background fetching
-  const stopBackgroundFetching = async () => {
-    try {
-      const response = await fetch('/api/curseforge/background-fetch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'stop' })
-      });
-      if (response.ok) {
-        loadBackgroundFetchStatus();
-        toast.success("Background fetching stopped");
-      }
-    } catch (error) {
-      console.error("Failed to stop background fetching:", error);
-      toast.error("Failed to stop background fetching");
     }
   };
 
@@ -754,16 +835,17 @@ const ModManager: React.FC<ModManagerProps> = ({
     </div>
   );
 
-  const renderBackgroundFetchControls = () => backgroundFetchStatus && (
+  const renderBackgroundFetchControls = () => (
     <div>
       <h3 className="font-bold text-matrix-400 uppercase tracking-wider mb-2">Cache Status</h3>
       <div className="text-xs text-matrix-600 space-y-1">
-        <p>Status: {backgroundFetchStatus.isRunning ? 'Running' : 'Stopped'}</p>
-        <p>Rate Limited: {backgroundFetchStatus.rateLimited ? 'Yes' : 'No'}</p>
+        <p>Status: {backgroundFetchStatus?.isRunning ? '🟢 Active' : '🔴 Inactive'}</p>
+        <p>Rate Limited: {backgroundFetchStatus?.rateLimited ? '⚠️ Yes' : '✅ No'}</p>
+        <p>Cache Warming: {backgroundFetchStatus?.cacheWarming?.isWarming ? '🔄 Warming' : '💾 Ready'}</p>
       </div>
-      <div className="flex gap-2 mt-2">
-        <button onClick={startBackgroundFetching} disabled={backgroundFetchStatus.isRunning} className="btn-cyber-xs">Start</button>
-        <button onClick={stopBackgroundFetching} disabled={!backgroundFetchStatus.isRunning} className="btn-cyber-xs-danger">Stop</button>
+      <div className="mt-2 text-xs text-matrix-700">
+        <p>💡 Automatic caching is enabled</p>
+        <p>📊 Data refreshes every 30 minutes</p>
       </div>
     </div>
   );
@@ -779,6 +861,33 @@ const ModManager: React.FC<ModManagerProps> = ({
     useEffect(() => {
       const loadCategoryMods = async () => {
         if (category === 'Installed') return; // Skip for installed mods
+
+        // Check global cache first
+        const cached = categoryDataCache.get(category);
+        const now = Date.now();
+        
+        if (cached && (now - cached.timestamp) < CATEGORY_CACHE_TTL) {
+          // Use cached data
+          setCategoryMods(cached.data);
+          setError(cached.error);
+          setCacheStatus('cache');
+          addConsoleInfo(`💾 Loaded ${cached.data.length} mods for "${category}" from global cache`);
+          return;
+        }
+
+        // Check if already loading this category
+        if (cached?.isLoading) {
+          setIsLoading(true);
+          return;
+        }
+
+        // Set loading state in global cache
+        categoryDataCache.set(category, {
+          data: [],
+          timestamp: now,
+          isLoading: true,
+          error: null
+        });
 
         setIsLoading(true);
         setError(null);
@@ -797,14 +906,33 @@ const ModManager: React.FC<ModManagerProps> = ({
             throw new Error(data.error || `Failed to load ${category} mods`);
           }
           
-          setCategoryMods(data.data || []);
+          const mods = data.data || [];
+          
+          // Update global cache
+          categoryDataCache.set(category, {
+            data: mods,
+            timestamp: now,
+            isLoading: false,
+            error: null
+          });
+          
+          setCategoryMods(mods);
           setCacheStatus(data.source === 'cache' ? 'cache' : 'api');
           
           // Log success to system console
-          addConsoleInfo(`✅ Loaded ${data.data?.length || 0} mods for category "${category}" from ${data.source || 'unknown source'}`);
+          addConsoleInfo(`✅ Loaded ${mods.length} mods for category "${category}" from ${data.source || 'unknown source'}`);
           
         } catch (err) {
           const errorMessage = err instanceof Error ? err.message : `Failed to load ${category} mods`;
+          
+          // Update global cache with error
+          categoryDataCache.set(category, {
+            data: [],
+            timestamp: now,
+            isLoading: false,
+            error: errorMessage
+          });
+          
           setError(errorMessage);
           setCategoryMods([]);
           
@@ -890,7 +1018,7 @@ const ModManager: React.FC<ModManagerProps> = ({
             {category} Mods ({categoryMods.length})
           </h3>
           <div className="text-xs text-matrix-600 flex items-center gap-2">
-            <span className={`px-2 py-1 rounded ${cacheStatus === 'cache' ? 'bg-green-900/30 text-green-400' : 'bg-blue-900/30 text-blue-400'}`}>
+            <span className={`px-2 py-1 rounded ${cacheStatus === 'cache' ? 'bg-green-900/30 text-green-400' : 'bg-matrix-900/30 text-matrix-400'}`}>
               {cacheStatus === 'cache' ? '💾 Cached' : '🌐 Live'}
             </span>
           </div>
@@ -987,177 +1115,218 @@ const ModManager: React.FC<ModManagerProps> = ({
       mod.description.toLowerCase().includes(installedModsSearchQuery.toLowerCase())
     );
 
-    return (
-      <div>
-        {filteredInstalledMods.length === 0 ? (
-          <div className="text-center p-8 border-2 border-dashed border-matrix-500/30">
-            <PuzzlePieceIcon className="mx-auto h-10 w-10 text-matrix-600" />
-            <h4 className="mt-4 font-bold text-matrix-500">
-              {installedModsSearchQuery ? 'No Matching Mods Found' : 'No Mods Installed'}
-            </h4>
-            <p className="text-sm text-matrix-600">
-              {installedModsSearchQuery 
-                ? `No mods match "${installedModsSearchQuery}". Try a different search term.`
-                : `Click 'Add Mods' to get started.`
-              }
-            </p>
+    // Loading state
+    if (isLoadingMods) {
+      return (
+        <div className="text-center p-8 border-2 border-dashed border-matrix-500/30">
+          <div className="loading loading-spinner loading-lg text-matrix-500 mx-auto mb-4"></div>
+          <p className="text-matrix-600">Loading installed mods...</p>
+          <p className="text-xs text-matrix-700">Fetching mod data from server (timeout: 15s)</p>
+          <p className="text-xs text-matrix-800 mt-2">
+            {backgroundFetchStatus?.isRunning 
+              ? "🔄 Background caching is active" 
+              : "💡 Background caching will start automatically"
+            }
+          </p>
+        </div>
+      );
+    }
+
+    // Empty state
+    if (filteredInstalledMods.length === 0) {
+      return (
+        <div className="text-center p-8 border-2 border-dashed border-matrix-500/30">
+          <div className="text-matrix-500 mb-4">
+            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {filteredInstalledMods.map((mod) => (
-              <div key={mod.id} className="bg-cyber-bg/50 border border-matrix-500/20 p-4 hover:bg-matrix-900/50 transition-colors">
-                <div className="flex items-start gap-4">
-                  {/* Mod Icon/Logo */}
-                  <div className="flex-shrink-0">
-                    <div className="w-16 h-16 bg-matrix-800/50 rounded flex items-center justify-center border border-matrix-500/30">
-                      <PuzzlePieceIcon className="h-8 w-8 text-matrix-600" />
+          <h3 className="text-lg font-semibold text-matrix-400 mb-2">No Mods Found</h3>
+          {installedModsSearchQuery ? (
+            <div>
+              <p className="text-matrix-600 mb-4">No mods match your search &quot;{installedModsSearchQuery}&quot;</p>
+              <button 
+                onClick={() => setInstalledModsSearchQuery("")}
+                className="btn btn-sm btn-outline text-matrix-400 border-matrix-500 hover:bg-matrix-500 hover:text-black"
+              >
+                Clear Search
+              </button>
+            </div>
+          ) : (
+            <div>
+              <p className="text-matrix-600 mb-2">No mods are currently installed on this server</p>
+              <p className="text-xs text-matrix-700 mb-4">
+                {backgroundFetchStatus?.isRunning 
+                  ? "🔄 Background caching is active - mod data will be available soon" 
+                  : "💡 Try searching for mods to install some"
+                }
+              </p>
+              <button 
+                onClick={() => setSelectedCategory("Popular")}
+                className="btn btn-sm btn-primary bg-matrix-500 border-matrix-500 text-black hover:bg-matrix-400"
+              >
+                Browse Popular Mods
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {filteredInstalledMods.map((mod) => (
+          <div key={mod.id} className="bg-cyber-bg/50 border border-matrix-500/20 p-4 hover:bg-matrix-900/50 transition-colors">
+            <div className="flex items-start gap-4">
+              {/* Mod Icon/Logo */}
+              <div className="flex-shrink-0">
+                <div className="w-16 h-16 bg-matrix-800/50 rounded flex items-center justify-center border border-matrix-500/30">
+                  <PuzzlePieceIcon className="h-8 w-8 text-matrix-600" />
+                </div>
+              </div>
+
+              {/* Mod Information */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h3 className="font-bold text-matrix-400 text-lg truncate">{mod.name}</h3>
+                    <p className="text-sm text-matrix-600 mt-1 line-clamp-2">{mod.description}</p>
+                    
+                    {/* Mod Stats */}
+                    <div className="flex items-center gap-4 mt-2 text-xs text-matrix-700">
+                      <span className="flex items-center gap-1">
+                        📦 Version: {mod.version}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        🆔 ID: {mod.workshopId}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        📊 {typeof mod.size === 'number' ? `${(mod.size / 1024 / 1024).toFixed(1)} MB` : 'Unknown'}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        📅 {formatDate(mod.lastUpdated)}
+                      </span>
                     </div>
-                  </div>
 
-                  {/* Mod Information */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="font-bold text-matrix-400 text-lg truncate">{mod.name}</h3>
-                        <p className="text-sm text-matrix-600 mt-1 line-clamp-2">{mod.description}</p>
-                        
-                        {/* Mod Stats */}
-                        <div className="flex items-center gap-4 mt-2 text-xs text-matrix-700">
-                          <span className="flex items-center gap-1">
-                            📦 Version: {mod.version}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            🆔 ID: {mod.workshopId}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            📊 {mod.size}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            📅 {formatDate(mod.lastUpdated)}
-                          </span>
-                        </div>
-
-                        {/* Dependencies & Incompatibilities */}
-                        {(mod.dependencies.length > 0 || mod.incompatibilities.length > 0) && (
-                          <div className="mt-2 text-xs">
-                            {mod.dependencies.length > 0 && (
-                              <div className="text-blue-400">
-                                🔗 Dependencies: {mod.dependencies.join(', ')}
-                              </div>
-                            )}
-                            {mod.incompatibilities.length > 0 && (
-                              <div className="text-red-400">
-                                ⚠️ Conflicts: {mod.incompatibilities.join(', ')}
-                              </div>
-                            )}
+                    {/* Dependencies & Incompatibilities */}
+                    {(mod.dependencies.length > 0 || mod.incompatibilities.length > 0) && (
+                      <div className="mt-2 text-xs">
+                        {mod.dependencies.length > 0 && (
+                          <div className="text-matrix-400">
+                            🔗 Dependencies: {mod.dependencies.join(', ')}
+                          </div>
+                        )}
+                        {mod.incompatibilities.length > 0 && (
+                          <div className="text-red-400">
+                            ⚠️ Conflicts: {mod.incompatibilities.join(', ')}
                           </div>
                         )}
                       </div>
+                    )}
+                  </div>
 
-                      {/* Enabled/Disabled Status */}
-                      <div className="flex-shrink-0 ml-4">
-                        <div className={clsx(
-                          "px-3 py-1 text-xs font-bold uppercase tracking-wider",
-                          mod.enabled 
-                            ? "bg-green-900/30 text-green-400 border border-green-500/30" 
-                            : "bg-red-900/30 text-red-400 border border-red-500/30"
-                        )}>
-                          {mod.enabled ? "✅ Enabled" : "❌ Disabled"}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex items-center gap-2 mt-4">
-                      <button
-                        onClick={() => toggleMod(mod.id)}
-                        className={clsx(
-                          "px-4 py-2 text-sm font-bold transition-colors",
-                          mod.enabled
-                            ? "bg-red-600 hover:bg-red-500 text-white"
-                            : "bg-green-600 hover:bg-green-500 text-white"
-                        )}
-                        title={mod.enabled ? "Disable mod" : "Enable mod"}
-                      >
-                        {mod.enabled ? "Disable" : "Enable"}
-                      </button>
-
-                      <button
-                        onClick={() => removeMod(mod.id)}
-                        className="bg-red-700 hover:bg-red-600 text-white px-4 py-2 text-sm font-bold transition-colors"
-                        title="Remove mod completely"
-                      >
-                        Remove
-                      </button>
-
-                      {/* View on CurseForge (if available) */}
-                      <button
-                        onClick={() => window.open(`https://www.curseforge.com/ark-survival-ascended/mods/${mod.workshopId}`, '_blank')}
-                        className="bg-matrix-600 hover:bg-matrix-500 text-white px-4 py-2 text-sm font-bold transition-colors flex items-center gap-1"
-                        title="View on CurseForge"
-                      >
-                        <EyeIcon className="h-4 w-4" />
-                        View
-                      </button>
+                  {/* Enabled/Disabled Status */}
+                  <div className="flex-shrink-0 ml-4">
+                    <div className={clsx(
+                      "px-3 py-1 text-xs font-bold uppercase tracking-wider",
+                      mod.enabled 
+                        ? "bg-green-900/30 text-green-400 border border-green-500/30" 
+                        : "bg-red-900/30 text-red-400 border border-red-500/30"
+                    )}>
+                      {mod.enabled ? "✅ Enabled" : "❌ Disabled"}
                     </div>
                   </div>
                 </div>
 
-                {/* Load Order (for advanced users) */}
-                <div className="mt-3 pt-3 border-t border-matrix-500/20">
-                  <div className="flex items-center justify-between text-xs text-matrix-700">
-                    <span>Load Order: {mod.loadOrder}</span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          // Move up in load order
-                          const currentIndex = mods.findIndex(m => m.id === mod.id);
-                          if (currentIndex > 0) {
-                            const newMods = [...mods];
-                            [newMods[currentIndex], newMods[currentIndex - 1]] = [newMods[currentIndex - 1], newMods[currentIndex]];
-                            // Update load orders
-                            newMods.forEach((m, i) => m.loadOrder = i);
-                            setMods(newMods);
-                            saveInstalledModsToCache(newMods);
-                            updateLaunchOptions(newMods);
-                          }
-                        }}
-                        disabled={mod.loadOrder === 0}
-                        className="text-matrix-600 hover:text-matrix-400 disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Move up in load order"
-                      >
-                        ⬆️
-                      </button>
-                      <button
-                        onClick={() => {
-                          // Move down in load order
-                          const currentIndex = mods.findIndex(m => m.id === mod.id);
-                          if (currentIndex < mods.length - 1) {
-                            const newMods = [...mods];
-                            [newMods[currentIndex], newMods[currentIndex + 1]] = [newMods[currentIndex + 1], newMods[currentIndex]];
-                            // Update load orders
-                            newMods.forEach((m, i) => m.loadOrder = i);
-                            setMods(newMods);
-                            saveInstalledModsToCache(newMods);
-                            updateLaunchOptions(newMods);
-                          }
-                        }}
-                        disabled={mod.loadOrder === mods.length - 1}
-                        className="text-matrix-600 hover:text-matrix-400 disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Move down in load order"
-                      >
-                        ⬇️
-                      </button>
-                    </div>
-                  </div>
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2 mt-4">
+                  <button
+                    onClick={() => toggleMod(mod.id)}
+                    className={clsx(
+                      "px-4 py-2 text-sm font-bold transition-colors",
+                      mod.enabled
+                        ? "bg-red-600 hover:bg-red-500 text-white"
+                        : "bg-green-600 hover:bg-green-500 text-white"
+                    )}
+                    title={mod.enabled ? "Disable mod" : "Enable mod"}
+                  >
+                    {mod.enabled ? "Disable" : "Enable"}
+                  </button>
+
+                  <button
+                    onClick={() => removeMod(mod.id)}
+                    className="bg-red-700 hover:bg-red-600 text-white px-4 py-2 text-sm font-bold transition-colors"
+                    title="Remove mod completely"
+                  >
+                    Remove
+                  </button>
+
+                  {/* View on CurseForge (if available) */}
+                  <button
+                    onClick={() => window.open(`https://www.curseforge.com/ark-survival-ascended/mods/${mod.workshopId}`, '_blank')}
+                    className="bg-matrix-600 hover:bg-matrix-500 text-white px-4 py-2 text-sm font-bold transition-colors flex items-center gap-1"
+                    title="View on CurseForge"
+                  >
+                    <EyeIcon className="h-4 w-4" />
+                    View
+                  </button>
                 </div>
               </div>
-            ))}
+            </div>
+
+            {/* Load Order (for advanced users) */}
+            <div className="mt-3 pt-3 border-t border-matrix-500/20">
+              <div className="flex items-center justify-between text-xs text-matrix-700">
+                <span>Load Order: {mod.loadOrder}</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      // Move up in load order
+                      const currentIndex = mods.findIndex(m => m.id === mod.id);
+                      if (currentIndex > 0) {
+                        const newMods = [...mods];
+                        [newMods[currentIndex], newMods[currentIndex - 1]] = [newMods[currentIndex - 1], newMods[currentIndex]];
+                        // Update load orders
+                        newMods.forEach((m, i) => m.loadOrder = i);
+                        setMods(newMods);
+                        saveInstalledModsToCache(newMods);
+                        updateLaunchOptions(newMods);
+                      }
+                    }}
+                    disabled={mod.loadOrder === 0}
+                    className="text-matrix-600 hover:text-matrix-400 disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Move up in load order"
+                  >
+                    ⬆️
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Move down in load order
+                      const currentIndex = mods.findIndex(m => m.id === mod.id);
+                      if (currentIndex < mods.length - 1) {
+                        const newMods = [...mods];
+                        [newMods[currentIndex], newMods[currentIndex + 1]] = [newMods[currentIndex + 1], newMods[currentIndex]];
+                        // Update load orders
+                        newMods.forEach((m, i) => m.loadOrder = i);
+                        setMods(newMods);
+                        saveInstalledModsToCache(newMods);
+                        updateLaunchOptions(newMods);
+                      }
+                    }}
+                    disabled={mod.loadOrder === mods.length - 1}
+                    className="text-matrix-600 hover:text-matrix-400 disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Move down in load order"
+                  >
+                    ⬇️
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
-        )}
+        ))}
       </div>
-    )
-  }
+    );
+  };
 
   const filteredMods = getFilteredMods();
   const displayMods = getDisplayMods();

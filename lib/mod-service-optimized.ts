@@ -133,9 +133,21 @@ class ModServiceOptimized {
 
   // Start cache warming service
   startCacheWarming(): void {
+    // Check if we're in a build context (during Next.js build process)
+    const isBuildTime = process.env.NODE_ENV === 'production' && 
+                       (process.env.NEXT_PHASE === 'phase-production-build' || 
+                        process.env.NEXT_PHASE === 'phase-production-optimize');
+
+    if (isBuildTime) {
+      console.log("Strategy 2: Cache warming service disabled during build time");
+      return;
+    }
+
     if (this.warmingInterval) {
       clearInterval(this.warmingInterval);
     }
+
+    console.log("Strategy 2: Cache warming service started");
 
     // Check for warming every 5 minutes
     this.warmingInterval = setInterval(() => {
@@ -182,7 +194,7 @@ class ModServiceOptimized {
           console.log(`Warmed cache for category: ${schedule.categoryKey}`);
           
           // Small delay between warming operations
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 10000));
           
         } catch (error) {
           console.error(`Failed to warm category ${schedule.categoryKey}:`, error);

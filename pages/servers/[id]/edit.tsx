@@ -94,21 +94,21 @@ const EditServerPage = () => {
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         sidebarOpen={sidebarOpen}
       >
-        <div className="min-h-screen bg-base-100 text-base-content flex items-center justify-center px-4">
-          <div className="card bg-base-200 shadow-xl border border-base-300 rounded-2xl max-w-md w-full">
+        <div className="min-h-screen bg-cyber-bg text-matrix-400 flex items-center justify-center px-4">
+          <div className="card bg-cyber-panel shadow-matrix-glow border-2 border-matrix-500/30 rounded-2xl max-w-md w-full">
             <div className="card-body text-center p-8">
-              <div className="w-16 h-16 bg-error/20 rounded-2xl flex items-center justify-center ring-2 ring-error/30 shadow-glow shadow-error/20 mx-auto mb-6">
-                <ExclamationTriangleIcon className="h-8 w-8 text-error drop-shadow-glow" />
+              <div className="w-16 h-16 bg-red-900/20 rounded-2xl flex items-center justify-center ring-2 ring-red-500/30 shadow-glow shadow-red-500/20 mx-auto mb-6">
+                <ExclamationTriangleIcon className="h-8 w-8 text-red-400 drop-shadow-glow" />
               </div>
-              <h1 className="text-2xl font-bold text-base-content mb-4 font-display">
+              <h1 className="text-2xl font-bold text-matrix-400 mb-4 font-display cyber-text">
                 Invalid Server ID
               </h1>
-              <p className="text-base-content/70 mb-6 font-mono">
+              <p className="text-matrix-600 mb-6 font-mono">
                 The server ID is missing or invalid.
               </p>
               <button
                 onClick={() => router.push("/")}
-                className="btn btn-primary rounded-xl shadow-lg hover:shadow-glow hover:shadow-primary/30 transition-all duration-300 font-semibold tracking-wide"
+                className="btn-cyber rounded-xl shadow-matrix-glow hover:shadow-matrix-glow transition-all duration-300 font-semibold tracking-wide bg-matrix-500 text-black hover:bg-matrix-400"
               >
                 <ArrowLeftIcon className="h-5 w-5" />
                 Return to Dashboard
@@ -144,26 +144,26 @@ const EditServerPage = () => {
           totalPlayers: 0, // We don't have player count in edit view
         }}
       >
-        <div className="min-h-screen bg-base-100 text-base-content">
+        <div className="min-h-screen bg-cyber-bg text-matrix-400">
           {/* Header */}
-          <div className="bg-base-200/80 backdrop-blur-sm border-b border-base-300 shadow-lg">
+          <div className="bg-cyber-panel/80 backdrop-blur-sm border-b border-matrix-500/30 shadow-matrix-glow">
             <div className="container mx-auto px-4 py-6">
               <div className="flex items-center gap-4">
-                <button
-                  onClick={() => router.push(`/servers/${id}`)}
-                  className="btn btn-ghost btn-circle hover:bg-base-300 transition-all duration-200"
-                  aria-label="Back to server dashboard"
-                >
-                  <ArrowLeftIcon className="h-6 w-6" />
-                </button>
-                <div>
-                  <h1 className="text-3xl font-bold text-base-content font-display tracking-wide">
-                    Edit Server
-                  </h1>
-                  <p className="text-base-content/70 font-mono">
-                    Server ID: {id}
-                  </p>
-                </div>
+                                  <button
+                    onClick={() => router.push(`/servers/${id}`)}
+                    className="btn btn-ghost btn-circle hover:bg-matrix-900/50 transition-all duration-200 text-matrix-400 hover:text-matrix-300"
+                    aria-label="Back to server dashboard"
+                  >
+                    <ArrowLeftIcon className="h-6 w-6" />
+                  </button>
+                  <div>
+                    <h1 className="text-3xl font-bold text-matrix-400 font-display tracking-wide cyber-text">
+                      Edit Server
+                    </h1>
+                    <p className="text-matrix-600 font-mono">
+                      Server ID: {id}
+                    </p>
+                  </div>
               </div>
             </div>
           </div>
@@ -204,28 +204,28 @@ const EditServerPage = () => {
                         onKeyPress={(e) =>
                           e.key === "Enter" && searchCurseForgeMods(searchQuery)
                         }
-                        className="input input-xs input-bordered w-48 pl-8 pr-8 bg-base-200 border-base-content/20 focus:border-primary text-sm"
+                        className="input input-xs input-bordered w-48 pl-8 pr-8 bg-cyber-bg border-matrix-500/50 focus:border-matrix-500 text-matrix-400 text-sm"
                       />
                       <button
                         onClick={() => searchCurseForgeMods(searchQuery)}
-                        className="absolute left-1 top-1/2 transform -translate-y-1/2 p-1 hover:bg-base-300 rounded transition-colors"
+                        className="absolute left-1 top-1/2 transform -translate-y-1/2 p-1 hover:bg-matrix-900/50 rounded transition-colors"
                         title="Search mods"
                       >
-                        <MagnifyingGlassIcon className="h-3 w-3 text-base-content/60 hover:text-base-content" />
+                        <MagnifyingGlassIcon className="h-3 w-3 text-matrix-600 hover:text-matrix-400" />
                       </button>
                       {searchQuery && (
                         <button
                           onClick={() => setSearchQuery("")}
-                          className="absolute right-1 top-1/2 transform -translate-y-1/2 p-1 hover:bg-base-300 rounded transition-colors"
+                          className="absolute right-1 top-1/2 transform -translate-y-1/2 p-1 hover:bg-matrix-900/50 rounded transition-colors"
                           title="Clear search"
                         >
-                          <XMarkIcon className="h-3 w-3 text-base-content/60 hover:text-base-content" />
+                          <XMarkIcon className="h-3 w-3 text-matrix-600 hover:text-matrix-400" />
                         </button>
                       )}
                     </div>
                     <button
                       onClick={() => setShowAddModModal(true)}
-                      className="btn btn-xs btn-outline flex items-center justify-center min-w-[2rem] hover:bg-base-300"
+                      className="btn btn-xs btn-outline flex items-center justify-center min-w-[2rem] hover:bg-matrix-900/50 text-matrix-400 border-matrix-500/50 hover:border-matrix-500"
                       title="Add manual mod"
                     >
                       <PlusIcon className="h-3 w-3" />

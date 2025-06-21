@@ -83,16 +83,35 @@ class CacheRefreshService {
   private isRefreshing = false;
   private lastRefresh = 0;
   private readonly REFRESH_THROTTLE = 300000; // 5 minutes between refreshes
+  private static isServiceRunning = false; // Static flag to prevent multiple instances
 
   /**
    * Start the background cache refresh service
    */
   start(): void {
+    // Prevent multiple instances
+    if (CacheRefreshService.isServiceRunning) {
+      log(LOG_LEVEL.WARN, "Cache refresh service already running, skipping start");
+      return;
+    }
+
+    // Check if we're in a build context (during Next.js build process)
+    const isBuildTime = process.env.NODE_ENV === 'production' && 
+                       (process.env.NEXT_PHASE === 'phase-production-build' || 
+                        process.env.NEXT_PHASE === 'phase-production-optimize');
+
+    if (isBuildTime) {
+      log(LOG_LEVEL.INFO, "Cache refresh service disabled during build time");
+      return;
+    }
+    
+    CacheRefreshService.isServiceRunning = true;
     this.stop(); // Stop any existing interval
 
     const settings = loadGlobalSettings();
     if (!settings.cacheEnabled) {
       log(LOG_LEVEL.INFO, "Cache refresh service disabled in settings");
+      CacheRefreshService.isServiceRunning = false;
       return;
     }
 
@@ -114,9 +133,8 @@ class CacheRefreshService {
       this.refreshAllCategories();
     }, 30000); // 30 seconds delay instead of 5
 
-    // Start background mod fetching service
-    log(LOG_LEVEL.INFO, "Starting background mod fetching service...");
-    CurseForgeAPI.startBackgroundFetching();
+    // Remove background mod fetching from here to prevent multiple concurrent processes
+    // CurseForgeAPI.startBackgroundFetching(); // REMOVED - causes multiple background processes
   }
 
   /**
@@ -128,9 +146,11 @@ class CacheRefreshService {
       this.refreshInterval = null;
       log(LOG_LEVEL.INFO, "Cache refresh service stopped");
     }
+    
+    CacheRefreshService.isServiceRunning = false;
 
-    // Stop background mod fetching service
-    CurseForgeAPI.stopBackgroundFetching();
+    // Remove this since we're not starting background fetching here anymore
+    // CurseForgeAPI.stopBackgroundFetching();
   }
 
   /**

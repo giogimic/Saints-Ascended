@@ -4,7 +4,7 @@ import { Sidebar } from './Sidebar';
 import { Footer } from './Footer';
 import { CyberLayout } from './CyberLayout';
 import { TerminalWindow } from './TerminalWindow';
-import { DevCacheControls } from './DevCacheControls';
+
 import { GlobalSettings } from '../../lib/global-settings';
 
 interface LayoutProps {
@@ -127,8 +127,7 @@ export function Layout({
           messages={consoleMessages}
         />
         
-        {/* Development Cache Controls */}
-        <DevCacheControls />
+
       </div>
     </CyberLayout>
   );

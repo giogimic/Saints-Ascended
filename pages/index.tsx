@@ -72,6 +72,7 @@ export default function Dashboard() {
         curseforgeApiKey: "",
         cacheRefreshInterval: 5,
         cacheEnabled: true,
+        adminPin: "1234",
         updatedAt: new Date(),
       });
     }
@@ -160,6 +161,18 @@ export default function Dashboard() {
 
     loadData();
   }, [fetchServers, loadInitialSettings]);
+
+  // Handle URL parameters for auto-opening modals
+  useEffect(() => {
+    if (router.isReady) {
+      const { settings } = router.query;
+      if (settings === 'true') {
+        openModal('globalSettings');
+        // Clean up the URL parameter
+        router.replace('/', undefined, { shallow: true });
+      }
+    }
+  }, [router.isReady, router.query, openModal, router]);
 
   const handleAddServerSuccess = async (serverId: string) => {
     try {

@@ -51,6 +51,7 @@ export function GlobalSettingsModal({
     curseforgeApiKey: "",
     cacheRefreshInterval: 5,
     cacheEnabled: true,
+    adminPin: "1234",
     updatedAt: new Date(),
   };
 
@@ -100,7 +101,7 @@ export function GlobalSettingsModal({
         }
 
         const result = await response.json();
-        return result.data;
+        return result;
       },
       { component: "GlobalSettingsModal", action: "loadSettings" },
       false // Don't show toast for this error
@@ -196,7 +197,7 @@ export function GlobalSettingsModal({
         }
 
         const result = await response.json();
-        return result.data;
+        return result;
       },
       { component: "GlobalSettingsModal", action: "saveSettings" }
     );
@@ -545,6 +546,40 @@ export function GlobalSettingsModal({
                           <label className="label">
                             <span className="label-text-alt text-error">
                               {errors.curseforgeApiKey}
+                            </span>
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Admin PIN */}
+                    <div className="form-control">
+                      <label className="label">
+                        <span className="label-text text-matrix-600 font-display font-semibold">Admin PIN</span>
+                        <span className="label-text-alt text-matrix-600">4-digit PIN for admin access</span>
+                      </label>
+                      <div className="space-y-2">
+                        <input
+                          type="password"
+                          className={`input input-bordered w-32 text-center tracking-widest ${errors.adminPin ? "input-error" : ""}`}
+                          value={settings.adminPin}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, '').slice(0, 4);
+                            handleInputChange("adminPin", value);
+                          }}
+                          placeholder="1234"
+                          maxLength={4}
+                          disabled={isSaving}
+                          aria-label="Admin PIN"
+                        />
+                        <p className="text-sm text-matrix-600 font-mono">
+                          Used to access the admin dashboard at /admin. 
+                          {process.env.ADMIN_PIN ? ' (Environment variable takes precedence)' : ''}
+                        </p>
+                        {errors.adminPin && (
+                          <label className="label">
+                            <span className="label-text-alt text-error">
+                              {errors.adminPin}
                             </span>
                           </label>
                         )}

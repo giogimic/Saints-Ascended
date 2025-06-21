@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { 
   ComputerDesktopIcon, 
   Bars3Icon,
-  CommandLineIcon
+  CommandLineIcon,
+  ShieldCheckIcon
 } from '@heroicons/react/24/outline';
 import { useGlobalSettings } from '@/lib/global-settings';
+import Link from 'next/link';
 
 interface HeaderProps {
   onToggleConsole?: () => void;
@@ -46,6 +48,16 @@ export function Header({ onToggleConsole }: HeaderProps = {}) {
               SYSTEM READY
             </div>
             <div className="w-px h-6 bg-matrix-700"></div>
+            
+            {/* Admin Link */}
+            <Link
+              href="/admin"
+              className="w-8 h-8 bg-cyber-panel border border-matrix-500 flex items-center justify-center cyber-hover transition-all duration-200 hover:border-orange-400 group"
+              title="Admin Dashboard"
+            >
+              <ShieldCheckIcon className="h-4 w-4 text-matrix-500 group-hover:text-orange-400 transition-colors" />
+            </Link>
+            
             {/* Console Toggle */}
             <button
               onClick={onToggleConsole}
@@ -76,6 +88,14 @@ export function Header({ onToggleConsole }: HeaderProps = {}) {
                 <div className="w-2 h-2 bg-matrix-500 rounded-full animate-pulse"></div>
                 <span className="text-xs font-mono text-matrix-600 uppercase tracking-wider">SYSTEM STATUS: ONLINE</span>
               </div>
+              <Link
+                href="/admin"
+                className="flex items-center gap-2 px-4 py-2 text-xs font-mono text-matrix-600 uppercase tracking-wider hover:text-orange-400 transition-colors"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                <ShieldCheckIcon className="h-4 w-4" />
+                Admin Dashboard
+              </Link>
             </div>
           </div>
         )}

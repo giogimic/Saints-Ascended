@@ -30,12 +30,12 @@ class ModServiceOptimized {
   // Category configurations with priorities (base priorities, will be enhanced by analytics)
   private readonly categoryConfigs: Record<string, CategoryConfig> = {
     "Popular": { query: "", priority: 10 },
-    "QoL": { query: "quality of life", priority: 9 },
+    "Utility": { query: "utility quality of life tools automation", priority: 9 },
     "Maps": { categoryId: 17, priority: 8 },
-    "RPG": { query: "rpg progression", priority: 7 },
-    "Overhauls": { query: "overhaul total conversion", priority: 6 },
-    "General": { query: "utility building", priority: 5 },
-    "Custom Cosmetics": { query: "cosmetic decoration", priority: 4 }
+    "Gameplay": { query: "gameplay mechanics survival features", priority: 7 },
+    "Structures": { query: "structures building construction", priority: 6 },
+    "Creatures": { query: "creatures dinos dinosaurs animals", priority: 5 },
+    "Cosmetic": { query: "cosmetic skins visual appearance texture", priority: 4 }
   };
 
   private readonly WARMING_INTERVALS = {

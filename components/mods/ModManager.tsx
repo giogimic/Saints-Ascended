@@ -85,16 +85,16 @@ interface DisplayMod {
   _curseforgeData?: CurseForgeModData;
 }
 
-// Predefined mod categories
+// Predefined mod categories using actual CurseForge categories for Ark: Survival Ascended
 const MOD_CATEGORIES = [
   "Installed",
-  "QoL",
-  "RPG",
-  "Maps",
-  "Popular",
-  "Overhauls",
-  "General",
-  "Custom Cosmetics",
+  "Structures", // CurseForge category for building/structure mods
+  "Creatures", // CurseForge category for creature/dino mods  
+  "Maps", // CurseForge category for custom maps
+  "Popular", // Most popular mods across all categories
+  "Gameplay", // CurseForge category for gameplay modifications
+  "Utility", // CurseForge category for utility/QoL mods
+  "Cosmetic", // CurseForge category for cosmetic/visual mods
 ];
 
 // Cache keys for persistent storage
@@ -987,13 +987,13 @@ const ModManager: React.FC<ModManagerProps> = ({
   // Helper function to get appropriate search query for each category
   const getCategorySearchQuery = (category: string): string => {
     const categoryQueries: Record<string, string> = {
-      "QoL": "quality of life utility",
-      "RPG": "rpg roleplay character",
-      "Maps": "map world island",
+      "Structures": "structures building construction",
+      "Creatures": "creatures dinos dinosaurs animals",
+      "Maps": "map world island custom terrain",
       "Popular": "", // Empty for popular mods
-      "Overhauls": "overhaul total conversion",
-      "General": "gameplay mechanics",
-      "Custom Cosmetics": "cosmetic skin appearance"
+      "Gameplay": "gameplay mechanics survival features",
+      "Utility": "utility quality of life tools automation",
+      "Cosmetic": "cosmetic skins visual appearance texture"
     };
 
     return categoryQueries[category] || "";

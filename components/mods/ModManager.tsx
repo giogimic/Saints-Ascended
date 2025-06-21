@@ -546,17 +546,46 @@ const ModManager: React.FC<ModManagerProps> = ({
         clearTimeout(timeoutId);
         
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
-          throw new Error(errorData.error || `Failed to search mods (${response.status})`);
+          // Handle different types of errors more gracefully
+          if (response.status === 404) {
+            // 404 errors are now handled by fallback strategies in the API
+            addConsoleInfo(`⚠️ No direct results found for "${query.trim()}", but fallback strategies may have found alternatives`);
+            const errorData = await response.json().catch(() => ({ data: [], totalCount: 0 }));
+            
+            // If we have fallback data, use it
+            if (errorData.data && errorData.data.length > 0) {
+              setSearchResults(errorData.data);
+              addConsoleInfo(`✅ Found ${errorData.data.length} mods using fallback search strategies`);
+              return;
+            } else {
+              setSearchError(`No mods found for "${query.trim()}". Try a different search term.`);
+              setSearchResults([]);
+              addConsoleInfo(`ℹ️ No results found for "${query.trim()}" - try simpler terms like "dino", "building", or "tool"`);
+              return;
+            }
+          } else if (response.status === 429) {
+            throw new Error('Search rate limit exceeded. Please wait a moment before searching again.');
+          } else if (response.status >= 500) {
+            throw new Error('CurseForge service is temporarily unavailable. Please try again later.');
+          } else {
+            const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+            throw new Error(errorData.error || `Search failed (${response.status})`);
+          }
         }
 
         const data = await response.json();
         
-        if (data.data) {
+        if (data.data && data.data.length > 0) {
           setSearchResults(data.data);
-          addConsoleInfo(`✅ Found ${data.data.length} mods for "${query.trim()}" from ${data.source || 'unknown source'}`);
+          const sourceInfo = data.source ? ` from ${data.source}` : '';
+          addConsoleInfo(`✅ Found ${data.data.length} mods for "${query.trim()}"${sourceInfo}`);
+        } else if (data.error) {
+          throw new Error(data.error);
         } else {
-          throw new Error(data.error || "No results found");
+          // Empty results but no error - this is valid
+          setSearchResults([]);
+          setSearchError(`No mods found for "${query.trim()}". Try a different search term.`);
+          addConsoleInfo(`ℹ️ No results found for "${query.trim()}" - try simpler terms like "dino", "building", or "tool"`);
         }
       } catch (fetchError) {
         clearTimeout(timeoutId);
@@ -575,6 +604,15 @@ const ModManager: React.FC<ModManagerProps> = ({
       // Enhanced error handling for system console
       addConsoleError(`❌ Search Error: ${errorMessage}`);
       addConsoleError(`📍 Context: Query="${query.trim()}", Time=${new Date().toISOString()}`);
+      
+      // Provide helpful suggestions based on error type
+      if (errorMessage.includes('404') || errorMessage.includes('No mods found')) {
+        addConsoleInfo(`💡 Tip: Try simpler search terms like "dino", "building", "weapon", "tool", or "skin"`);
+      } else if (errorMessage.includes('timeout')) {
+        addConsoleInfo(`💡 Tip: The search timed out. Try again with a shorter search term.`);
+      } else if (errorMessage.includes('rate limit')) {
+        addConsoleInfo(`💡 Tip: Please wait a moment before searching again.`);
+      }
       
       // Use the error handler for proper logging and categorization
       ErrorHandler.handleError(error, {

@@ -27,16 +27,20 @@ const createPrismaClient = (): PrismaClient => {
       // Apply SQLite performance optimizations
       if (env.database.type === 'sqlite') {
         try {
+          // Apply PRAGMA settings using $queryRaw with Prisma.sql
+          const { Prisma } = await import('@prisma/client');
+          
           // Enable WAL mode for better concurrency
-          await client.$executeRaw`PRAGMA journal_mode = WAL`;
-          // Increase cache size for better performance
-          await client.$executeRaw`PRAGMA cache_size = 10000`;
+          await client.$queryRaw(Prisma.sql`PRAGMA journal_mode = WAL`);
+          // Increase cache size for better performance  
+          await client.$queryRaw(Prisma.sql`PRAGMA cache_size = 10000`);
           // Reduce sync overhead
-          await client.$executeRaw`PRAGMA synchronous = NORMAL`;
+          await client.$queryRaw(Prisma.sql`PRAGMA synchronous = NORMAL`);
           // Enable memory-mapped I/O
-          await client.$executeRaw`PRAGMA mmap_size = 268435456`; // 256MB
+          await client.$queryRaw(Prisma.sql`PRAGMA mmap_size = 268435456`);
           // Optimize for faster queries
-          await client.$executeRaw`PRAGMA temp_store = MEMORY`;
+          await client.$queryRaw(Prisma.sql`PRAGMA temp_store = MEMORY`);
+          
           console.log('✅ SQLite performance optimizations applied');
         } catch (pragmaError) {
           console.warn('⚠️  Failed to apply SQLite optimizations:', pragmaError);
@@ -110,7 +114,9 @@ export async function initializeDatabase(): Promise<void> {
     if (env.isDevelopment && env.database.type === 'sqlite') {
       console.log('Attempting to create SQLite database file...');
       try {
-        await prisma.$executeRaw`PRAGMA journal_mode = WAL`;
+        // Use $queryRaw for PRAGMA statements with proper Prisma.sql syntax
+        const { Prisma } = await import('@prisma/client');
+        await prisma.$queryRaw(Prisma.sql`PRAGMA journal_mode = WAL`);
         console.log('✅ SQLite database created successfully');
       } catch (createError) {
         console.error('Failed to create SQLite database:', createError);

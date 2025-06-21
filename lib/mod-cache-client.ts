@@ -210,7 +210,7 @@ class ModCacheClient {
     const timeoutId = setTimeout(() => {
       controller.abort();
       console.warn(`[modCacheClient] Request timeout for query: ${sanitizedQuery}`);
-    }, 15000); // Reduced from 30s to 15s
+    }, 30000); // Increased from 15s to 30s to match API timeout
 
     try {
       const params = new URLSearchParams({

@@ -267,12 +267,13 @@ class TokenBucket {
 }
 
 // Sort field mapping based on CurseForge API documentation
-export type SortField = "name" | "popularity" | "size" | "updated";
+export type SortField = "name" | "popularity" | "size" | "updated" | "downloads";
 const SORT_FIELD_MAP: Record<SortField, number> = {
-  name: 1,
-  popularity: 2,
-  size: 3,
-  updated: 4,
+  name: 1,        // Alphabetical
+  popularity: 2,  // Download count + featured status
+  size: 3,        // File size
+  updated: 4,     // Last update date
+  downloads: 6,   // Total downloads
 };
 
 // Logging level configuration
@@ -306,14 +307,15 @@ export class CurseForgeAPI {
   private static readonly RETRY_DELAY = 1000; // 1 second
   private static rateLimitInfo: RateLimitInfo | null = null;
 
-  // Token bucket: 100 tokens per minute = ~1.67 tokens per second (more reasonable rate)
-  private static tokenBucket = new TokenBucket(100, 100 / 60000); // 100 tokens per 60000ms (1 minute)
+  // Token bucket: Optimized for maximum throughput while staying under limits
+  // CurseForge API documentation suggests ~200 requests per minute, we use 90% for safety
+  private static tokenBucket = new TokenBucket(180, 180 / 60000); // 180 tokens per minute (90% of 200 for safety)
 
-  // Background fetching throttling
+  // Background fetching throttling - optimized for faster cache population
   private static backgroundFetching = false;
   private static backgroundFetchInterval: NodeJS.Timeout | null = null;
   private static lastBackgroundFetch = 0;
-  private static readonly BACKGROUND_FETCH_THROTTLE = 30000; // 30 seconds between fetches (reduced from 60)
+  private static readonly BACKGROUND_FETCH_THROTTLE = 15000; // 15 seconds between fetches (reduced from 30)
 
   // Request batching to prevent overwhelming the API
   // Enhanced request deduplication and queue management
@@ -327,12 +329,16 @@ export class CurseForgeAPI {
     timestamp: number;
   }> = [];
   
-  // Queue processing with better concurrency control
+  // Queue processing with optimized concurrency for maximum throughput
   private static isProcessingQueue = false;
-  private static readonly MAX_CONCURRENT_REQUESTS = 2; // Reduced for better stability
+  private static readonly MAX_CONCURRENT_REQUESTS = 8; // Increased from 2 to 8 for maximum parallel processing
   private static activeRequests = 0;
-  private static readonly REQUEST_TIMEOUT = 30000; // Increased from 15s to 30s to match search endpoint
-  private static readonly RETRY_DELAYS = [1000, 2000, 4000]; // Reduced delays for faster failure detection
+  private static readonly REQUEST_TIMEOUT = 30000; // 30s timeout
+  private static readonly RETRY_DELAYS = [500, 1000, 2000]; // Faster retry delays for quicker recovery
+
+  // Optimized page sizes - stay at 90% of max to prevent hitting limits
+  private static readonly OPTIMAL_PAGE_SIZE = 45; // 90% of max 50
+  private static readonly MAX_TOTAL_RESULTS = 9000; // 90% of max 10,000
 
   /**
    * Get API key with fallback to reading from .env files
@@ -632,95 +638,221 @@ export class CurseForgeAPI {
     categoryId?: number,
     sortField: SortField = "name",
     sortOrder: "asc" | "desc" = "asc",
-    pageSize: number = 20,
+    pageSize: number = this.OPTIMAL_PAGE_SIZE, // Use optimized page size by default
     page: number = 1,
     includeAllCategories: boolean = false
   ): Promise<{ mods: CurseForgeMod[]; totalCount: number; hasMore: boolean; fromCache: boolean }> {
+    // Ensure we don't exceed API limits
+    const safePageSize = Math.min(pageSize, this.OPTIMAL_PAGE_SIZE);
+    const maxPage = Math.floor(this.MAX_TOTAL_RESULTS / safePageSize);
+    const safePage = Math.min(page, maxPage);
+    
+    log(LOG_LEVEL.INFO, `Fetching from CurseForge API: ${JSON.stringify({
+      searchQuery: searchFilter,
+      categoryId: categoryId ? categoryId.toString() : "none",
+      mappedSortField: sortField,
+      sortOrder,
+      pageSize: safePageSize,
+      page: safePage
+    })}`);
+
     try {
-      // Check cache first with enhanced key
-      const cacheKey = this.generateEnhancedCacheKey(
-        searchFilter,
-        categoryId,
-        sortField,
-        sortOrder,
-        page,
-        pageSize,
-        includeAllCategories
-      );
+      // Try primary search strategy first
+      const result = await this.performPrimarySearch(searchFilter, categoryId, sortField, sortOrder, safePageSize, safePage);
+      if (result.mods.length > 0) {
+        return result;
+      }
       
-      const cachedResult = await modCacheClient.searchMods(
-        searchFilter,
-        categoryId?.toString(),
-        sortField,
-        sortOrder,
-        page,
-        pageSize
-      );
-
-      // Defensive check for cache hit
-      if (cachedResult && Array.isArray(cachedResult.data) && cachedResult.data.length > 0) {
-        log(LOG_LEVEL.DEBUG, `Cache hit for enhanced search: ${cacheKey}`);
-        const mods = this.normalizeModData(cachedResult.data);
-        return {
-          mods,
-          totalCount: cachedResult.totalCount || mods.length,
-          hasMore: cachedResult.data.length === pageSize,
-          fromCache: true,
-        };
+      // If primary search fails or returns no results, try fallback strategies
+      log(LOG_LEVEL.INFO, `Primary search returned no results, trying fallback strategies...`);
+      return await this.performFallbackSearch(searchFilter, categoryId, sortField, sortOrder, safePageSize, safePage);
+      
+    } catch (error: any) {
+      log(LOG_LEVEL.ERROR, `CurseForge API search failed: ${error.message}`);
+      
+      // If it's a 404 error, try fallback strategies instead of throwing
+      if (error.statusCode === 404) {
+        log(LOG_LEVEL.INFO, `404 error detected, attempting fallback search strategies...`);
+        try {
+          return await this.performFallbackSearch(searchFilter, categoryId, sortField, sortOrder, safePageSize, safePage);
+        } catch (fallbackError) {
+          log(LOG_LEVEL.WARN, `All search strategies failed, returning empty results`);
+          return { mods: [], totalCount: 0, hasMore: false, fromCache: false };
+        }
       }
-
-      // If cache miss, try to fetch from API
-      const apiResult = await modCacheClient.searchMods(
-        searchFilter,
-        categoryId?.toString(),
-        sortField,
-        sortOrder,
-        page,
-        pageSize
-      );
-
-      // Handle case where API request failed (returns null)
-      if (!apiResult) {
-        log(LOG_LEVEL.WARN, "API request failed, returning empty results");
-        return {
-          mods: [],
-          totalCount: 0,
-          hasMore: false,
-          fromCache: false,
-        };
-      }
-
-      // Normalize and deduplicate results
-      const normalizedMods = this.normalizeModData(apiResult.data as CurseForgeModData[]);
-      const deduplicatedMods = this.deduplicateMods(normalizedMods);
-
-      // Store in cache with enhanced metadata
-      await modCacheClient.setSearchResults(
-        searchFilter,
-        categoryId?.toString(),
-        sortField,
-        sortOrder,
-        page,
-        pageSize,
-        deduplicatedMods as CurseForgeModData[],
-        apiResult.totalCount
-      );
-
-      // Store individual mods in cache for faster future access
-      for (const mod of deduplicatedMods) {
-        await modCacheClient.setMod(mod as CurseForgeModData);
-      }
-
-      return {
-        mods: deduplicatedMods,
-        totalCount: apiResult.totalCount,
-        hasMore: deduplicatedMods.length === pageSize && deduplicatedMods.length < apiResult.totalCount,
-        fromCache: false,
-      };
-    } catch (error) {
-      console.error("Failed to search CurseForge mods:", error);
+      
       throw error;
     }
+  }
+
+  /**
+   * Primary search strategy using the exact search parameters
+   */
+  private static async performPrimarySearch(
+    searchFilter: string,
+    categoryId: number | undefined,
+    sortField: SortField,
+    sortOrder: "asc" | "desc",
+    safePageSize: number,
+    safePage: number
+  ): Promise<{ mods: CurseForgeMod[]; totalCount: number; hasMore: boolean; fromCache: boolean }> {
+    const searchParams = new URLSearchParams({
+      gameId: this.GAME_ID.toString(),
+      sortField: (SORT_FIELD_MAP[sortField] || SORT_FIELD_MAP.popularity).toString(),
+      sortOrder,
+      pageSize: safePageSize.toString(),
+      index: ((safePage - 1) * safePageSize).toString(),
+    });
+
+    // Only add searchFilter if it's not empty and doesn't look like a category name
+    if (searchFilter && searchFilter.trim() && !this.isCategoryLikeTerm(searchFilter)) {
+      searchParams.append("searchFilter", searchFilter.trim());
+    }
+
+    if (categoryId) {
+      searchParams.append("categoryId", categoryId.toString());
+    }
+
+    const response = await this.makeRequest<any>(
+      `/mods/search?${searchParams.toString()}`
+    );
+
+    if (!response.data) {
+      log(LOG_LEVEL.WARN, "No data in CurseForge API response");
+      return { mods: [], totalCount: 0, hasMore: false, fromCache: false };
+    }
+
+    const mods: CurseForgeMod[] = response.data.map((mod: any) => ({
+      ...mod,
+      gameId: this.GAME_ID,
+    }));
+
+    const totalCount = response.pagination?.totalCount || mods.length;
+    const hasMore = response.pagination ? 
+      (response.pagination.index + response.pagination.resultCount) < response.pagination.totalCount :
+      false;
+
+    log(LOG_LEVEL.INFO, `✅ Primary search successful: ${mods.length} mods found`);
+    
+    return {
+      mods,
+      totalCount,
+      hasMore,
+      fromCache: false
+    };
+  }
+
+  /**
+   * Fallback search strategies when primary search fails
+   */
+  private static async performFallbackSearch(
+    searchFilter: string,
+    categoryId: number | undefined,
+    sortField: SortField,
+    sortOrder: "asc" | "desc",
+    safePageSize: number,
+    safePage: number
+  ): Promise<{ mods: CurseForgeMod[]; totalCount: number; hasMore: boolean; fromCache: boolean }> {
+    const strategies = [
+      // Strategy 1: Search without searchFilter (category only)
+      async () => {
+        if (categoryId) {
+          log(LOG_LEVEL.INFO, `Fallback 1: Searching by category ${categoryId} only`);
+          return await this.performPrimarySearch("", categoryId, sortField, sortOrder, safePageSize, safePage);
+        }
+        throw new Error("No category for category-only search");
+      },
+      
+      // Strategy 2: Popular mods without category
+      async () => {
+        log(LOG_LEVEL.INFO, `Fallback 2: Searching popular mods without category`);
+        return await this.performPrimarySearch("", undefined, "popularity", "desc", safePageSize, safePage);
+      },
+      
+      // Strategy 3: Popular mods with category if available
+      async () => {
+        if (categoryId) {
+          log(LOG_LEVEL.INFO, `Fallback 3: Searching popular mods in category ${categoryId}`);
+          return await this.performPrimarySearch("", categoryId, "popularity", "desc", safePageSize, safePage);
+        }
+        throw new Error("No category for category popular search");
+      },
+      
+      // Strategy 4: Use simplified search terms
+      async () => {
+        if (searchFilter && searchFilter.trim()) {
+          const simplifiedTerm = this.simplifySearchTerm(searchFilter);
+          if (simplifiedTerm && simplifiedTerm !== searchFilter) {
+            log(LOG_LEVEL.INFO, `Fallback 4: Trying simplified search term "${simplifiedTerm}"`);
+            return await this.performPrimarySearch(simplifiedTerm, categoryId, sortField, sortOrder, safePageSize, safePage);
+          }
+        }
+        throw new Error("No simplified term available");
+      }
+    ];
+
+    // Try each strategy until one succeeds
+    for (let i = 0; i < strategies.length; i++) {
+      try {
+        const result = await strategies[i]();
+        if (result.mods.length > 0) {
+          log(LOG_LEVEL.INFO, `✅ Fallback strategy ${i + 1} successful: ${result.mods.length} mods found`);
+          return result;
+        }
+      } catch (error) {
+        log(LOG_LEVEL.DEBUG, `Fallback strategy ${i + 1} failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        continue;
+      }
+    }
+
+    // If all strategies fail, return empty results
+    log(LOG_LEVEL.WARN, "All fallback strategies failed, returning empty results");
+    return { mods: [], totalCount: 0, hasMore: false, fromCache: false };
+  }
+
+  /**
+   * Check if a search term looks like a category name that might not work as a search filter
+   */
+  private static isCategoryLikeTerm(term: string): boolean {
+    const categoryLikeTerms = [
+      'overhaul', 'qol', 'general', 'rpg', 'cosmetic', 'popular', 'map', 'maps',
+      'creature', 'creatures', 'building', 'buildings', 'utility', 'utilities',
+      'admin', 'server', 'client', 'ui', 'interface', 'hud'
+    ];
+    
+    return categoryLikeTerms.some(catTerm => 
+      term.toLowerCase().includes(catTerm) || catTerm.includes(term.toLowerCase())
+    );
+  }
+
+  /**
+   * Simplify search terms to more generic versions that might work better
+   */
+  private static simplifySearchTerm(term: string): string | null {
+    const simplifications: Record<string, string> = {
+      'overhaul': 'mod',
+      'total conversion': 'conversion',
+      'qol': 'quality',
+      'cosmetic': 'skin',
+      'building': 'build',
+      'creature': 'dino',
+      'admin': 'tool'
+    };
+
+    const lowerTerm = term.toLowerCase();
+    for (const [complex, simple] of Object.entries(simplifications)) {
+      if (lowerTerm.includes(complex)) {
+        return simple;
+      }
+    }
+    
+    // If term is very long, try first word only
+    const words = term.trim().split(/\s+/);
+    if (words.length > 2) {
+      return words[0];
+    }
+    
+    return null;
   }
 
   /**
@@ -1071,6 +1203,35 @@ export class CurseForgeAPI {
   }
 
   /**
+   * Get featured mods for enhanced discovery
+   */
+  static async getFeaturedMods(
+    gameId: number = this.GAME_ID,
+    excludedModIds: number[] = []
+  ): Promise<CurseForgeMod[]> {
+    try {
+      const data = await this.makeRequest<{data: {featured: CurseForgeMod[]}}>(
+        '/mods/featured',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            gameId,
+            excludedModIds,
+            gameVersionTypeId: null
+          })
+        }
+      );
+      
+      log(LOG_LEVEL.DEBUG, `Successfully fetched ${data.data.featured.length} featured mods`);
+      return data.data.featured;
+    } catch (error) {
+      console.error("Failed to get featured mods:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Get rate limit information
    */
   static getRateLimitInfo(): RateLimitInfo | null {
@@ -1095,7 +1256,7 @@ export class CurseForgeAPI {
   static getTokenBucketStatus(): { tokens: number; capacity: number } {
     return {
       tokens: this.tokenBucket.getTokens(),
-      capacity: 100,
+      capacity: 180, // Updated to match actual token bucket capacity
     };
   }
 
@@ -1437,5 +1598,103 @@ export class CurseForgeAPI {
       activeRequests: this.activeRequests,
       isProcessingQueue: this.isProcessingQueue
     };
+  }
+
+  /**
+   * Parallel category processing for maximum cache population
+   * Fetches mods from multiple categories simultaneously to maximize API efficiency
+   */
+  static async populateMultipleCategoriesParallel(
+    categories: number[],
+    sortField: SortField = "popularity",
+    sortOrder: "asc" | "desc" = "desc",
+    pagesPerCategory: number = 5
+  ): Promise<{
+    totalMods: number;
+    categoriesProcessed: number;
+    errors: string[];
+  }> {
+    log(LOG_LEVEL.INFO, `Starting parallel category population for ${categories.length} categories`);
+    
+    const results = {
+      totalMods: 0,
+      categoriesProcessed: 0,
+      errors: [] as string[]
+    };
+
+    // Process categories in batches to respect concurrent request limits
+    const batchSize = this.MAX_CONCURRENT_REQUESTS;
+    const categoryBatches = [];
+    
+    for (let i = 0; i < categories.length; i += batchSize) {
+      categoryBatches.push(categories.slice(i, i + batchSize));
+    }
+
+    for (const batch of categoryBatches) {
+      const batchPromises = batch.map(async (categoryId) => {
+        try {
+          let categoryModCount = 0;
+          
+          // Fetch multiple pages per category for maximum coverage
+          for (let page = 1; page <= pagesPerCategory; page++) {
+            try {
+              const categoryResult = await this.searchMods(
+                "", // Empty search to get all mods in category
+                categoryId,
+                sortField,
+                sortOrder,
+                this.OPTIMAL_PAGE_SIZE,
+                page
+              );
+              
+              categoryModCount += categoryResult.mods.length;
+              
+              // Break if no more pages
+              if (!categoryResult.hasMore || categoryResult.mods.length === 0) {
+                break;
+              }
+              
+              // Small delay between pages to be respectful
+              await this.delay(100);
+            } catch (pageError: any) {
+              log(LOG_LEVEL.WARN, `Failed to fetch page ${page} for category ${categoryId}: ${pageError.message}`);
+              break; // Stop processing this category if a page fails
+            }
+          }
+          
+          return { categoryId, modCount: categoryModCount, success: true };
+        } catch (error: any) {
+          log(LOG_LEVEL.ERROR, `Failed to process category ${categoryId}: ${error.message}`);
+          return { categoryId, modCount: 0, success: false, error: error.message };
+        }
+      });
+
+      // Wait for batch to complete
+      const batchResults = await Promise.allSettled(batchPromises);
+      
+      batchResults.forEach((result) => {
+        if (result.status === 'fulfilled') {
+          const { categoryId, modCount, success, error } = result.value;
+          if (success) {
+            results.totalMods += modCount;
+            results.categoriesProcessed++;
+            log(LOG_LEVEL.INFO, `✅ Category ${categoryId}: ${modCount} mods processed`);
+          } else {
+            results.errors.push(`Category ${categoryId}: ${error}`);
+          }
+        } else {
+          results.errors.push(`Batch processing failed: ${result.reason}`);
+        }
+      });
+
+      // Delay between batches to prevent overwhelming the API
+      if (categoryBatches.indexOf(batch) < categoryBatches.length - 1) {
+        await this.delay(1000);
+      }
+    }
+
+    log(LOG_LEVEL.INFO, `Parallel category population completed: ${results.totalMods} total mods, ${results.categoriesProcessed}/${categories.length} categories processed`);
+    
+    return results;
   }
 }

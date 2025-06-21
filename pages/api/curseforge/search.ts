@@ -26,9 +26,11 @@ setInterval(() => {
   }
 }, 60000); // Every minute
 
-const SEARCH_TIMEOUT = 30000; // Increased from 25000 to 30000ms for better reliability
+const SEARCH_TIMEOUT = 30000; // 30 seconds for better reliability
 const MAX_RETRIES = 3;
 const RETRY_DELAY_BASE = 1000; // 1 second base delay
+const OPTIMAL_PAGE_SIZE = 45; // 90% of CurseForge max (50) to prevent hitting limits
+const MAX_TOTAL_RESULTS = 9000; // 90% of CurseForge max (10,000) to prevent hitting limits
 
 export default async function handler(
   req: NextApiRequest,
@@ -48,44 +50,27 @@ export default async function handler(
     sortBy, // ModManager sends 'sortBy'
     sortField = "popularity", // Legacy parameter
     sortOrder = "desc",
-    pageSize = "50",
+    pageSize = OPTIMAL_PAGE_SIZE.toString(), // Use optimized page size by default
     index = "0",
-    forceRefresh = "false",
+    forceRefresh = "false"
   } = req.query;
 
-  // Use query parameter from ModManager, fallback to searchFilter
+  // Properly cast query parameters to strings with fallbacks
   const searchQuery = (query as string) || (searchFilter as string) || "";
-
-  // Map sortBy to sortField for compatibility
-  const mappedSortField =
-    sortBy === "downloads"
-      ? "popularity"
-      : sortBy === "featured"
-        ? "name"
-        : (sortField as string);
-
-  // Validate sortField
-  const validSortFields = ["name", "popularity", "size", "updated"];
-  if (!validSortFields.includes(mappedSortField)) {
-    return res.status(400).json({ error: "Invalid sort field" });
-  }
-
-  // Validate sortOrder
-  const validSortOrders = ["asc", "desc"];
-  if (!validSortOrders.includes(sortOrder as string)) {
-    return res.status(400).json({ error: "Invalid sort order" });
-  }
-
-  // Validate pageSize
-  const pageSizeNum = parseInt(pageSize as string);
-  if (isNaN(pageSizeNum) || pageSizeNum < 1 || pageSizeNum > 50) {
-    return res.status(400).json({ error: "Invalid page size (1-50)" });
-  }
-
-  // Validate index
-  const indexNum = parseInt(index as string);
-  if (isNaN(indexNum) || indexNum < 0) {
-    return res.status(400).json({ error: "Invalid index" });
+  const sort = (sortBy as string) || (sortField as string) || "popularity";
+  
+  // Validate and optimize parameters to stay under API limits
+  const safePageSize = Math.min(parseInt(pageSize as string) || OPTIMAL_PAGE_SIZE, OPTIMAL_PAGE_SIZE);
+  const safeIndex = Math.min(parseInt(index as string) || 0, MAX_TOTAL_RESULTS - safePageSize);
+  
+  // Ensure we don't exceed the total results limit (index + pageSize <= 10,000)
+  if (safeIndex + safePageSize > MAX_TOTAL_RESULTS) {
+    return res.status(400).json({ 
+      error: "Request exceeds maximum results limit",
+      maxIndex: MAX_TOTAL_RESULTS - safePageSize,
+      requestedIndex: safeIndex,
+      pageSize: safePageSize
+    });
   }
 
   const shouldForceRefresh = forceRefresh === "true";
@@ -95,10 +80,10 @@ export default async function handler(
     const categoryIdStr = Array.isArray(categoryId) ? categoryId[0] : (categoryId || 'none');
 
     // Create unique request key for deduplication
-    const requestKey = `search_${searchQuery}_${categoryIdStr}_${mappedSortField}_${sortOrder}_${pageSizeNum}_${indexNum}_${shouldForceRefresh}_${Date.now()}`;
+    const requestKey = `search_${searchQuery}_${categoryIdStr}_${sort}_${sortOrder}_${safePageSize}_${safeIndex}_${shouldForceRefresh}_${Date.now()}`;
 
     // Check if this request is already pending
-    const pendingKey = `search_${searchQuery}_${categoryIdStr}_${mappedSortField}_${sortOrder}_${pageSizeNum}_${indexNum}_${shouldForceRefresh}`;
+    const pendingKey = `search_${searchQuery}_${categoryIdStr}_${sort}_${sortOrder}_${safePageSize}_${safeIndex}_${shouldForceRefresh}`;
     if (pendingRequests.has(pendingKey)) {
       info('[API]', 'Request already pending, waiting for result');
       try {
@@ -114,10 +99,10 @@ export default async function handler(
       performSearch(
         searchQuery,
         categoryIdStr,
-        mappedSortField,
+        sort,
         sortOrder as "asc" | "desc",
-        pageSizeNum,
-        index as string,
+        safePageSize,
+        safeIndex,
         shouldForceRefresh
       ),
       new Promise((_, reject) => 
@@ -146,10 +131,10 @@ export default async function handler(
         const fallbackResult = await modCache.searchMods(
           searchQuery,
           undefined,
-          mappedSortField,
+          sort,
           sortOrder as "asc" | "desc",
           1,
-          pageSizeNum
+          safePageSize
         );
         if (fallbackResult.data && fallbackResult.data.length > 0) {
           const safeData = convertBigIntsToStrings(fallbackResult.data);
@@ -195,10 +180,10 @@ export default async function handler(
         const fallbackResult = await modCache.searchMods(
           searchQuery,
           undefined,
-          mappedSortField,
+          sort,
           sortOrder as "asc" | "desc",
           1,
-          pageSizeNum
+          safePageSize
         );
         if (fallbackResult.data && fallbackResult.data.length > 0) {
           const safeData = convertBigIntsToStrings(fallbackResult.data);
@@ -226,10 +211,10 @@ export default async function handler(
         const fallbackResult = await modCache.searchMods(
           searchQuery,
           undefined,
-          mappedSortField,
+          sort,
           sortOrder as "asc" | "desc",
           1,
-          pageSizeNum
+          safePageSize
         );
         if (fallbackResult.data && fallbackResult.data.length > 0) {
           const safeData = convertBigIntsToStrings(fallbackResult.data);
@@ -265,10 +250,10 @@ export default async function handler(
       const fallbackResult = await modCache.searchMods(
         searchQuery,
         undefined,
-        mappedSortField,
+        sort,
         sortOrder as "asc" | "desc",
         1,
-        pageSizeNum
+        safePageSize
       );
       if (fallbackResult.data && fallbackResult.data.length > 0) {
         const safeData = convertBigIntsToStrings(fallbackResult.data);
@@ -300,10 +285,10 @@ export default async function handler(
 async function performSearch(
   searchQuery: string,
   categoryId: string,
-  mappedSortField: string,
+  sort: string,
   sortOrder: "asc" | "desc",
   pageSizeNum: number,
-  index: string,
+  index: number,
   shouldForceRefresh: boolean
 ) {
   // Try to get from cache first (unless force refresh is requested)
@@ -312,7 +297,7 @@ async function performSearch(
       const cachedResult = await modCache.searchMods(
         searchQuery,
         undefined,
-        mappedSortField,
+        sort,
         sortOrder,
         1,
         pageSizeNum
@@ -328,9 +313,9 @@ async function performSearch(
   }
 
   // Fetch from CurseForge API with timeout and retry
-  const page = Math.floor(Number(index) / Number(pageSizeNum)) + 1;
+  const page = Math.floor(index / pageSizeNum) + 1;
   
-  info('[API]', 'Fetching from CurseForge API: ' + JSON.stringify({searchQuery, categoryId, mappedSortField, sortOrder, pageSize: pageSizeNum, page}));
+  info('[API]', 'Fetching from CurseForge API: ' + JSON.stringify({searchQuery, categoryId, sort, sortOrder, pageSize: pageSizeNum, page}));
   
   try {
     // Add timeout to CurseForge API call
@@ -338,7 +323,7 @@ async function performSearch(
       CurseForgeAPI.searchMods(
         String(searchQuery),
         categoryId && categoryId !== 'none' ? Number(categoryId) : undefined,
-        mappedSortField as any,
+        sort as any,
         sortOrder as any,
         Number(pageSizeNum),
         page
@@ -356,7 +341,7 @@ async function performSearch(
         await modCache.setSearchResults(
           searchQuery,
           undefined,
-          mappedSortField,
+          sort,
           sortOrder,
           1,
           pageSizeNum,
@@ -379,8 +364,8 @@ async function performSearch(
       const fallbackResult = await modCache.searchMods(
         searchQuery,
         undefined,
-        mappedSortField,
-        sortOrder,
+        sort,
+        sortOrder as "asc" | "desc",
         1,
         pageSizeNum
       );

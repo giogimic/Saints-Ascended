@@ -40,25 +40,25 @@ export function Sidebar({
       name: 'DASHBOARD',
       icon: HomeIcon,
       href: '/',
-      description: 'SERVER OVERVIEW AND MANAGEMENT'
+      description: 'SERVER OVERVIEW'
     },
     {
       name: 'ADD SERVER',
       icon: PlusIcon,
       action: onAddServer,
-      description: 'CREATE A NEW ARK SERVER'
+      description: 'CREATE NEW ARK SERVER'
     },
     {
       name: 'GLOBAL SETTINGS',
       icon: Cog6ToothIcon,
       action: onGlobalSettings,
-      description: 'SITE TITLE, FAVICON, THEME, AND SYSTEM PREFERENCES'
+      description: 'SITE PREFERENCES & THEME'
     }
   ];
 
   return (
-    <aside className={`fixed left-0 top-16 h-[calc(100vh-4rem)] bg-cyber-panel/95 backdrop-blur-lg border-r-2 border-matrix-500 shadow-matrix transition-all duration-300 z-[60] overflow-y-auto ${
-      isOpen ? 'w-64' : 'w-16'
+    <aside className={`fixed left-0 top-16 h-[calc(100vh-4rem)] bg-cyber-panel/95 backdrop-blur-lg border-r-2 border-matrix-500 shadow-matrix transition-all duration-300 z-[60] ${
+      isOpen ? 'w-80' : 'w-16'
     }`}>
       {/* Toggle Button */}
       <Button
@@ -68,19 +68,19 @@ export function Sidebar({
           e.stopPropagation();
           onToggleSidebar?.();
         }}
-        className="absolute -right-4 top-1/2 transform -translate-y-1/2 w-8 h-8 z-50"
+        className="absolute -right-3 top-1/2 transform -translate-y-1/2 w-6 h-6 z-50"
         title={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
       >
         {isOpen ? (
-          <ChevronLeftIcon className="h-4 w-4" />
+          <ChevronLeftIcon className="h-3 w-3" />
         ) : (
-          <ChevronRightIcon className="h-4 w-4" />
+          <ChevronRightIcon className="h-3 w-3" />
         )}
       </Button>
 
       {/* Expanded State - Full Navigation */}
       {isOpen && (
-        <div className="p-4 space-y-6">
+        <div className="p-4 pb-6 space-y-6 h-full overflow-y-auto">
           {/* Navigation Items */}
           <nav className="space-y-2">
             {navigationItems.map((item) => {
@@ -90,17 +90,21 @@ export function Sidebar({
                 return (
                   <Button
                     key={item.name}
-                    variant={isActive ? "cyber-solid" : "cyber-ghost"}
-                    className="w-full justify-start h-auto p-4"
+                    variant="cyber-ghost"
+                    className={`w-full justify-start h-auto p-4 min-h-[4rem] transition-all duration-200 ${
+                      isActive 
+                        ? 'border-2 border-matrix-500 bg-matrix-900/30 text-matrix-300 shadow-matrix-glow' 
+                        : 'border border-transparent hover:border-matrix-500/50 hover:bg-matrix-900/20'
+                    }`}
                     onClick={() => router.push(item.href)}
                   >
                     <div className="flex items-start gap-3 w-full">
                       <item.icon className="h-5 w-5 shrink-0 mt-0.5" />
-                      <div className="text-left">
+                      <div className="text-left flex-1 min-w-0">
                         <div className="font-mono font-semibold text-sm uppercase tracking-wider">
                           {item.name}
                         </div>
-                        <div className="text-xs text-matrix-600 font-mono mt-1 leading-tight">
+                        <div className="text-xs text-matrix-600 font-mono mt-1 leading-tight break-words">
                           {item.description}
                         </div>
                       </div>
@@ -112,16 +116,16 @@ export function Sidebar({
                   <Button
                     key={item.name}
                     variant="cyber-ghost"
-                    className="w-full justify-start h-auto p-4"
+                    className="w-full justify-start h-auto p-4 min-h-[4rem] border border-transparent hover:border-matrix-500/50 hover:bg-matrix-900/20 transition-all duration-200"
                     onClick={item.action}
                   >
                     <div className="flex items-start gap-3 w-full">
                       <item.icon className="h-5 w-5 shrink-0 mt-0.5" />
-                      <div className="text-left">
+                      <div className="text-left flex-1 min-w-0">
                         <div className="font-mono font-semibold text-sm uppercase tracking-wider">
                           {item.name}
                         </div>
-                        <div className="text-xs text-matrix-600 font-mono mt-1 leading-tight">
+                        <div className="text-xs text-matrix-600 font-mono mt-1 leading-tight break-words">
                           {item.description}
                         </div>
                       </div>
@@ -192,9 +196,13 @@ export function Sidebar({
             return (
               <Button
                 key={item.name}
-                variant={isActive ? "cyber-solid" : "cyber-ghost"}
+                variant="cyber-ghost"
                 size="icon"
-                className="w-12 h-12"
+                className={`w-12 h-12 transition-all duration-200 ${
+                  isActive 
+                    ? 'border-2 border-matrix-500 bg-matrix-900/30 text-matrix-300 shadow-matrix-glow' 
+                    : 'border border-transparent hover:border-matrix-500/50 hover:bg-matrix-900/20'
+                }`}
                 onClick={item.href ? () => router.push(item.href) : item.action}
                 title={item.name}
               >

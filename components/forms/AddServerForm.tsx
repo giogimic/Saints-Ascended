@@ -1,8 +1,17 @@
 import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { ServerIcon, FolderIcon, MapIcon, CogIcon, CheckIcon, XMarkIcon, XCircleIcon } from '@heroicons/react/24/outline';
+import { ServerIcon, FolderIcon } from '@heroicons/react/24/outline';
 import type { CreateServerFormData } from '@/types/server';
-import { ErrorHandler, ErrorType, ErrorSeverity } from '@/lib/error-handler';
+import { ErrorHandler } from '@/lib/error-handler';
+
+// shadcn/ui imports
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Card, CardContent } from '@/components/ui/Card';
 
 interface AddServerFormProps {
   onSuccess: (serverId: string) => void;
@@ -12,22 +21,22 @@ interface AddServerFormProps {
 export function AddServerForm({ onSuccess, onClose }: AddServerFormProps) {
   const [formData, setFormData] = useState<CreateServerFormData>({
     name: '',
-    executablePath: '',
-    configDirectory: '',
-    serverDirectory: '',
     map: 'TheIsland_WP',
     port: 7777,
     queryPort: 27015,
     rconPort: 32330,
-    rconPassword: '',
-    adminPassword: '',
-    serverPassword: '',
-    maxPlayers: 70,
+    maxPlayers: 20,
     description: '',
+    executablePath: '',
+    configDirectory: '',
+    serverDirectory: '',
+    adminPassword: '',
+    rconPassword: '',
+    serverPassword: '',
   });
 
-  const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
 
   const handleInputChange = (field: keyof CreateServerFormData, value: string | number) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -40,7 +49,6 @@ export function AddServerForm({ onSuccess, onClose }: AddServerFormProps) {
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    // Required fields validation
     if (!formData.name.trim()) {
       newErrors.name = 'Server name is required';
     }
@@ -147,400 +155,338 @@ export function AddServerForm({ onSuccess, onClose }: AddServerFormProps) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex min-h-screen items-center justify-center px-4 py-8 text-center sm:block sm:p-0">
-        {/* Improved backdrop with proper z-index and blur */}
-        <div 
-          className="fixed inset-0 bg-black/80 backdrop-blur-md transition-opacity" 
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose();
-          }}
-          aria-hidden="true"
-        />
+    <Dialog open={true} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-matrix-500/20">
+              <ServerIcon className="h-6 w-6 text-matrix-500" />
+            </div>
+            <DialogTitle className="text-xl font-mono uppercase text-matrix-500">
+              Add New Server
+            </DialogTitle>
+          </div>
+        </DialogHeader>
 
-        {/* Modal panel */}
-        <div className="fixed inset-0 z-10 overflow-y-auto">
-          <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-            <div className="inline-block transform overflow-hidden rounded-2xl bg-cyber-panel text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:align-middle border border-matrix-500/30">
-              <div className="bg-gradient-to-br from-cyber-panel to-cyber-bg px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-matrix-500/20 sm:mx-0 sm:h-10 sm:w-10">
-                    <ServerIcon className="h-6 w-6 text-matrix-500" aria-hidden="true" />
-                  </div>
-                  <div className="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left w-full">
-                    <h3 className="text-base font-semibold leading-6 text-matrix-400 font-mono">
-                      Add New Server
-                    </h3>
-                    <div className="mt-4">
-                      <form onSubmit={handleSubmit} className="space-y-4">
-                        {/* Basic Information */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="form-control">
-                            <label className="label">
-                              <span className="label-text text-primary font-display font-semibold">Server Name *</span>
-                            </label>
-                            <input
-                              type="text"
-                              className={`input input-bordered w-full ${errors.name ? 'input-error' : ''}`}
-                              value={formData.name}
-                              onChange={(e) => handleInputChange('name', e.target.value)}
-                              placeholder="My Ark Server"
-                              disabled={loading}
-                              aria-label="Server name"
-                              required
-                            />
-                            {errors.name && (
-                              <label className="label">
-                                <span className="label-text-alt text-error">{errors.name}</span>
-                              </label>
-                            )}
-                          </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Basic Information */}
+          <Card variant="cyber-glass">
+            <CardContent className="space-y-4">
+              <h3 className="text-lg font-mono uppercase text-matrix-400 mb-4">Basic Information</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name" className="text-matrix-400 font-mono">Server Name *</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => handleInputChange('name', e.target.value)}
+                    placeholder="My Ark Server"
+                    disabled={loading}
+                    className={errors.name ? 'border-red-500' : ''}
+                  />
+                  {errors.name && (
+                    <p className="text-red-400 text-sm font-mono">{errors.name}</p>
+                  )}
+                </div>
 
-                          <div className="form-control">
-                            <label className="label">
-                              <span className="label-text text-primary font-display font-semibold">Map *</span>
-                            </label>
-                            <select
-                              className={`select select-bordered w-full ${errors.map ? 'select-error' : ''}`}
-                              value={formData.map}
-                              onChange={(e) => handleInputChange('map', e.target.value)}
-                              disabled={loading}
-                              aria-label="Select server map"
-                              required
-                            >
-                              {mapOptions.map(option => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                            {errors.map && (
-                              <label className="label">
-                                <span className="label-text-alt text-error">{errors.map}</span>
-                              </label>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Paths */}
-                        <div className="space-y-4">
-                          <div className="form-control">
-                            <label className="label">
-                              <span className="label-text text-primary font-display font-semibold">Executable Path *</span>
-                            </label>
-                            <div className="flex gap-2">
-                              <input
-                                type="text"
-                                className={`input input-bordered flex-1 ${errors.executablePath ? 'input-error' : ''}`}
-                                value={formData.executablePath}
-                                onChange={(e) => handleInputChange('executablePath', e.target.value)}
-                                placeholder="C:\ArkServer\ShooterGame\Binaries\Win64\ArkAscendedServer.exe"
-                                disabled={loading}
-                                aria-label="Server executable path"
-                                required
-                              />
-                              <button
-                                type="button"
-                                className="btn btn-ghost btn-square btn-sm"
-                                onClick={() => toast('Please enter the path manually', {
-                                  icon: '💡',
-                                  duration: 3000
-                                })}
-                                disabled={loading}
-                                aria-label="Browse for executable"
-                              >
-                                <FolderIcon className="h-4 w-4" />
-                              </button>
-                            </div>
-                            {errors.executablePath && (
-                              <label className="label">
-                                <span className="label-text-alt text-error">{errors.executablePath}</span>
-                              </label>
-                            )}
-                          </div>
-
-                          <div className="form-control">
-                            <label className="label">
-                              <span className="label-text text-primary font-display font-semibold">Config Directory *</span>
-                            </label>
-                            <div className="flex gap-2">
-                              <input
-                                type="text"
-                                className={`input input-bordered flex-1 ${errors.configDirectory ? 'input-error' : ''}`}
-                                value={formData.configDirectory}
-                                onChange={(e) => handleInputChange('configDirectory', e.target.value)}
-                                placeholder="C:\ArkServer\ShooterGame\Saved\Config\WindowsServer"
-                                disabled={loading}
-                                aria-label="Server config directory"
-                                required
-                              />
-                              <button
-                                type="button"
-                                className="btn btn-ghost btn-square btn-sm"
-                                onClick={() => toast('Please enter the path manually', {
-                                  icon: '💡',
-                                  duration: 3000
-                                })}
-                                disabled={loading}
-                                aria-label="Browse for config directory"
-                              >
-                                <FolderIcon className="h-4 w-4" />
-                              </button>
-                            </div>
-                            {errors.configDirectory && (
-                              <label className="label">
-                                <span className="label-text-alt text-error">{errors.configDirectory}</span>
-                              </label>
-                            )}
-                          </div>
-
-                          <div className="form-control">
-                            <label className="label">
-                              <span className="label-text text-primary font-display font-semibold">Server Directory *</span>
-                            </label>
-                            <div className="flex gap-2">
-                              <input
-                                type="text"
-                                className={`input input-bordered flex-1 ${errors.serverDirectory ? 'input-error' : ''}`}
-                                value={formData.serverDirectory}
-                                onChange={(e) => handleInputChange('serverDirectory', e.target.value)}
-                                placeholder="C:\ArkServer"
-                                disabled={loading}
-                                aria-label="Server installation directory"
-                                required
-                              />
-                              <button
-                                type="button"
-                                className="btn btn-ghost btn-square btn-sm"
-                                onClick={() => toast('Please enter the path manually', {
-                                  icon: '💡',
-                                  duration: 3000
-                                })}
-                                disabled={loading}
-                                aria-label="Browse for server directory"
-                              >
-                                <FolderIcon className="h-4 w-4" />
-                              </button>
-                            </div>
-                            {errors.serverDirectory && (
-                              <label className="label">
-                                <span className="label-text-alt text-error">{errors.serverDirectory}</span>
-                              </label>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Network Settings */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                          <div className="form-control">
-                            <label className="label">
-                              <span className="label-text text-primary font-display font-semibold">Game Port *</span>
-                            </label>
-                            <input
-                              type="number"
-                              className={`input input-bordered w-full ${errors.port ? 'input-error' : ''}`}
-                              value={formData.port}
-                              onChange={(e) => handleInputChange('port', parseInt(e.target.value))}
-                              min="1"
-                              max="65535"
-                              disabled={loading}
-                              aria-label="Game port"
-                              required
-                            />
-                            {errors.port && (
-                              <label className="label">
-                                <span className="label-text-alt text-error">{errors.port}</span>
-                              </label>
-                            )}
-                          </div>
-
-                          <div className="form-control">
-                            <label className="label">
-                              <span className="label-text text-primary font-display font-semibold">Query Port *</span>
-                            </label>
-                            <input
-                              type="number"
-                              className={`input input-bordered w-full ${errors.queryPort ? 'input-error' : ''}`}
-                              value={formData.queryPort}
-                              onChange={(e) => handleInputChange('queryPort', parseInt(e.target.value))}
-                              min="1"
-                              max="65535"
-                              disabled={loading}
-                              aria-label="Query port"
-                              required
-                            />
-                            {errors.queryPort && (
-                              <label className="label">
-                                <span className="label-text-alt text-error">{errors.queryPort}</span>
-                              </label>
-                            )}
-                          </div>
-
-                          <div className="form-control">
-                            <label className="label">
-                              <span className="label-text text-primary font-display font-semibold">RCON Port *</span>
-                            </label>
-                            <input
-                              type="number"
-                              className={`input input-bordered w-full ${errors.rconPort ? 'input-error' : ''}`}
-                              value={formData.rconPort}
-                              onChange={(e) => handleInputChange('rconPort', parseInt(e.target.value))}
-                              min="1"
-                              max="65535"
-                              disabled={loading}
-                              aria-label="RCON port"
-                              required
-                            />
-                            {errors.rconPort && (
-                              <label className="label">
-                                <span className="label-text-alt text-error">{errors.rconPort}</span>
-                              </label>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Passwords */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                          <div className="form-control">
-                            <label className="label">
-                              <span className="label-text text-primary font-display font-semibold">Admin Password</span>
-                            </label>
-                            <input
-                              type="password"
-                              className={`input input-bordered w-full ${errors.adminPassword ? 'input-error' : ''}`}
-                              value={formData.adminPassword}
-                              onChange={(e) => handleInputChange('adminPassword', e.target.value)}
-                              placeholder="••••••"
-                              disabled={loading}
-                              aria-label="Admin password"
-                            />
-                            {errors.adminPassword && (
-                              <label className="label">
-                                <span className="label-text-alt text-error">{errors.adminPassword}</span>
-                              </label>
-                            )}
-                          </div>
-
-                          <div className="form-control">
-                            <label className="label">
-                              <span className="label-text text-primary font-display font-semibold">RCON Password</span>
-                            </label>
-                            <input
-                              type="password"
-                              className={`input input-bordered w-full ${errors.rconPassword ? 'input-error' : ''}`}
-                              value={formData.rconPassword}
-                              onChange={(e) => handleInputChange('rconPassword', e.target.value)}
-                              placeholder="••••••"
-                              disabled={loading}
-                              aria-label="RCON password"
-                            />
-                            {errors.rconPassword && (
-                              <label className="label">
-                                <span className="label-text-alt text-error">{errors.rconPassword}</span>
-                              </label>
-                            )}
-                          </div>
-
-                          <div className="form-control">
-                            <label className="label">
-                              <span className="label-text text-primary font-display font-semibold">Server Password</span>
-                            </label>
-                            <input
-                              type="password"
-                              className={`input input-bordered w-full ${errors.serverPassword ? 'input-error' : ''}`}
-                              value={formData.serverPassword}
-                              onChange={(e) => handleInputChange('serverPassword', e.target.value)}
-                              placeholder="••••••"
-                              disabled={loading}
-                              aria-label="Server password"
-                            />
-                            {errors.serverPassword && (
-                              <label className="label">
-                                <span className="label-text-alt text-error">{errors.serverPassword}</span>
-                              </label>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Additional Settings */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="form-control">
-                            <label className="label">
-                              <span className="label-text text-primary font-display font-semibold">Max Players *</span>
-                            </label>
-                            <input
-                              type="number"
-                              className={`input input-bordered w-full ${errors.maxPlayers ? 'input-error' : ''}`}
-                              value={formData.maxPlayers}
-                              onChange={(e) => handleInputChange('maxPlayers', parseInt(e.target.value))}
-                              min="1"
-                              max="255"
-                              disabled={loading}
-                              aria-label="Maximum players"
-                              required
-                            />
-                            {errors.maxPlayers && (
-                              <label className="label">
-                                <span className="label-text-alt text-error">{errors.maxPlayers}</span>
-                              </label>
-                            )}
-                          </div>
-
-                          <div className="form-control">
-                            <label className="label">
-                              <span className="label-text text-primary font-display font-semibold">Description</span>
-                            </label>
-                            <textarea
-                              className={`textarea textarea-bordered w-full h-20 min-h-[5rem] resize-none font-mono text-sm ${errors.description ? 'textarea-error' : ''}`}
-                              value={formData.description}
-                              onChange={(e) => handleInputChange('description', e.target.value)}
-                              placeholder="Server description (optional)"
-                              disabled={loading}
-                              aria-label="Server description"
-                            />
-                            {errors.description && (
-                              <label className="label">
-                                <span className="label-text-alt text-error">{errors.description}</span>
-                              </label>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex justify-end gap-4 mt-8">
-                          <button
-                            type="button"
-                            onClick={onClose}
-                            className="btn btn-ghost min-w-[100px]"
-                            disabled={loading}
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="submit"
-                            className="btn btn-primary min-w-[140px]"
-                            disabled={loading}
-                          >
-                            {loading ? (
-                              <>
-                                <span className="loading loading-spinner loading-sm" />
-                                Creating...
-                              </>
-                            ) : (
-                              'Create Server'
-                            )}
-                          </button>
-                        </div>
-                      </form>
-                    </div>
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="map" className="text-matrix-400 font-mono">Map *</Label>
+                  <Select value={formData.map} onValueChange={(value) => handleInputChange('map', value)}>
+                    <SelectTrigger className={errors.map ? 'border-red-500' : ''}>
+                      <SelectValue placeholder="Select a map" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {mapOptions.map(option => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.map && (
+                    <p className="text-red-400 text-sm font-mono">{errors.map}</p>
+                  )}
                 </div>
               </div>
-            </div>
+            </CardContent>
+          </Card>
+
+          {/* Paths */}
+          <Card variant="cyber-glass">
+            <CardContent className="space-y-4">
+              <h3 className="text-lg font-mono uppercase text-matrix-400 mb-4">Server Paths</h3>
+              
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="executablePath" className="text-matrix-400 font-mono">Executable Path *</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="executablePath"
+                      value={formData.executablePath}
+                      onChange={(e) => handleInputChange('executablePath', e.target.value)}
+                      placeholder="C:\ArkServer\ShooterGame\Binaries\Win64\ArkAscendedServer.exe"
+                      disabled={loading}
+                      className={`flex-1 ${errors.executablePath ? 'border-red-500' : ''}`}
+                    />
+                    <Button
+                      type="button"
+                      variant="cyber-outline"
+                      size="icon"
+                      onClick={() => toast('Please enter the path manually', {
+                        icon: '💡',
+                        duration: 3000
+                      })}
+                      disabled={loading}
+                    >
+                      <FolderIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {errors.executablePath && (
+                    <p className="text-red-400 text-sm font-mono">{errors.executablePath}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="configDirectory" className="text-matrix-400 font-mono">Config Directory *</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="configDirectory"
+                      value={formData.configDirectory}
+                      onChange={(e) => handleInputChange('configDirectory', e.target.value)}
+                      placeholder="C:\ArkServer\ShooterGame\Saved\Config\WindowsServer"
+                      disabled={loading}
+                      className={`flex-1 ${errors.configDirectory ? 'border-red-500' : ''}`}
+                    />
+                    <Button
+                      type="button"
+                      variant="cyber-outline"
+                      size="icon"
+                      onClick={() => toast('Please enter the path manually', {
+                        icon: '💡',
+                        duration: 3000
+                      })}
+                      disabled={loading}
+                    >
+                      <FolderIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {errors.configDirectory && (
+                    <p className="text-red-400 text-sm font-mono">{errors.configDirectory}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="serverDirectory" className="text-matrix-400 font-mono">Server Directory *</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="serverDirectory"
+                      value={formData.serverDirectory}
+                      onChange={(e) => handleInputChange('serverDirectory', e.target.value)}
+                      placeholder="C:\ArkServer"
+                      disabled={loading}
+                      className={`flex-1 ${errors.serverDirectory ? 'border-red-500' : ''}`}
+                    />
+                    <Button
+                      type="button"
+                      variant="cyber-outline"
+                      size="icon"
+                      onClick={() => toast('Please enter the path manually', {
+                        icon: '💡',
+                        duration: 3000
+                      })}
+                      disabled={loading}
+                    >
+                      <FolderIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {errors.serverDirectory && (
+                    <p className="text-red-400 text-sm font-mono">{errors.serverDirectory}</p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Network Settings */}
+          <Card variant="cyber-glass">
+            <CardContent className="space-y-4">
+              <h3 className="text-lg font-mono uppercase text-matrix-400 mb-4">Network Settings</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="port" className="text-matrix-400 font-mono">Game Port *</Label>
+                  <Input
+                    id="port"
+                    type="number"
+                    value={formData.port}
+                    onChange={(e) => handleInputChange('port', parseInt(e.target.value))}
+                    min="1"
+                    max="65535"
+                    disabled={loading}
+                    className={errors.port ? 'border-red-500' : ''}
+                  />
+                  {errors.port && (
+                    <p className="text-red-400 text-sm font-mono">{errors.port}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="queryPort" className="text-matrix-400 font-mono">Query Port *</Label>
+                  <Input
+                    id="queryPort"
+                    type="number"
+                    value={formData.queryPort}
+                    onChange={(e) => handleInputChange('queryPort', parseInt(e.target.value))}
+                    min="1"
+                    max="65535"
+                    disabled={loading}
+                    className={errors.queryPort ? 'border-red-500' : ''}
+                  />
+                  {errors.queryPort && (
+                    <p className="text-red-400 text-sm font-mono">{errors.queryPort}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="rconPort" className="text-matrix-400 font-mono">RCON Port *</Label>
+                  <Input
+                    id="rconPort"
+                    type="number"
+                    value={formData.rconPort}
+                    onChange={(e) => handleInputChange('rconPort', parseInt(e.target.value))}
+                    min="1"
+                    max="65535"
+                    disabled={loading}
+                    className={errors.rconPort ? 'border-red-500' : ''}
+                  />
+                  {errors.rconPort && (
+                    <p className="text-red-400 text-sm font-mono">{errors.rconPort}</p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Security Settings */}
+          <Card variant="cyber-glass">
+            <CardContent className="space-y-4">
+              <h3 className="text-lg font-mono uppercase text-matrix-400 mb-4">Security Settings</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="adminPassword" className="text-matrix-400 font-mono">Admin Password</Label>
+                  <Input
+                    id="adminPassword"
+                    type="password"
+                    value={formData.adminPassword}
+                    onChange={(e) => handleInputChange('adminPassword', e.target.value)}
+                    placeholder="••••••"
+                    disabled={loading}
+                    className={errors.adminPassword ? 'border-red-500' : ''}
+                  />
+                  {errors.adminPassword && (
+                    <p className="text-red-400 text-sm font-mono">{errors.adminPassword}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="rconPassword" className="text-matrix-400 font-mono">RCON Password</Label>
+                  <Input
+                    id="rconPassword"
+                    type="password"
+                    value={formData.rconPassword}
+                    onChange={(e) => handleInputChange('rconPassword', e.target.value)}
+                    placeholder="••••••"
+                    disabled={loading}
+                    className={errors.rconPassword ? 'border-red-500' : ''}
+                  />
+                  {errors.rconPassword && (
+                    <p className="text-red-400 text-sm font-mono">{errors.rconPassword}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="serverPassword" className="text-matrix-400 font-mono">Server Password</Label>
+                  <Input
+                    id="serverPassword"
+                    type="password"
+                    value={formData.serverPassword}
+                    onChange={(e) => handleInputChange('serverPassword', e.target.value)}
+                    placeholder="••••••"
+                    disabled={loading}
+                    className={errors.serverPassword ? 'border-red-500' : ''}
+                  />
+                  {errors.serverPassword && (
+                    <p className="text-red-400 text-sm font-mono">{errors.serverPassword}</p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Additional Settings */}
+          <Card variant="cyber-glass">
+            <CardContent className="space-y-4">
+              <h3 className="text-lg font-mono uppercase text-matrix-400 mb-4">Additional Settings</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="maxPlayers" className="text-matrix-400 font-mono">Max Players *</Label>
+                  <Input
+                    id="maxPlayers"
+                    type="number"
+                    value={formData.maxPlayers}
+                    onChange={(e) => handleInputChange('maxPlayers', parseInt(e.target.value))}
+                    min="1"
+                    max="255"
+                    disabled={loading}
+                    className={errors.maxPlayers ? 'border-red-500' : ''}
+                  />
+                  {errors.maxPlayers && (
+                    <p className="text-red-400 text-sm font-mono">{errors.maxPlayers}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="description" className="text-matrix-400 font-mono">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => handleInputChange('description', e.target.value)}
+                    placeholder="Server description (optional)"
+                    disabled={loading}
+                    className={`min-h-[80px] ${errors.description ? 'border-red-500' : ''}`}
+                  />
+                  {errors.description && (
+                    <p className="text-red-400 text-sm font-mono">{errors.description}</p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-4 pt-4">
+            <Button
+              type="button"
+              variant="cyber-outline"
+              onClick={onClose}
+              disabled={loading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="cyber-solid"
+              disabled={loading}
+              className="min-w-[140px]"
+            >
+              {loading ? 'Creating...' : 'Create Server'}
+            </Button>
           </div>
-        </div>
-      </div>
-    </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 } 

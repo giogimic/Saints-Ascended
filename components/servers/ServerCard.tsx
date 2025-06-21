@@ -12,9 +12,13 @@ import {
   UsersIcon,
   MapIcon
 } from '@heroicons/react/24/outline';
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/Card';
-import { cn } from '@/lib/utils';
 import type { ServerConfig, ServerStatus } from '@/types/server';
+
+// shadcn/ui imports
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/Card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 
 interface ServerCardProps {
   server: ServerConfig;
@@ -51,155 +55,166 @@ export function ServerCard({
       case 'online':
         return {
           icon: CheckCircleIcon,
-          color: 'text-matrix-500',
-          bgColor: 'bg-cyber-panel',
-          borderColor: 'border-matrix-500',
-          text: 'ONLINE',
-          dotColor: 'bg-matrix-500'
+          variant: 'cyber-success' as const,
+          text: 'Online',
+          color: 'text-green-500'
         };
       case 'offline':
         return {
           icon: XCircleIcon,
-          color: 'text-danger-red',
-          bgColor: 'bg-cyber-panel',
-          borderColor: 'border-danger-red',
-          text: 'OFFLINE',
-          dotColor: 'bg-danger-red'
+          variant: 'cyber-error' as const,
+          text: 'Offline',
+          color: 'text-red-500'
         };
       case 'starting':
       case 'stopping':
         return {
           icon: ClockIcon,
-          color: 'text-warning-orange',
-          bgColor: 'bg-cyber-panel',
-          borderColor: 'border-warning-orange',
-          text: status === 'starting' ? 'STARTING' : 'STOPPING',
-          dotColor: 'bg-warning-orange'
+          variant: 'cyber-warning' as const,
+          text: status === 'starting' ? 'Starting' : 'Stopping',
+          color: 'text-orange-500'
         };
       default:
         return {
           icon: ExclamationTriangleIcon,
-          color: 'text-warning-orange',
-          bgColor: 'bg-cyber-panel',
-          borderColor: 'border-warning-orange',
-          text: 'UNKNOWN',
-          dotColor: 'bg-warning-orange'
+          variant: 'cyber-warning' as const,
+          text: 'Unknown',
+          color: 'text-orange-500'
         };
     }
   };
 
   const statusConfig = getStatusConfig(status.status);
   const StatusIcon = statusConfig.icon;
+  const playerPercentage = status.players.max > 0 ? (status.players.current / status.players.max) * 100 : 0;
 
   return (
     <Card 
-      className="group hover:scale-[1.02] transition-all duration-200 relative overflow-hidden shadow-lg shadow-primary-green/10 hover:shadow-primary-green/20"
+      variant="cyber-glass"
+      className="group hover:shadow-matrix-glow transition-all duration-300 relative overflow-hidden"
     >
       {/* Status indicator line */}
-      <div className={cn('absolute top-0 left-0 right-0 h-1', statusConfig.dotColor)} />
+      <div className={`absolute top-0 left-0 right-0 h-1 ${
+        status.status === 'online' ? 'bg-green-500' : 
+        status.status === 'offline' ? 'bg-red-500' : 
+        'bg-orange-500'
+      }`} />
       
-      <CardHeader>
+      <CardHeader className="pb-4">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-cyber-panel border-2 border-primary-green/30 flex items-center justify-center shadow-lg shadow-primary-green/20">
-              <ServerIcon className="h-6 w-6 text-primary-green drop-shadow-lg" />
+            <div className="w-12 h-12 bg-matrix-500/20 rounded-lg flex items-center justify-center border border-matrix-500/30">
+              <ServerIcon className="h-6 w-6 text-matrix-500" />
             </div>
             <div className="flex-1 min-w-0">
-              <CardTitle className="text-primary-green mb-1">
+              <CardTitle className="text-lg mb-1">
                 {server.name}
               </CardTitle>
-              <p className="text-sm text-matrix-600 font-mono truncate uppercase tracking-wider">
-                {server.executablePath}:{server.port}
+              <p className="text-sm text-matrix-600 font-mono truncate">
+                {server.executablePath?.split('\\').pop() || 'ARK Server'}:{server.port}
               </p>
             </div>
           </div>
           
-          <div className={cn(
-            'flex items-center gap-2 px-3 py-1.5 border-2 backdrop-blur-sm',
-            statusConfig.bgColor,
-            statusConfig.borderColor
-          )}>
-            <div className={cn('w-2 h-2 animate-pulse', statusConfig.dotColor)} />
-            <span className={cn('text-xs font-mono font-medium uppercase tracking-wider', statusConfig.color)}>
-              {statusConfig.text}
-            </span>
-          </div>
+          <Badge variant={statusConfig.variant} className="flex items-center gap-2">
+            <StatusIcon className="h-3 w-3" />
+            {statusConfig.text}
+          </Badge>
         </div>
       </CardHeader>
 
-      <CardContent>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex items-center gap-3 p-4 bg-cyber-panel border border-matrix-700">
-            <div className="w-10 h-10 bg-cyber-panel border border-matrix-600 flex items-center justify-center">
-              <UsersIcon className="h-5 w-5 text-matrix-500" />
+      <CardContent className="space-y-4">
+        {/* Player Count */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <UsersIcon className="h-4 w-4 text-matrix-500" />
+              <span className="text-sm font-mono text-matrix-400">Players</span>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-matrix-600 font-mono font-medium mb-1 uppercase tracking-wider">PLAYERS</p>
-              <p className="text-lg font-bold font-mono text-matrix-500">
-                {status.players.current}/{status.players.max}
-              </p>
-            </div>
+            <span className="text-sm font-mono font-bold text-matrix-500">
+              {status.players.current}/{status.players.max}
+            </span>
           </div>
-          
-          <div className="flex items-center gap-3 p-4 bg-cyber-panel border border-matrix-700">
-            <div className="w-10 h-10 bg-cyber-panel border border-matrix-600 flex items-center justify-center">
-              <MapIcon className="h-5 w-5 text-matrix-500" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-matrix-600 font-mono font-medium mb-1 uppercase tracking-wider">MAP</p>
-              <p className="text-sm font-semibold font-mono text-matrix-500 truncate uppercase">
-                {server.map || 'THE ISLAND'}
-              </p>
-            </div>
+          <Progress 
+            value={playerPercentage} 
+            className="h-2"
+          />
+        </div>
+
+        {/* Map Info */}
+        <div className="flex items-center justify-between p-3 bg-cyber-panel/50 rounded-lg border border-matrix-500/20">
+          <div className="flex items-center gap-2">
+            <MapIcon className="h-4 w-4 text-matrix-500" />
+            <span className="text-sm font-mono text-matrix-400">Map</span>
+          </div>
+          <Badge variant="cyberpunk" className="text-xs">
+            {server.map?.replace('_WP', '').replace(/([A-Z])/g, ' $1').trim() || 'The Island'}
+          </Badge>
+        </div>
+
+        {/* Additional Info */}
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="text-matrix-600 font-mono">
+            <span className="text-matrix-400">Max Players:</span> {server.maxPlayers}
+          </div>
+          <div className="text-matrix-600 font-mono">
+            <span className="text-matrix-400">Query Port:</span> {server.queryPort}
           </div>
         </div>
       </CardContent>
 
-      <CardFooter>
-        <div className="flex gap-3 w-full">
+      <CardFooter className="pt-4">
+        <div className="flex gap-2 w-full">
+          {/* Primary Action Button */}
           {status.status === 'offline' ? (
-            <button
+            <Button
               onClick={() => handleServerAction('start')}
               disabled={isLoading || actionLoading === 'start'}
-              className="flex-1 px-4 py-2 bg-cyber-panel border-2 border-matrix-500 text-matrix-500 font-mono font-medium uppercase tracking-wider text-sm hover:bg-matrix-500 hover:text-cyber-bg transition-all duration-200 cyber-hover flex items-center justify-center gap-2"
+              variant="cyber-success"
+              className="flex-1"
             >
               {actionLoading === 'start' ? (
-                <div className="w-4 h-4 border-2 border-matrix-500 border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
               ) : (
-                <PlayIcon className="h-4 w-4" />
+                <PlayIcon className="h-4 w-4 mr-2" />
               )}
-              START SERVER
-            </button>
+              Start Server
+            </Button>
           ) : (
-            <button
+            <Button
               onClick={() => handleServerAction('stop')}
               disabled={isLoading || actionLoading === 'stop'}
-              className="flex-1 px-4 py-2 bg-cyber-panel border-2 border-danger-red text-danger-red font-mono font-medium uppercase tracking-wider text-sm hover:bg-danger-red hover:text-cyber-bg transition-all duration-200 cyber-hover flex items-center justify-center gap-2"
+              variant="cyber-danger"
+              className="flex-1"
             >
               {actionLoading === 'stop' ? (
-                <div className="w-4 h-4 border-2 border-danger-red border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
               ) : (
-                <StopIcon className="h-4 w-4" />
+                <StopIcon className="h-4 w-4 mr-2" />
               )}
-              STOP SERVER
-            </button>
+              Stop Server
+            </Button>
           )}
 
-          <button
+          {/* Action Buttons */}
+          <Button
             onClick={() => onEditServer(server.id)}
-            className="px-3 py-2 bg-cyber-panel border border-matrix-700 text-matrix-600 hover:border-matrix-500 hover:text-matrix-500 transition-all duration-200 cyber-hover"
+            variant="cyber-outline"
+            size="icon"
             title="Edit Server"
           >
             <PencilIcon className="h-4 w-4" />
-          </button>
+          </Button>
 
-          <button
+          <Button
             onClick={() => onDeleteServer(server.id)}
-            className="px-3 py-2 bg-cyber-panel border border-matrix-700 text-matrix-600 hover:border-danger-red hover:text-danger-red transition-all duration-200 cyber-hover"
+            variant="cyber-danger"
+            size="icon"
             title="Delete Server"
+            className="hover:bg-red-500/20"
           >
             <TrashIcon className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
       </CardFooter>
     </Card>

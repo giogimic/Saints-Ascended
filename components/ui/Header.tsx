@@ -8,6 +8,24 @@ import {
 import { useGlobalSettings } from '@/lib/global-settings';
 import Link from 'next/link';
 
+// shadcn/ui imports
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { 
+  NavigationMenu,
+  NavigationMenuContent,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+  NavigationMenuTrigger,
+} from '@/components/ui/navigation-menu';
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+
 interface HeaderProps {
   onToggleConsole?: () => void;
 }
@@ -37,68 +55,119 @@ export function Header({ onToggleConsole }: HeaderProps = {}) {
             </div>
           </div>
 
-          {/* Status Indicators */}
-          <div className="hidden md:flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-matrix-500 rounded-full animate-pulse"></div>
-              <span className="text-xs font-mono text-matrix-600 uppercase tracking-wider">ONLINE</span>
-            </div>
-            <div className="w-px h-6 bg-matrix-700"></div>
-            <div className="text-xs font-mono text-matrix-600 uppercase tracking-wider">
-              SYSTEM READY
-            </div>
-            <div className="w-px h-6 bg-matrix-700"></div>
-            
-            {/* Admin Link */}
-            <Link
-              href="/admin"
-              className="w-8 h-8 bg-cyber-panel border border-matrix-500 flex items-center justify-center cyber-hover transition-all duration-200 hover:border-orange-400 group"
-              title="Admin Dashboard"
-            >
-              <ShieldCheckIcon className="h-4 w-4 text-matrix-500 group-hover:text-orange-400 transition-colors" />
-            </Link>
-            
-            {/* Console Toggle */}
-            <button
-              onClick={onToggleConsole}
-              className="w-8 h-8 bg-cyber-panel border border-matrix-500 flex items-center justify-center cyber-hover transition-all duration-200 hover:border-matrix-400"
-              title="Toggle System Console"
-            >
-              <CommandLineIcon className="h-4 w-4 text-matrix-500" />
-            </button>
+          {/* Navigation Menu - Desktop */}
+          <div className="hidden md:block">
+            <NavigationMenu>
+              <NavigationMenuList>
+                <NavigationMenuItem>
+                  <NavigationMenuTrigger className="bg-transparent text-matrix-400 hover:text-matrix-300 font-mono">
+                    System
+                  </NavigationMenuTrigger>
+                  <NavigationMenuContent>
+                    <div className="grid w-[400px] gap-3 p-4 md:w-[500px] md:grid-cols-2 lg:w-[600px]">
+                      <NavigationMenuLink asChild>
+                        <Link
+                          href="/"
+                          className="block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-matrix-500/10 hover:text-matrix-300 focus:bg-matrix-500/10 focus:text-matrix-300"
+                        >
+                          <div className="text-sm font-medium leading-none text-matrix-400 font-mono">Dashboard</div>
+                          <p className="line-clamp-2 text-sm leading-snug text-matrix-600">
+                            Server overview and management
+                          </p>
+                        </Link>
+                      </NavigationMenuLink>
+                      <NavigationMenuLink asChild>
+                        <Link
+                          href="/admin"
+                          className="block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-matrix-500/10 hover:text-matrix-300 focus:bg-matrix-500/10 focus:text-matrix-300"
+                        >
+                          <div className="text-sm font-medium leading-none text-matrix-400 font-mono">Admin Panel</div>
+                          <p className="line-clamp-2 text-sm leading-snug text-matrix-600">
+                            System administration and testing
+                          </p>
+                        </Link>
+                      </NavigationMenuLink>
+                    </div>
+                  </NavigationMenuContent>
+                </NavigationMenuItem>
+              </NavigationMenuList>
+            </NavigationMenu>
           </div>
 
-          {/* Mobile Menu Button */}
-          <div className="md:hidden">
-            <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="w-8 h-8 bg-cyber-panel border border-matrix-500 flex items-center justify-center cyber-hover transition-all duration-200"
-              title="Menu"
-            >
-              <Bars3Icon className="h-5 w-5 text-matrix-500" />
-            </button>
+          {/* Status Indicators and Actions */}
+          <div className="flex items-center gap-3">
+            {/* System Status */}
+            <div className="hidden lg:flex items-center gap-2">
+              <Badge variant="cyber-online" className="animate-pulse">
+                ONLINE
+              </Badge>
+              <div className="text-xs text-matrix-600 font-mono">
+                SYSTEM OPERATIONAL
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2">
+              {/* Console Toggle */}
+              {onToggleConsole && (
+                <Button
+                  variant="cyber-ghost"
+                  size="sm"
+                  onClick={onToggleConsole}
+                  className="hidden sm:flex"
+                  title="Toggle Console"
+                >
+                  <CommandLineIcon className="h-4 w-4" />
+                  <span className="hidden lg:inline ml-2">CONSOLE</span>
+                </Button>
+              )}
+
+              {/* Admin Access */}
+              <Button
+                variant="cyber-outline"
+                size="sm"
+                asChild
+                className="hidden sm:flex"
+              >
+                <Link href="/admin">
+                  <ShieldCheckIcon className="h-4 w-4" />
+                  <span className="hidden lg:inline ml-2">ADMIN</span>
+                </Link>
+              </Button>
+
+              {/* Mobile Menu */}
+              <div className="md:hidden">
+                <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="cyber-ghost" size="sm">
+                      <Bars3Icon className="h-5 w-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuItem asChild>
+                      <Link href="/" className="flex items-center gap-2 w-full">
+                        <ComputerDesktopIcon className="h-4 w-4" />
+                        Dashboard
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin" className="flex items-center gap-2 w-full">
+                        <ShieldCheckIcon className="h-4 w-4" />
+                        Admin Panel
+                      </Link>
+                    </DropdownMenuItem>
+                    {onToggleConsole && (
+                      <DropdownMenuItem onClick={onToggleConsole}>
+                        <CommandLineIcon className="h-4 w-4 mr-2" />
+                        Toggle Console
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
           </div>
         </div>
-
-        {/* Mobile Menu */}
-        {isMenuOpen && (
-          <div className="md:hidden border-t border-matrix-500 py-4 bg-cyber-panel/95 backdrop-blur-sm">
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2 px-4">
-                <div className="w-2 h-2 bg-matrix-500 rounded-full animate-pulse"></div>
-                <span className="text-xs font-mono text-matrix-600 uppercase tracking-wider">SYSTEM STATUS: ONLINE</span>
-              </div>
-              <Link
-                href="/admin"
-                className="flex items-center gap-2 px-4 py-2 text-xs font-mono text-matrix-600 uppercase tracking-wider hover:text-orange-400 transition-colors"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                <ShieldCheckIcon className="h-4 w-4" />
-                Admin Dashboard
-              </Link>
-            </div>
-          </div>
-        )}
       </div>
     </header>
   );

@@ -2,8 +2,12 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { XMarkIcon, ExclamationTriangleIcon, InformationCircleIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
-import { Button } from './button'
 import { clearAllCaches, forceReloadResource, getCacheBustParam } from '@/lib/cache-bust'
+
+// shadcn/ui imports
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader } from '@/components/ui/Card'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 interface ConsoleMessage {
   message: string
@@ -90,67 +94,74 @@ export function TerminalWindow({ isOpen, onClose, messages = [] }: TerminalWindo
   if (!isOpen) return null
 
   return (
-    <div className={`fixed bottom-4 right-4 z-50 bg-cyber-panel/95 backdrop-blur-lg border-2 border-matrix-500 shadow-matrix transition-all duration-300 ${
-      isMinimized ? 'w-80 h-12' : showDevControls ? 'w-96 h-96' : 'w-96 h-80'
-    }`}>
+    <Card 
+      variant="cyber" 
+      className={`fixed bottom-4 right-4 z-50 transition-all duration-300 ${
+        isMinimized ? 'w-80 h-12' : showDevControls ? 'w-96 h-96' : 'w-96 h-80'
+      }`}
+    >
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-matrix-500 bg-cyber-panel/80">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 bg-matrix-500 rounded-full animate-pulse"></div>
-          <span className="text-sm font-mono font-bold text-matrix-500 uppercase tracking-wider">
-            SYSTEM CONSOLE
-          </span>
-        </div>
-        
-        <div className="flex items-center gap-1">
-          {mounted && process.env.NODE_ENV === 'development' && (
-            <button
-              onClick={() => setShowDevControls(!showDevControls)}
-              className="w-6 h-6 bg-cyber-panel border border-matrix-700 flex items-center justify-center cyber-hover transition-all duration-200 hover:border-matrix-500"
-              title="Toggle Dev Controls"
-            >
-              <span className="text-xs font-mono text-matrix-500">
-                {showDevControls ? '🔧' : '⚙️'}
-              </span>
-            </button>
-          )}
-          
-          <button
-            onClick={() => setIsMinimized(!isMinimized)}
-            className="w-6 h-6 bg-cyber-panel border border-matrix-700 flex items-center justify-center cyber-hover transition-all duration-200 hover:border-matrix-500"
-            title={isMinimized ? 'Maximize' : 'Minimize'}
-          >
-            <span className="text-xs font-mono text-matrix-500">
-              {isMinimized ? '□' : '_'}
+      <CardHeader className="p-3 border-b border-matrix-500">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-matrix-500 rounded-full animate-pulse"></div>
+            <span className="text-sm font-mono font-bold text-matrix-500 uppercase tracking-wider">
+              System Console
             </span>
-          </button>
+          </div>
           
-          <button
-            onClick={onClose}
-            className="w-6 h-6 bg-cyber-panel border border-matrix-700 flex items-center justify-center cyber-hover transition-all duration-200 hover:border-red-500 hover:text-red-400"
-            title="Close Console"
-          >
-            <XMarkIcon className="w-3 h-3 text-matrix-500 hover:text-red-400" />
-          </button>
+          <div className="flex items-center gap-1">
+            {mounted && process.env.NODE_ENV === 'development' && (
+              <Button
+                variant="cyber-ghost"
+                size="xs"
+                onClick={() => setShowDevControls(!showDevControls)}
+                title="Toggle Dev Controls"
+              >
+                <span className="text-xs font-mono">
+                  {showDevControls ? '🔧' : '⚙️'}
+                </span>
+              </Button>
+            )}
+            
+            <Button
+              variant="cyber-ghost"
+              size="xs"
+              onClick={() => setIsMinimized(!isMinimized)}
+              title={isMinimized ? 'Maximize' : 'Minimize'}
+            >
+              <span className="text-xs font-mono">
+                {isMinimized ? '□' : '_'}
+              </span>
+            </Button>
+            
+            <Button
+              variant="cyber-ghost"
+              size="xs"
+              onClick={onClose}
+              title="Close Console"
+              className="hover:text-red-400"
+            >
+              <XMarkIcon className="w-3 h-3" />
+            </Button>
+          </div>
         </div>
-      </div>
+      </CardHeader>
 
       {/* Terminal Content */}
       {!isMinimized && (
-        <>
-          <div 
+        <CardContent className="p-0">
+          <ScrollArea 
+            className={`${showDevControls ? 'h-48' : 'h-64'} bg-gray-900/50`}
             ref={terminalRef}
-            className={`overflow-y-auto p-3 bg-gray-900/50 font-mono text-xs ${
-              showDevControls ? 'h-48' : 'h-64'
-            }`}
           >
-            <div className="space-y-1">
+            <div className="p-3 space-y-1">
               {messages.map((message, index) => (
                 <div 
                   key={`${message.timestamp}-${index}`}
                   className="flex items-start gap-2 py-1 hover:bg-matrix-900/20 transition-colors"
                 >
-                  <span className="text-matrix-700 text-xs shrink-0">
+                  <span className="text-matrix-700 text-xs shrink-0 font-mono">
                     {mounted ? message.timestamp : '00:00:00'}
                   </span>
                   
@@ -158,7 +169,7 @@ export function TerminalWindow({ isOpen, onClose, messages = [] }: TerminalWindo
                     {getMessageIcon(message.type)}
                   </div>
                   
-                  <span className={`${getMessageColor(message.type)} leading-tight`}>
+                  <span className={`${getMessageColor(message.type)} leading-tight text-xs font-mono`}>
                     {message.message}
                   </span>
                 </div>
@@ -166,11 +177,11 @@ export function TerminalWindow({ isOpen, onClose, messages = [] }: TerminalWindo
             </div>
             
             {messages.length === 0 && (
-              <div className="text-matrix-700 text-center py-8">
+              <div className="text-matrix-700 text-center py-8 text-sm font-mono">
                 No console messages
               </div>
             )}
-          </div>
+          </ScrollArea>
 
           {/* Dev Cache Controls */}
           {mounted && showDevControls && process.env.NODE_ENV === 'development' && (
@@ -179,7 +190,7 @@ export function TerminalWindow({ isOpen, onClose, messages = [] }: TerminalWindo
                 <span className="text-xs font-mono text-matrix-500 uppercase tracking-wider">
                   🔧 Dev Cache Controls
                 </span>
-                <span className="text-xs text-matrix-700">
+                <span className="text-xs text-matrix-700 font-mono">
                   v{mounted ? getCacheBustParam().replace('?v=', '') : '000000'}
                 </span>
               </div>
@@ -187,36 +198,39 @@ export function TerminalWindow({ isOpen, onClose, messages = [] }: TerminalWindo
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   onClick={handleReloadCSS}
-                  size="sm"
-                  className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-600/30 text-xs"
+                  variant="cyber-info"
+                  size="xs"
+                  className="text-xs"
                 >
                   🎨 Reload CSS
                 </Button>
                 
                 <Button
                   onClick={handleClearCaches}
-                  size="sm"
-                  className="bg-orange-600/20 hover:bg-orange-600/40 text-orange-400 border border-orange-600/30 text-xs"
+                  variant="cyber-warning"
+                  size="xs"
+                  className="text-xs"
                 >
                   🗑️ Clear Cache
                 </Button>
                 
                 <Button
                   onClick={handleForceReload}
-                  size="sm"
-                  className="bg-green-600/20 hover:bg-green-600/40 text-green-400 border border-green-600/30 text-xs col-span-2"
+                  variant="cyber-success"
+                  size="xs"
+                  className="col-span-2 text-xs"
                 >
                   🔄 Force Reload (Ctrl+Shift+F5)
                 </Button>
               </div>
               
-              <div className="mt-2 text-xs text-matrix-700 text-center">
+              <div className="mt-2 text-xs text-matrix-700 text-center font-mono">
                 Keyboard: Ctrl+Shift+F5 for hard refresh
               </div>
             </div>
           )}
-        </>
+        </CardContent>
       )}
-    </div>
+    </Card>
   )
 } 

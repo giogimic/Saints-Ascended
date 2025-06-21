@@ -331,7 +331,7 @@ export class CurseForgeAPI {
   private static isProcessingQueue = false;
   private static readonly MAX_CONCURRENT_REQUESTS = 2; // Reduced for better stability
   private static activeRequests = 0;
-  private static readonly REQUEST_TIMEOUT = 15000; // Increased from 8s to 15s for better reliability
+  private static readonly REQUEST_TIMEOUT = 30000; // Increased from 15s to 30s to match search endpoint
   private static readonly RETRY_DELAYS = [1000, 2000, 4000]; // Reduced delays for faster failure detection
 
   /**

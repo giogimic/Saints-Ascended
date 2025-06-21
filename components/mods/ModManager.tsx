@@ -531,20 +531,40 @@ const ModManager: React.FC<ModManagerProps> = ({
 
       addConsoleInfo(`🔍 Searching for "${query.trim()}" - checking cache first, then API if needed`);
 
-      const response = await fetch(`/api/curseforge/search?${params}`);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to search mods");
-      }
+      // Create a timeout controller for the fetch request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-      const data = await response.json();
-      
-      if (data.data) {
-        setSearchResults(data.data);
-        addConsoleInfo(`✅ Found ${data.data.length} mods for "${query.trim()}" from ${data.source || 'unknown source'}`);
-      } else {
-        throw new Error(data.error || "No results found");
+      try {
+        const response = await fetch(`/api/curseforge/search?${params}`, {
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+          throw new Error(errorData.error || `Failed to search mods (${response.status})`);
+        }
+
+        const data = await response.json();
+        
+        if (data.data) {
+          setSearchResults(data.data);
+          addConsoleInfo(`✅ Found ${data.data.length} mods for "${query.trim()}" from ${data.source || 'unknown source'}`);
+        } else {
+          throw new Error(data.error || "No results found");
+        }
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+          throw new Error('Request timeout - The search took too long to complete');
+        }
+        throw fetchError;
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Failed to search mods";

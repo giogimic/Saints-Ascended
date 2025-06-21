@@ -26,7 +26,7 @@ setInterval(() => {
   }
 }, 60000); // Every minute
 
-const SEARCH_TIMEOUT = 25000; // Increased from 8000 to 25000ms for better reliability
+const SEARCH_TIMEOUT = 30000; // Increased from 25000 to 30000ms for better reliability
 const MAX_RETRIES = 3;
 const RETRY_DELAY_BASE = 1000; // 1 second base delay
 
@@ -109,7 +109,7 @@ export default async function handler(
       }
     }
 
-    // Create new request promise with timeout
+    // Create new request promise with increased timeout
     const requestPromise = Promise.race([
       performSearch(
         searchQuery,
@@ -121,10 +121,12 @@ export default async function handler(
         shouldForceRefresh
       ),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('API request timeout after 10 seconds')), 10000)
+        setTimeout(() => reject(new Error('Request timeout')), SEARCH_TIMEOUT)
       )
     ]);
 
+    // Add timestamp to promise for cleanup
+    (requestPromise as any).timestamp = Date.now();
     pendingRequests.set(pendingKey, requestPromise);
 
     try {
@@ -342,7 +344,7 @@ async function performSearch(
         page
       ),
       new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new CurseForgeTimeoutError()), SEARCH_TIMEOUT) // 25 second timeout for CurseForge API (allows for retries)
+        setTimeout(() => reject(new CurseForgeTimeoutError()), SEARCH_TIMEOUT) // 30 second timeout for CurseForge API (allows for retries)
       )
     ]);
 

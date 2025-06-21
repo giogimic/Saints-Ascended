@@ -466,8 +466,23 @@ export default async function handler(
       page = "1",
     } = req.query;
 
+    // If no category is provided, return the list of available categories
     if (!category || typeof category !== "string") {
-      return res.status(400).json({ error: "Category parameter is required" });
+      const availableCategories = Object.keys(CATEGORY_SEARCH_TERMS).map(name => ({
+        name,
+        searchTerms: CATEGORY_SEARCH_TERMS[name].slice(0, 5), // First 5 terms for preview
+        totalTerms: CATEGORY_SEARCH_TERMS[name].length,
+        description: getCategoryDescription(name)
+      }));
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          categories: availableCategories,
+          totalCategories: availableCategories.length
+        },
+        message: "Available mod categories"
+      });
     }
 
     // Get search terms for the category
@@ -604,4 +619,19 @@ export default async function handler(
       error: "An unexpected error occurred",
     });
   }
+}
+
+// Helper function to provide descriptions for categories
+function getCategoryDescription(categoryName: string): string {
+  const descriptions: { [key: string]: string } = {
+    Structures: "Building and construction mods including walls, foundations, and architectural elements",
+    Creatures: "Dinosaurs, animals, and creature-related mods including new species and creature mechanics",
+    Maps: "Custom maps, biomes, and world environments for ARK",
+    Popular: "Most popular and trending mods in the community",
+    Gameplay: "Core gameplay mechanics, survival features, and game system overhauls",
+    Utility: "Quality of life improvements, tools, and helpful automation mods",
+    Cosmetic: "Visual enhancements, skins, textures, and appearance modifications"
+  };
+  
+  return descriptions[categoryName] || `Mods related to ${categoryName.toLowerCase()}`;
 }

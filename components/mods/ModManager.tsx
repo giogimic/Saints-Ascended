@@ -1173,7 +1173,7 @@ const ModManager: React.FC<ModManagerProps> = ({
           type="text"
           placeholder="Search installed mods..."
           value={installedModsSearchQuery}
-          onChange={(e) => setInstalledModsSearchQuery(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInstalledModsSearchQuery(e.target.value)}
           className="w-full"
         />
       </div>
@@ -1689,7 +1689,7 @@ const ModManager: React.FC<ModManagerProps> = ({
                   <Input
                     type="text"
                     value={searchModalQuery}
-                    onChange={(e) => setSearchModalQuery(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchModalQuery(e.target.value)}
                     placeholder="Search for mods... (e.g., 'quality of life', 'map', 'building')"
                     className="flex-1"
                   />
@@ -1765,7 +1765,7 @@ const ModManager: React.FC<ModManagerProps> = ({
         </Dialog>
 
         {/* Add Mods by ID Modal using ShadCN Dialog */}
-        <Dialog open={showAddModModal} onOpenChange={(open) => {
+        <Dialog open={showAddModModal} onOpenChange={(open: boolean) => {
           setShowAddModModal(open);
           if (!open) setManualModId("");
         }}>

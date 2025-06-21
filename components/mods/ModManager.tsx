@@ -597,12 +597,20 @@ const ModManager: React.FC<ModManagerProps> = ({
     }
   };
 
-  // Filter mods based on selected category
+  // Effect to handle external search query changes from the top-right search bar
+  useEffect(() => {
+    if (searchQuery && searchQuery.trim() && selectedCategory !== "Installed") {
+      // For non-installed categories, use the search query to filter the displayed mods
+      // This will be handled in the CategoryModsDisplay component
+    }
+  }, [searchQuery, selectedCategory]);
+
+  // Filter mods based on selected category and search query
   const getFilteredMods = () => {
     if (selectedCategory === "Installed") {
       let filteredMods = mods;
       
-      // Apply search filter for installed mods
+      // Apply search filter for installed mods using the installed mods search query
       if (installedModsSearchQuery.trim()) {
         const query = installedModsSearchQuery.toLowerCase();
         filteredMods = mods.filter(mod => 
@@ -1178,6 +1186,24 @@ const ModManager: React.FC<ModManagerProps> = ({
       loadCategoryMods();
     }, [category]);
 
+    // Filter category mods based on the top-right search query
+    const getFilteredCategoryMods = () => {
+      if (!searchQuery || !searchQuery.trim()) {
+        return categoryMods;
+      }
+      
+      const query = searchQuery.toLowerCase();
+      return categoryMods.filter(mod => 
+        mod.name.toLowerCase().includes(query) ||
+        (mod.summary || '').toLowerCase().includes(query) ||
+        (mod.authors && mod.authors.some(author => 
+          author.name.toLowerCase().includes(query)
+        ))
+      );
+    };
+
+    const filteredMods = getFilteredCategoryMods();
+
     if (isLoading) {
       return (
         <div className="flex items-center justify-center py-12">
@@ -1228,6 +1254,17 @@ const ModManager: React.FC<ModManagerProps> = ({
       );
     }
 
+    if (filteredMods.length === 0 && categoryMods.length > 0) {
+      // Search query filtered out all results
+      return (
+        <div className="text-center py-8">
+          <MagnifyingGlassIcon className="h-12 w-12 text-matrix-600 mx-auto mb-4" />
+          <p className="text-matrix-600 font-mono">No mods found matching &ldquo;{searchQuery}&rdquo;</p>
+          <p className="text-matrix-700 text-sm mt-2">Try a different search term or clear the search</p>
+        </div>
+      );
+    }
+
     if (categoryMods.length === 0) {
       return (
         <div className="text-center py-8">
@@ -1258,7 +1295,7 @@ const ModManager: React.FC<ModManagerProps> = ({
         )}
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {categoryMods.map((mod) => (
+          {filteredMods.map((mod) => (
             <div
               key={mod.id}
               className="bg-cyber-panel border border-matrix-500/30 rounded-lg p-4 hover:border-matrix-500 transition-colors group"

@@ -15,7 +15,8 @@ import {
   ClockIcon,
   PlayIcon,
   StopIcon,
-  WrenchScrewdriverIcon
+  WrenchScrewdriverIcon,
+  PencilIcon
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 import type { ServerConfig, ServerStatus } from '@/types/server';
@@ -337,35 +338,35 @@ const ServerDetailPage = () => {
           <div className="container mx-auto px-6 py-12">
             <div className="max-w-5xl mx-auto">
               {/* Server Overview */}
-              <div className="bg-base-200/50 rounded-2xl shadow-lg overflow-hidden mb-10 border border-base-300/30">
+              <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-2xl mb-10">
                 <div className="p-8">
-                  <h2 className="text-2xl font-bold text-base-content mb-6 font-display tracking-wide">Server Overview</h2>
+                  <h2 className="text-2xl font-bold text-matrix-400 font-display tracking-wide">Server Overview</h2>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-base-300/30 rounded-xl p-5 border border-base-300/20">
+                    <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-xl p-5 border border-matrix-500/30">
                       <div className="flex items-center gap-3 mb-3">
                         <UsersIcon className="h-6 w-6 text-accent" />
-                        <h3 className="text-lg font-semibold text-base-content">Players</h3>
+                        <h3 className="text-lg font-semibold text-matrix-400">Players</h3>
                       </div>
                       <div className="text-3xl font-bold text-accent tracking-wide">
                         {players.current}/{players.max}
                       </div>
-                      <div className="text-sm font-mono text-base-content/60 mt-1">
+                      <div className="text-sm font-mono text-matrix-400 mt-1">
                         {Math.round((players.current / players.max) * 100)}% capacity
                       </div>
                     </div>
-                    <div className="bg-base-300/30 rounded-xl p-5 border border-base-300/20">
+                    <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-xl p-5 border border-matrix-500/30">
                       <div className="flex items-center gap-3 mb-3">
                         <SignalIcon className="h-6 w-6 text-primary" />
-                        <h3 className="text-lg font-semibold text-base-content">Map</h3>
+                        <h3 className="text-lg font-semibold text-matrix-400">Map</h3>
                       </div>
-                      <div className="text-xl font-bold text-base-content truncate">{server.map}</div>
+                      <div className="text-xl font-bold text-matrix-400 truncate">{server.map}</div>
                     </div>
-                    <div className="bg-base-300/30 rounded-xl p-5 border border-base-300/20">
+                    <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-xl p-5 border border-matrix-500/30">
                       <div className="flex items-center gap-3 mb-3">
                         <GlobeAltIcon className="h-6 w-6 text-info" />
-                        <h3 className="text-lg font-semibold text-base-content">Port</h3>
+                        <h3 className="text-lg font-semibold text-matrix-400">Port</h3>
                       </div>
-                      <div className="text-xl font-bold text-base-content">{server.port}</div>
+                      <div className="text-xl font-bold text-matrix-400">{server.port}</div>
                     </div>
                   </div>
                   <div className="flex gap-4 mt-8 justify-center">
@@ -405,17 +406,52 @@ const ServerDetailPage = () => {
                 />
               )}
 
+              {/* Server Information Card */}
+              <div className="card bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-2xl">
+                <div className="card-body p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold text-matrix-400 font-display tracking-wide cyber-text">
+                      Server Information
+                    </h2>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => router.push(`/servers/${id}/edit`)}
+                        className="btn btn-sm btn-outline hover:bg-matrix-900/50 text-matrix-400 border-matrix-500/50 hover:border-matrix-500"
+                        title="Edit server"
+                      >
+                        <PencilIcon className="h-4 w-4" />
+                        Edit
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-6">
+                    <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-xl p-6 border border-matrix-500/30">
+                      <div className="text-base font-medium text-matrix-400 uppercase tracking-wider mb-3">Server ID</div>
+                      <div className="text-lg font-mono text-matrix-400">{server.id}</div>
+                    </div>
+                    <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-xl p-6 border border-matrix-500/30">
+                      <div className="text-base font-medium text-matrix-400 uppercase tracking-wider mb-3">Max Players</div>
+                      <div className="text-lg font-bold text-matrix-400">{server.maxPlayers}</div>
+                    </div>
+                    <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-xl p-6 border border-matrix-500/30">
+                      <div className="text-base font-medium text-matrix-400 uppercase tracking-wider mb-3">Executable Path</div>
+                      <div className="text-lg font-mono text-matrix-400 break-all">{server.executablePath}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Navigation and Details */}
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
                 {/* Navigation Sidebar */}
                 <div className="lg:col-span-2">
-                  <div className="bg-base-200/50 rounded-2xl shadow-lg overflow-hidden border border-base-300/30 sticky top-24">
+                  <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-2xl shadow-lg overflow-hidden sticky top-24">
                     <div className="p-6">
-                      <h2 className="text-2xl font-bold text-base-content mb-6 font-display tracking-wide">Quick Navigation</h2>
+                      <h2 className="text-2xl font-bold text-matrix-400 mb-6 font-display tracking-wide">Quick Navigation</h2>
                       <div className="space-y-4">
                         <button
                           onClick={() => router.push(`/servers/${server.id}/edit?tab=mods`)}
-                          className="btn btn-outline w-full rounded-xl hover:bg-secondary hover:border-secondary hover:text-secondary-content transition-all duration-300 font-semibold tracking-wide text-base py-3"
+                          className="btn btn-outline w-full rounded-xl hover:bg-matrix-900/50 text-matrix-400 hover:border-matrix-500 hover:text-matrix-400 transition-all duration-300 font-semibold tracking-wide text-base py-3"
                         >
                           <div className="flex items-center justify-center gap-3 w-full">
                             <PuzzlePieceIcon className="h-5 w-5" />
@@ -424,7 +460,7 @@ const ServerDetailPage = () => {
                         </button>
                         <button
                           onClick={() => router.push(`/servers/${server.id}/edit?tab=cluster`)}
-                          className="btn btn-outline w-full rounded-xl hover:bg-secondary hover:border-secondary hover:text-secondary-content transition-all duration-300 font-semibold tracking-wide text-base py-3"
+                          className="btn btn-outline w-full rounded-xl hover:bg-matrix-900/50 text-matrix-400 hover:border-matrix-500 hover:text-matrix-400 transition-all duration-300 font-semibold tracking-wide text-base py-3"
                         >
                           <div className="flex items-center justify-center gap-3 w-full">
                             <GlobeAltIcon className="h-5 w-5" />
@@ -433,7 +469,7 @@ const ServerDetailPage = () => {
                         </button>
                         <button
                           onClick={() => router.push(`/servers/${server.id}/edit?tab=general`)}
-                          className="btn btn-outline w-full rounded-xl hover:bg-secondary hover:border-secondary hover:text-secondary-content transition-all duration-300 font-semibold tracking-wide text-base py-3"
+                          className="btn btn-outline w-full rounded-xl hover:bg-matrix-900/50 text-matrix-400 hover:border-matrix-500 hover:text-matrix-400 transition-all duration-300 font-semibold tracking-wide text-base py-3"
                         >
                           <div className="flex items-center justify-center gap-3 w-full">
                             <CogIcon className="h-5 w-5" />
@@ -445,7 +481,7 @@ const ServerDetailPage = () => {
                           className={`btn w-full rounded-xl transition-all duration-300 font-semibold tracking-wide text-base py-3 ${
                             showConfigEditor 
                               ? 'btn-primary hover:shadow-glow hover:shadow-primary/30' 
-                              : 'btn-outline hover:bg-secondary hover:border-secondary hover:text-secondary-content'
+                              : 'btn-outline hover:bg-matrix-900/50 hover:border-matrix-500 hover:text-matrix-400'
                           }`}
                         >
                           <div className="flex items-center justify-center gap-3 w-full">
@@ -460,21 +496,21 @@ const ServerDetailPage = () => {
 
                 {/* Server Details */}
                 <div className="lg:col-span-3">
-                  <div className="bg-base-200/50 rounded-2xl shadow-lg overflow-hidden border border-base-300/30">
+                  <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-2xl shadow-lg overflow-hidden">
                     <div className="p-8">
-                      <h2 className="text-2xl font-bold text-base-content mb-6 font-display tracking-wide">Server Details</h2>
+                      <h2 className="text-2xl font-bold text-matrix-400 mb-6 font-display tracking-wide">Server Details</h2>
                       <div className="space-y-6">
-                        <div className="bg-base-300/30 rounded-xl p-6 border border-base-300/20">
-                          <div className="text-base font-medium text-base-content/60 uppercase tracking-wider mb-3">Server ID</div>
-                          <div className="text-lg font-mono text-base-content">{server.id}</div>
+                        <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-xl p-6 border border-matrix-500/30">
+                          <div className="text-base font-medium text-matrix-400 uppercase tracking-wider mb-3">Server ID</div>
+                          <div className="text-lg font-mono text-matrix-400">{server.id}</div>
                         </div>
-                        <div className="bg-base-300/30 rounded-xl p-6 border border-base-300/20">
-                          <div className="text-base font-medium text-base-content/60 uppercase tracking-wider mb-3">Max Players</div>
-                          <div className="text-lg font-bold text-base-content">{server.maxPlayers}</div>
+                        <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-xl p-6 border border-matrix-500/30">
+                          <div className="text-base font-medium text-matrix-400 uppercase tracking-wider mb-3">Max Players</div>
+                          <div className="text-lg font-bold text-matrix-400">{server.maxPlayers}</div>
                         </div>
-                        <div className="bg-base-300/30 rounded-xl p-6 border border-base-300/20">
-                          <div className="text-base font-medium text-base-content/60 uppercase tracking-wider mb-3">Executable Path</div>
-                          <div className="text-lg font-mono text-base-content break-all">{server.executablePath}</div>
+                        <div className="bg-cyber-panel shadow-matrix-glow border border-matrix-500/30 rounded-xl p-6 border border-matrix-500/30">
+                          <div className="text-base font-medium text-matrix-400 uppercase tracking-wider mb-3">Executable Path</div>
+                          <div className="text-lg font-mono text-matrix-400 break-all">{server.executablePath}</div>
                         </div>
                       </div>
                     </div>

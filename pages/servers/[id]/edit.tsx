@@ -201,34 +201,16 @@ const EditServerPage = () => {
                         placeholder="Search mods..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        onKeyPress={(e) =>
-                          e.key === "Enter" && searchCurseForgeMods(searchQuery)
-                        }
-                        className="input input-xs input-bordered w-48 pl-8 pr-8 bg-cyber-bg border-matrix-500/50 focus:border-matrix-500 text-matrix-400 text-sm"
+                        className="input input-bordered w-64 bg-cyber-bg border-matrix-500/30 text-matrix-400 placeholder-matrix-600 focus:border-matrix-500 focus:outline-none"
                       />
-                      <button
-                        onClick={() => searchCurseForgeMods(searchQuery)}
-                        className="absolute left-1 top-1/2 transform -translate-y-1/2 p-1 hover:bg-matrix-900/50 rounded transition-colors"
-                        title="Search mods"
-                      >
-                        <MagnifyingGlassIcon className="h-3 w-3 text-matrix-600 hover:text-matrix-400" />
-                      </button>
-                      {searchQuery && (
-                        <button
-                          onClick={() => setSearchQuery("")}
-                          className="absolute right-1 top-1/2 transform -translate-y-1/2 p-1 hover:bg-matrix-900/50 rounded transition-colors"
-                          title="Clear search"
-                        >
-                          <XMarkIcon className="h-3 w-3 text-matrix-600 hover:text-matrix-400" />
-                        </button>
-                      )}
+                      <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-matrix-600" />
                     </div>
                     <button
                       onClick={() => setShowAddModModal(true)}
-                      className="btn btn-xs btn-outline flex items-center justify-center min-w-[2rem] hover:bg-matrix-900/50 text-matrix-400 border-matrix-500/50 hover:border-matrix-500"
-                      title="Add manual mod"
+                      className="btn btn-primary btn-sm hover:shadow-glow hover:shadow-primary/30 transition-all duration-300"
                     >
-                      <PlusIcon className="h-3 w-3" />
+                      <PlusIcon className="h-4 w-4" />
+                      Add Mod
                     </button>
                   </div>
                 )}

@@ -343,34 +343,22 @@ export function GlobalSettingsModal({
         />
 
         {/* Modal panel */}
-        <div className="inline-block transform overflow-hidden rounded-2xl bg-base-100 text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-3xl sm:align-middle border border-primary/30">
-          <div className="bg-gradient-to-br from-base-100 to-base-200/50">
-            <div className="px-6 pt-6 pb-6 sm:p-6">
-              <div className="sm:flex sm:items-start">
-                <div className="w-full">
-                  <div className="flex justify-between items-center mb-6">
-                    <div>
-                      <h3 className="text-2xl font-bold text-primary font-display tracking-wide">
-                        Global Settings
-                      </h3>
-                      <p className="text-primary/70 font-mono mt-2">
-                        Configure application-wide settings
-                      </p>
-                    </div>
-                    <button
-                      onClick={onClose}
-                      className="btn btn-ghost btn-sm rounded-xl hover:bg-primary/10 hover:text-primary transition-all duration-200"
-                      aria-label="Close dialog"
-                    >
-                      <XMarkIcon className="h-5 w-5" />
-                    </button>
-                  </div>
-
+        <div className="inline-block transform overflow-hidden rounded-2xl bg-cyber-panel text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-3xl sm:align-middle border border-matrix-500/30">
+          <div className="bg-gradient-to-br from-cyber-panel to-cyber-bg px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+            <div className="sm:flex sm:items-start">
+              <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-matrix-500/20 sm:mx-0 sm:h-10 sm:w-10">
+                <CogIcon className="h-6 w-6 text-matrix-500" aria-hidden="true" />
+              </div>
+              <div className="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left w-full">
+                <h3 className="text-base font-semibold leading-6 text-matrix-400 font-mono">
+                  Global Settings
+                </h3>
+                <div className="mt-4 space-y-4">
                   <form onSubmit={handleSave} className="space-y-6">
                     {/* Site Title */}
                     <div className="form-control">
                       <label className="label">
-                        <span className="label-text text-primary font-display font-semibold">Site Title *</span>
+                        <span className="label-text text-matrix-600 font-display font-semibold">Site Title *</span>
                       </label>
                       <input
                         type="text"
@@ -396,7 +384,7 @@ export function GlobalSettingsModal({
                     {/* Favicon */}
                     <div className="form-control">
                       <label className="label">
-                        <span className="label-text text-primary font-display font-semibold">Favicon *</span>
+                        <span className="label-text text-matrix-600 font-display font-semibold">Favicon *</span>
                       </label>
                       <div className="flex gap-2 mb-2">
                         <button
@@ -443,7 +431,7 @@ export function GlobalSettingsModal({
                             placeholder="Choose a file..."
                             aria-label="Upload custom favicon"
                           />
-                          <p className="text-sm text-primary/60 font-mono">
+                          <p className="text-sm text-matrix-600 font-mono">
                             Max file size: 100KB. Recommended size: 32x32 pixels.
                           </p>
                           {settings.favicon &&
@@ -451,7 +439,7 @@ export function GlobalSettingsModal({
                               <img
                                 src={settings.favicon}
                                 alt="Current favicon"
-                                className="h-8 w-8 rounded border border-primary/30 mt-2"
+                                className="h-8 w-8 rounded border border-matrix-500/30 mt-2"
                               />
                             )}
                         </div>
@@ -468,7 +456,7 @@ export function GlobalSettingsModal({
                     {/* SteamCMD Path */}
                     <div className="form-control">
                       <label className="label">
-                        <span className="label-text text-primary font-display font-semibold">SteamCMD Path</span>
+                        <span className="label-text text-matrix-600 font-display font-semibold">SteamCMD Path</span>
                       </label>
                       <div className="flex gap-2">
                         <input
@@ -505,8 +493,8 @@ export function GlobalSettingsModal({
                     {/* CurseForge API Key */}
                     <div className="form-control">
                       <label className="label">
-                        <span className="label-text text-primary font-display font-semibold">CurseForge API Key</span>
-                        <span className="label-text-alt text-primary/60">Required for mod management</span>
+                        <span className="label-text text-matrix-600 font-display font-semibold">CurseForge API Key</span>
+                        <span className="label-text-alt text-matrix-600">Required for mod management</span>
                       </label>
                       <div className="space-y-2">
                         <input
@@ -543,7 +531,7 @@ export function GlobalSettingsModal({
                             🔑 Get API Key
                           </a>
                         </div>
-                        <p className="text-sm text-primary/60 font-mono">
+                        <p className="text-sm text-matrix-600 font-mono">
                           Get your API key from the{" "}
                           <a
                             href="https://console.curseforge.com/#/api-keys"
@@ -568,7 +556,7 @@ export function GlobalSettingsModal({
                     {/* Cache Settings */}
                     <div className="form-control">
                       <label className="label">
-                        <span className="label-text text-primary font-display font-semibold">Mod Cache Settings</span>
+                        <span className="label-text text-matrix-600 font-display font-semibold">Mod Cache Settings</span>
                       </label>
                       <div className="space-y-4">
                         {/* Enable Cache */}
@@ -589,7 +577,7 @@ export function GlobalSettingsModal({
                           />
                           <label
                             htmlFor="cache-enabled"
-                            className="label-text cursor-pointer text-primary/80 font-mono"
+                            className="label-text cursor-pointer text-matrix-600 font-mono"
                           >
                             Enable mod caching
                           </label>
@@ -599,7 +587,7 @@ export function GlobalSettingsModal({
                         <div className="flex items-center gap-2">
                           <label
                             htmlFor="cache-interval"
-                            className="label-text min-w-[200px] text-primary/80 font-mono"
+                            className="label-text min-w-[200px] text-matrix-600 font-mono"
                           >
                             Refresh interval:
                           </label>
@@ -623,7 +611,7 @@ export function GlobalSettingsModal({
                           <span className="label-text">hours</span>
                         </div>
 
-                        <p className="text-sm text-primary/60 font-mono">
+                        <p className="text-sm text-matrix-600 font-mono">
                           Mod data is cached to improve performance. Cache is
                           refreshed automatically every{" "}
                           {settings.cacheRefreshInterval} hours.

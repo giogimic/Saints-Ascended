@@ -661,11 +661,33 @@ const ModManager: React.FC<ModManagerProps> = ({
         
         addConsoleSuccess(`✅ Loaded ${result.data.length} mods for "${category}" from ${result.source}`);
       } else {
-        throw new Error(result.error);
+        // If no results but no error, try to get popular mods as fallback
+        if (result.data && result.data.length === 0 && !result.error) {
+          addConsoleWarning(`⚠️ No mods found for "${category}", trying popular mods fallback...`);
+          
+          try {
+            const fallbackResult = await loadModsWithFallback("Popular");
+            if (fallbackResult.success && fallbackResult.data && fallbackResult.data.length > 0) {
+              setSearchResults(fallbackResult.data);
+              categoryDataCache.set(category, {
+                data: fallbackResult.data,
+                timestamp: Date.now(),
+                isLoading: false,
+                error: null
+              });
+              addConsoleInfo(`✅ Showing popular mods as fallback for "${category}"`);
+              return;
+            }
+          } catch (fallbackError) {
+            console.warn("Fallback to popular mods failed:", fallbackError);
+          }
+        }
+        
+        throw new Error(result.error || `No mods found for category: ${category}`);
       }
     } catch (error) {
       console.error(`Error loading mods for ${category}:`, error);
-      const errorMessage = error instanceof Error ? error.message : `Failed to load ${category} mods`;
+      const errorMessage = error instanceof Error ? error.message : String(error);
       setSearchError(errorMessage);
       
       // Update cache with error state
@@ -690,133 +712,208 @@ const ModManager: React.FC<ModManagerProps> = ({
     error?: string;
   }> => {
     const strategies = [
-      // Strategy 1: Optimized search endpoint with longer timeout
+      // Strategy 1: Category-specific search with proper query
       async () => {
+        const categoryQuery = getCategorySearchQuery(category);
         const params = new URLSearchParams({
-          category: category,
+          query: categoryQuery,
           sortBy: "popularity",
           sortOrder: "desc",
           pageSize: "20",
-          comprehensive: "true"
+          forceRefresh: "false"
         });
 
-        const response = await fetch(`/api/curseforge/search-optimized?${params}`, {
-          signal: AbortSignal.timeout(30000) // 30 second timeout
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.success) {
-          return {
-            success: true,
-            data: data.data || [],
-            source: 'optimized-search'
-          };
-        } else {
-          throw new Error(data.error || 'Unknown error from optimized search');
-        }
-      },
-      
-      // Strategy 2: Regular search endpoint with moderate timeout
-      async () => {
-        const params = new URLSearchParams({
-          query: category === "Popular" ? "" : category,
-          sortBy: "popularity",
-          sortOrder: "desc",
-          pageSize: "20"
-        });
+        addConsoleInfo(`🔍 Strategy 1: Searching with query "${categoryQuery}" for category "${category}"`);
 
         const response = await fetch(`/api/curseforge/search?${params}`, {
-          signal: AbortSignal.timeout(25000) // 25 second timeout
+          signal: AbortSignal.timeout(8000) // 8s timeout
         });
         
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-        
+
         const data = await response.json();
         
-        return {
-          success: true,
-          data: data.data || [],
-          source: 'regular-search'
-        };
+        // Check if we got actual data or just empty results
+        if (data.data && data.data.length > 0) {
+          return {
+            success: true,
+            data: data.data,
+            source: `category-search (${data.source || 'api'})`
+          };
+        } else if (data.warning) {
+          // API returned empty results but with a warning (like timeout fallback)
+          throw new Error(data.warning);
+        } else {
+          throw new Error("No results found");
+        }
       },
-      
-      // Strategy 3: Categories endpoint as final fallback
+
+      // Strategy 2: Empty query with category filter (popular mods in category)
       async () => {
-        const response = await fetch('/api/curseforge/categories', {
-          signal: AbortSignal.timeout(20000) // 20 second timeout
+        const params = new URLSearchParams({
+          query: "",
+          sortBy: "popularity",
+          sortOrder: "desc",
+          pageSize: "20",
+          forceRefresh: "false"
+        });
+
+        addConsoleInfo(`🔍 Strategy 2: Empty query search for popular mods`);
+
+        const response = await fetch(`/api/curseforge/search?${params}`, {
+          signal: AbortSignal.timeout(8000)
         });
         
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-        
+
         const data = await response.json();
         
+        if (data.data && data.data.length > 0) {
+          return {
+            success: true,
+            data: data.data,
+            source: `popular-search (${data.source || 'api'})`
+          };
+        } else {
+          throw new Error("No popular mods found");
+        }
+      },
+
+      // Strategy 3: Fallback to cached data from any category
+      async () => {
+        addConsoleInfo(`🔍 Strategy 3: Searching cache for any available mod data`);
+        
+        for (const [cacheKey, cacheData] of categoryDataCache.entries()) {
+          if (cacheData.data && cacheData.data.length > 0) {
+            addConsoleInfo(`✅ Found cached data from category: ${cacheKey}`);
+            return {
+              success: true,
+              data: cacheData.data,
+              source: `cache-fallback (${cacheKey})`
+            };
+          }
+        }
+        
+        throw new Error("No cached data available");
+      },
+
+      // Strategy 4: Demo/Sample mods fallback
+      async () => {
+        addConsoleInfo(`🔍 Strategy 4: Using demo mods as final fallback`);
+        
+        const demoMods: CurseForgeModData[] = [
+          {
+            id: 928621,
+            gameId: 83374,
+            name: "Awesome Spyglass",
+            slug: "awesome-spyglass",
+            links: {
+              websiteUrl: "https://www.curseforge.com/ark-survival-ascended/mods/awesome-spyglass",
+              wikiUrl: "",
+              issuesUrl: "",
+              sourceUrl: ""
+            },
+            summary: "A quality of life mod that enhances the spyglass functionality",
+            status: 4,
+            downloadCount: 150000,
+            isFeatured: false,
+            primaryCategoryId: 4546,
+            categories: [
+              {
+                id: 4546,
+                gameId: 83374,
+                name: "Quality of Life",
+                slug: "quality-of-life",
+                url: "",
+                iconUrl: "",
+                dateModified: "2023-01-01T00:00:00Z",
+                isClass: false,
+                classId: 0,
+                parentCategoryId: 0,
+                displayIndex: 0
+              }
+            ],
+            classId: 0,
+            authors: [
+              {
+                id: 1,
+                name: "ModAuthor",
+                url: ""
+              }
+            ],
+            logo: {
+              id: 1,
+              modId: 928621,
+              title: "Awesome Spyglass Logo",
+              description: "",
+              thumbnailUrl: "/placeholder.png",
+              url: "/placeholder.png"
+            },
+            screenshots: [],
+            mainFileId: 1,
+            latestFiles: [],
+            latestFilesIndexes: [],
+            dateCreated: "2023-01-01T00:00:00Z",
+            dateModified: "2023-12-01T00:00:00Z",
+            dateReleased: "2023-01-01T00:00:00Z",
+            allowModDistribution: true,
+            gamePopularityRank: 1,
+            isAvailable: true,
+            thumbsUpCount: 1200
+          }
+        ];
+
         return {
           success: true,
-          data: data.data || [],
-          source: 'categories-fallback'
+          data: demoMods,
+          source: "demo-fallback"
         };
       }
     ];
 
-    // Cache for successful results (5 minutes TTL)
-    const cachedResult = categoryDataCache.get(category);
-    
-    if (cachedResult && Date.now() - cachedResult.timestamp < 5 * 60 * 1000) {
-      addConsoleInfo(`📋 Using cached data for category "${category}"`);
-      return {
-        success: true,
-        data: cachedResult.data,
-        source: 'cache'
-      };
-    }
-
-    // Try each strategy with exponential backoff
     for (let i = 0; i < strategies.length; i++) {
       try {
-        addConsoleInfo(`🔄 Trying strategy ${i + 1} for category "${category}"`);
-        
         const result = await strategies[i]();
-        
-                 if (result.success && result.data && result.data.length > 0) {
-           // Cache successful result
-           categoryDataCache.set(category, {
-             data: result.data,
-             timestamp: Date.now(),
-             isLoading: false,
-             error: null
-           });
-          
-          addConsoleInfo(`✅ Strategy ${i + 1} succeeded for "${category}" - found ${result.data.length} mods`);
+        if (result.success && result.data && result.data.length > 0) {
           return result;
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        addConsoleError(`❌ Strategy ${i + 1} failed for "${category}": ${errorMessage}`);
+        addConsoleWarning(`⚠️ Strategy ${i + 1} failed: ${errorMessage}`);
         
-        // Wait between strategies (exponential backoff)
-        if (i < strategies.length - 1) {
-          const delay = Math.pow(2, i) * 1000; // 1s, 2s, 4s...
-          addConsoleInfo(`⏳ Waiting ${delay / 1000}s before next strategy...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
+        if (i === strategies.length - 1) {
+          // Last strategy failed
+          return {
+            success: false,
+            error: `All strategies failed. Last error: ${errorMessage}`
+          };
         }
       }
     }
 
-    // All strategies failed
-    addConsoleError(`💥 All strategies failed for category "${category}"`);
     return {
       success: false,
-      error: `Failed to load mods for category "${category}" after trying all available methods`
+      error: "All fallback strategies failed"
     };
+  };
+
+  // Helper function to get appropriate search query for each category
+  const getCategorySearchQuery = (category: string): string => {
+    const categoryQueries: Record<string, string> = {
+      "QoL": "quality of life utility",
+      "RPG": "rpg roleplay character",
+      "Maps": "map world island",
+      "Popular": "", // Empty for popular mods
+      "Overhauls": "overhaul total conversion",
+      "General": "gameplay mechanics",
+      "Custom Cosmetics": "cosmetic skin appearance"
+    };
+
+    return categoryQueries[category] || "";
   };
 
   // Load multiple categories for better performance
@@ -1032,106 +1129,30 @@ const ModManager: React.FC<ModManagerProps> = ({
     const [categoryMods, setCategoryMods] = useState<CurseForgeModData[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [cacheStatus, setCacheStatus] = useState<'cache' | 'api' | 'unknown'>('unknown');
 
-    // Load mods for the selected category using existing cache flow
     useEffect(() => {
       const loadCategoryMods = async () => {
-        if (category === 'Installed') return; // Skip for installed mods
-
-        // Check global cache first
-        const cached = categoryDataCache.get(category);
-        const now = Date.now();
+        if (category === "Installed") return;
         
-        if (cached && (now - cached.timestamp) < CATEGORY_CACHE_TTL) {
-          // Use cached data
-          setCategoryMods(cached.data);
-          setError(cached.error);
-          setCacheStatus('cache');
-          addConsoleInfo(`💾 Loaded ${cached.data.length} mods for "${category}" from global cache`);
-          return;
-        }
-
-        // Check if already loading this category
-        if (cached?.isLoading) {
-          setIsLoading(true);
-          return;
-        }
-
-        // Set loading state in global cache
-        categoryDataCache.set(category, {
-          data: [],
-          timestamp: now,
-          isLoading: true,
-          error: null
-        });
-
         setIsLoading(true);
         setError(null);
-        
+
         try {
-          // First try the optimized search endpoint (uses cache/db flow)
-          const response = await fetch(`/api/curseforge/search-optimized?category=${encodeURIComponent(category)}`);
+          const result = await loadModsWithFallback(category);
           
-          if (!response.ok) {
-            throw new Error(`Failed to fetch mods for ${category}: ${response.status} ${response.statusText}`);
+          if (result.success && result.data) {
+            setCategoryMods(result.data);
+            addConsoleSuccess(`✅ Loaded ${result.data.length} mods for "${category}" from ${result.source}`);
+          } else {
+            setError(result.error || `Failed to load ${category} mods`);
+            setCategoryMods([]);
+            addConsoleError(`❌ Failed to load ${category} mods: ${result.error}`);
           }
-          
-          const data = await response.json();
-          
-          if (!data.success) {
-            throw new Error(data.error || `Failed to load ${category} mods`);
-          }
-          
-          const mods = data.data || [];
-          
-          // Update global cache
-          categoryDataCache.set(category, {
-            data: mods,
-            timestamp: now,
-            isLoading: false,
-            error: null
-          });
-          
-          setCategoryMods(mods);
-          setCacheStatus(data.source === 'cache' ? 'cache' : 'api');
-          
-          // Log success to system console
-          addConsoleInfo(`✅ Loaded ${mods.length} mods for category "${category}" from ${data.source || 'unknown source'}`);
-          
-        } catch (err) {
-          const errorMessage = err instanceof Error ? err.message : `Failed to load ${category} mods`;
-          
-          // Update global cache with error
-          categoryDataCache.set(category, {
-            data: [],
-            timestamp: now,
-            isLoading: false,
-            error: errorMessage
-          });
-          
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
           setError(errorMessage);
           setCategoryMods([]);
-          
-          // Enhanced error handling for system console
-          const errorDetails = {
-            category,
-            error: errorMessage,
-            timestamp: new Date().toISOString(),
-            userAction: `Loading ${category} mods`
-          };
-          
-          // Log to system console with context
-          addConsoleError(`❌ Mod Loading Error: ${errorMessage}`);
-          addConsoleError(`📍 Context: Category="${category}", Time=${errorDetails.timestamp}`);
-          
-          // Use the error handler for proper logging and categorization
-          ErrorHandler.handleError(err, {
-            component: 'ModManager',
-            action: 'loadCategoryMods',
-            timestamp: new Date()
-          }, false); // Don't show toast, we handle it in UI
-          
+          addConsoleError(`❌ Error loading ${category} mods: ${errorMessage}`);
         } finally {
           setIsLoading(false);
         }
@@ -1140,144 +1161,130 @@ const ModManager: React.FC<ModManagerProps> = ({
       loadCategoryMods();
     }, [category]);
 
-    // Loading state
     if (isLoading) {
-    return (
-      <div className="text-center p-8 border-2 border-dashed border-matrix-500/30">
-          <div className="loading loading-spinner loading-lg text-matrix-500 mx-auto mb-4"></div>
-          <p className="text-matrix-600">Loading {category} mods...</p>
-          <p className="text-xs text-matrix-700">Checking cache and fetching fresh data</p>
-        </div>
-      );
-    }
-
-    // Error state
-    if (error) {
       return (
-        <div className="text-center p-8 border-2 border-dashed border-red-500/30 bg-red-900/10">
-          <ExclamationTriangleIcon className="mx-auto h-10 w-10 text-red-500 mb-4" />
-          <h4 className="font-bold text-red-400 mb-2">Failed to Load {category} Mods</h4>
-          <p className="text-sm text-red-300 mb-4">{error}</p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="btn-cyber-xs bg-red-600 hover:bg-red-500"
-          >
-            Retry
-          </button>
-          <div className="mt-4 text-xs text-matrix-700">
-            <p>💡 Try checking your CurseForge API key permissions</p>
-            <p>📊 Cache Status: {cacheStatus}</p>
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-matrix-500 mx-auto mb-4"></div>
+            <p className="text-matrix-400 font-mono">Loading {category} mods...</p>
+            <p className="text-matrix-600 text-xs mt-2">Searching CurseForge and cache...</p>
           </div>
         </div>
       );
     }
 
-    // Empty state
+    if (error && categoryMods.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-6 max-w-md mx-auto">
+            <ExclamationTriangleIcon className="h-8 w-8 text-red-400 mx-auto mb-3" />
+            <h3 className="text-red-400 font-bold mb-2">Failed to Load Mods</h3>
+            <p className="text-red-300 text-sm mb-4">{error}</p>
+            <button
+              onClick={() => {
+                setError(null);
+                setIsLoading(true);
+                // Trigger reload
+                const loadCategoryMods = async () => {
+                  try {
+                    const result = await loadModsWithFallback(category);
+                    if (result.success && result.data) {
+                      setCategoryMods(result.data);
+                    } else {
+                      setError(result.error || `Failed to load ${category} mods`);
+                    }
+                  } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    setError(errorMessage);
+                  } finally {
+                    setIsLoading(false);
+                  }
+                };
+                loadCategoryMods();
+              }}
+              className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded font-mono text-sm transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     if (categoryMods.length === 0) {
       return (
-        <div className="text-center p-8 border-2 border-dashed border-matrix-500/30">
-          <PuzzlePieceIcon className="mx-auto h-10 w-10 text-matrix-600 mb-4" />
-          <h4 className="font-bold text-matrix-500">No {category} Mods Found</h4>
-          <p className="text-sm text-matrix-600">No mods available in this category</p>
-          <div className="mt-4 text-xs text-matrix-700">
-            <p>📊 Source: {cacheStatus === 'cache' ? 'Cache' : 'Live API'}</p>
-          </div>
+        <div className="text-center py-8">
+          <PuzzlePieceIcon className="h-12 w-12 text-matrix-600 mx-auto mb-4" />
+          <p className="text-matrix-600 font-mono">No mods found for {category}</p>
+          <p className="text-matrix-700 text-sm mt-2">Try a different category or search term</p>
         </div>
       );
     }
 
-    // Success state - display mods
+    // Check if we're showing demo mods and display a notice
+    const isDemoData = categoryMods.some(mod => mod.id === 928621 && mod.name === "Awesome Spyglass");
+
     return (
       <div className="space-y-4">
-        {/* Category header with cache status */}
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-matrix-400">
-            {category} Mods ({categoryMods.length})
-          </h3>
-          <div className="text-xs text-matrix-600 flex items-center gap-2">
-            <span className={`px-2 py-1 rounded ${cacheStatus === 'cache' ? 'bg-green-900/30 text-green-400' : 'bg-matrix-900/30 text-matrix-400'}`}>
-              {cacheStatus === 'cache' ? '💾 Cached' : '🌐 Live'}
-            </span>
+        {isDemoData && (
+          <div className="bg-yellow-900/20 border border-yellow-500/50 rounded-lg p-4">
+            <div className="flex items-center gap-2">
+              <ExclamationTriangleIcon className="h-5 w-5 text-yellow-400" />
+              <div>
+                <h4 className="text-yellow-400 font-bold text-sm">Demo Mode</h4>
+                <p className="text-yellow-300 text-xs">
+                  Showing sample mods due to API connectivity issues. Please check your internet connection or try again later.
+                </p>
+              </div>
+            </div>
           </div>
-        </div>
-
-        {/* Mod grid */}
+        )}
+        
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {categoryMods.map((mod) => (
             <div
               key={mod.id}
-              className="bg-cyber-bg/50 border border-matrix-500/20 p-4 hover:bg-matrix-900/50 transition-colors"
+              className="bg-cyber-panel border border-matrix-500/30 rounded-lg p-4 hover:border-matrix-500 transition-colors group"
             >
               <div className="flex items-start gap-3">
-                {/* Mod logo */}
-                <div className="flex-shrink-0">
-                  {mod.logo?.thumbnailUrl ? (
-                    <img
-                      src={mod.logo.thumbnailUrl}
-                      alt={mod.name}
-                      className="w-12 h-12 rounded object-cover border border-matrix-500/30"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 bg-matrix-800/50 rounded flex items-center justify-center border border-matrix-500/30">
-                      <PuzzlePieceIcon className="h-6 w-6 text-matrix-600" />
-                    </div>
-                  )}
-                </div>
-
-                {/* Mod info */}
+                {mod.logo?.url && mod.logo.url !== "/placeholder.png" && (
+                  <Image
+                    src={mod.logo.url}
+                    alt={mod.name}
+                    width={48}
+                    height={48}
+                    className="rounded border border-matrix-500/30 flex-shrink-0"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                    }}
+                  />
+                )}
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-bold text-matrix-400 text-sm truncate">
+                  <h3 className="font-bold text-matrix-400 text-sm truncate group-hover:text-matrix-300 transition-colors">
                     {mod.name}
-                  </h4>
-                  <p className="text-xs text-matrix-600 line-clamp-2 mt-1">
+                  </h3>
+                  <p className="text-matrix-600 text-xs line-clamp-2 mt-1">
                     {mod.summary}
                   </p>
-                  
-                  {/* Mod stats */}
-                  <div className="flex items-center gap-3 mt-2 text-xs text-matrix-700">
-                    <span>⬇️ {mod.downloadCount?.toLocaleString() || '0'}</span>
-                    {mod.thumbsUpCount && mod.thumbsUpCount > 0 && (
-                      <span>👍 {mod.thumbsUpCount.toLocaleString()}</span>
-                    )}
-                    {mod.dateModified && (
-                      <span>📅 {new Date(mod.dateModified).toLocaleDateString()}</span>
-                    )}
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-matrix-700 text-xs">
+                      {mod.downloadCount?.toLocaleString()} downloads
+                    </span>
+                    <button
+                      onClick={() => addMod(mod)}
+                      className="bg-matrix-600 hover:bg-matrix-500 text-white p-1 rounded transition-colors"
+                      title={`Add ${mod.name}`}
+                      disabled={isDemoData}
+                    >
+                      <PlusIcon className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
-              </div>
-
-              {/* Action buttons */}
-              <div className="flex gap-2 mt-3">
-                <button
-                  onClick={() => addMod(mod)}
-                  className="flex-1 bg-matrix-600 text-white px-3 py-1 text-xs hover:bg-matrix-500 transition-colors"
-                  title="Add Mod"
-                >
-                  <PlusIcon className="h-4 w-4 inline mr-1" />
-                  Add
-                </button>
-                {mod.links?.websiteUrl && (
-                  <button
-                    onClick={() => window.open(mod.links.websiteUrl, '_blank')}
-                    className="bg-matrix-800 text-matrix-400 px-3 py-1 text-xs hover:bg-matrix-700 transition-colors"
-                    title="View on CurseForge"
-                  >
-                    🔗
-                  </button>
-                )}
               </div>
             </div>
           ))}
         </div>
-
-        {/* Load more button (if needed) */}
-        {categoryMods.length >= 20 && (
-          <div className="text-center mt-6">
-            <button className="btn-cyber-xs">
-              Load More {category} Mods
-            </button>
-          </div>
-        )}
       </div>
     );
   };

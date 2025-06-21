@@ -87,7 +87,6 @@ export default async function handler(
   const shouldForceRefresh = forceRefresh === "true";
 
   try {
-
     // Normalize categoryId for key generation
     const categoryIdStr = Array.isArray(categoryId) ? categoryId[0] : (categoryId || 'none');
 
@@ -106,16 +105,21 @@ export default async function handler(
       }
     }
 
-    // Create new request promise
-    const requestPromise = performSearch(
-      searchQuery,
-      categoryIdStr,
-      mappedSortField,
-      sortOrder as "asc" | "desc",
-      pageSizeNum,
-      index as string,
-      shouldForceRefresh
-    );
+    // Create new request promise with timeout
+    const requestPromise = Promise.race([
+      performSearch(
+        searchQuery,
+        categoryIdStr,
+        mappedSortField,
+        sortOrder as "asc" | "desc",
+        pageSizeNum,
+        index as string,
+        shouldForceRefresh
+      ),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('API request timeout after 10 seconds')), 10000)
+      )
+    ]);
 
     pendingRequests.set(pendingKey, requestPromise);
 
@@ -126,7 +130,7 @@ export default async function handler(
       pendingRequests.delete(pendingKey);
     }
 
-  } catch (err) {
+  } catch (err: unknown) {
     error('[API]', 'Search error: ' + (err instanceof Error ? err.message : String(err)));
 
     // Handle specific error types with enhanced fallback mechanisms
@@ -151,7 +155,7 @@ export default async function handler(
             retryAfter: err.retryAfter 
           });
         }
-      } catch (fallbackError) {
+      } catch (fallbackError: unknown) {
         warn('[API]', 'Fallback cache also failed during rate limit: ' + (fallbackError instanceof Error ? fallbackError.message : String(fallbackError)));
       }
 
@@ -179,7 +183,7 @@ export default async function handler(
       });
     }
 
-    if (err instanceof CurseForgeTimeoutError) {
+    if (err instanceof CurseForgeTimeoutError || (err instanceof Error && err.message?.includes('timeout'))) {
       // Try to return cached results for timeout errors
       try {
         const fallbackResult = await modCache.searchMods(
@@ -199,7 +203,7 @@ export default async function handler(
             warning: "Request timeout, using cached data" 
           });
         }
-      } catch (fallbackError) {
+      } catch (fallbackError: unknown) {
         warn('[API]', 'Fallback cache also failed during timeout: ' + (fallbackError instanceof Error ? fallbackError.message : String(fallbackError)));
       }
 
@@ -230,7 +234,7 @@ export default async function handler(
             warning: "Network error, using cached data" 
           });
         }
-      } catch (fallbackError) {
+      } catch (fallbackError: unknown) {
         warn('[API]', 'Fallback cache also failed during network error: ' + (fallbackError instanceof Error ? fallbackError.message : String(fallbackError)));
       }
 
@@ -273,11 +277,13 @@ export default async function handler(
       warn('[API]', 'Fallback cache also failed during generic error: ' + (fallbackError instanceof Error ? fallbackError.message : String(fallbackError)));
     }
 
-    // Final fallback
-    res.status(500).json({ 
-      error: "Internal server error", 
-      details: "An unexpected error occurred while searching for mods.",
-      suggestion: "Please try again with different search terms or contact support."
+    // Final fallback - return empty results instead of error
+    warn('[API]', 'All fallbacks failed, returning empty results');
+    res.status(200).json({ 
+      data: [], 
+      totalCount: 0,
+      source: "empty-fallback", 
+      warning: "Unable to fetch mods, please try again later" 
     });
   }
 }
@@ -321,14 +327,20 @@ async function performSearch(
   info('[API]', 'Fetching from CurseForge API: ' + JSON.stringify({searchQuery, categoryId, mappedSortField, sortOrder, pageSize: pageSizeNum, page}));
   
   try {
-    const result = await CurseForgeAPI.searchMods(
-      String(searchQuery),
-      categoryId && categoryId !== 'none' ? Number(categoryId) : undefined,
-      mappedSortField as any,
-      sortOrder as any,
-      Number(pageSizeNum),
-      page
-    );
+    // Add timeout to CurseForge API call
+    const result = await Promise.race([
+      CurseForgeAPI.searchMods(
+        String(searchQuery),
+        categoryId && categoryId !== 'none' ? Number(categoryId) : undefined,
+        mappedSortField as any,
+        sortOrder as any,
+        Number(pageSizeNum),
+        page
+      ),
+      new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new CurseForgeTimeoutError()), 8000) // 8 second timeout for CurseForge API
+      )
+    ]);
 
     info('[API]', 'Result: ' + JSON.stringify({mods: result.mods?.length, totalCount: result.totalCount, fromCache: result.fromCache}));
 
@@ -345,15 +357,15 @@ async function performSearch(
           result.mods,
           result.totalCount
         );
-      } catch (cacheError) {
+      } catch (cacheError: unknown) {
         warn('[API] Failed to cache results:', cacheError instanceof Error ? cacheError.message : String(cacheError));
       }
     }
 
     const safeMods = convertBigIntsToStrings(result?.mods || []);
-    return { data: safeMods, source: "api" };
+    return { data: safeMods, totalCount: result?.totalCount || 0, source: "api" };
 
-  } catch (apiError) {
+  } catch (apiError: unknown) {
     error('[API]', 'CurseForge API error: ' + (apiError instanceof Error ? apiError.message : String(apiError)));
     
     // Try to return cached results as fallback, even if expired
@@ -369,9 +381,9 @@ async function performSearch(
       if (fallbackResult.data && fallbackResult.data.length > 0) {
         const safeData = convertBigIntsToStrings(fallbackResult.data);
         warn('[API]', 'Returning stale cached data as fallback: ' + JSON.stringify({mods: fallbackResult.data.length}));
-        return { data: safeData, source: "cache-fallback", warning: "Using cached data due to API error" };
+        return { data: safeData, totalCount: fallbackResult.totalCount || 0, source: "cache-fallback", warning: "Using cached data due to API error" };
       }
-    } catch (fallbackError) {
+    } catch (fallbackError: unknown) {
       warn('[API]', 'Fallback cache also failed: ' + (fallbackError instanceof Error ? fallbackError.message : String(fallbackError)));
     }
 

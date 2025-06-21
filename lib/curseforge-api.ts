@@ -6,6 +6,28 @@ import {
   CurseForgeSearchResponse,
 } from "../types/curseforge";
 
+/**
+ * Validates CurseForge API key format
+ * CurseForge API keys use BCrypt hash format: $2a$10$[53 character base64-like string]
+ * Length: Exactly 60 characters
+ * Pattern: ^\$2[aby]?\$\d{2}\$[./A-Za-z0-9]{53}$
+ */
+export function isValidCurseForgeApiKey(key: string): boolean {
+  if (!key) return false;
+  
+  // BCrypt hash format (current CurseForge standard)
+  if (key.length === 60 && /^\$2[aby]?\$\d{2}\$[./A-Za-z0-9]{53}$/.test(key)) {
+    return true;
+  }
+  
+  // Legacy alphanumeric format (fallback)
+  if (key.length >= 32 && /^[a-zA-Z0-9]+$/.test(key)) {
+    return true;
+  }
+  
+  return false;
+}
+
 // CurseForge API Error Types
 export class CurseForgeAPIError extends Error {
   constructor(
@@ -308,8 +330,8 @@ export class CurseForgeAPI {
   private static isProcessingQueue = false;
   private static readonly MAX_CONCURRENT_REQUESTS = 2; // Reduced for better stability
   private static activeRequests = 0;
-  private static readonly REQUEST_TIMEOUT = 45000; // 45 seconds timeout
-  private static readonly RETRY_DELAYS = [2000, 5000, 10000]; // Exponential backoff delays
+  private static readonly REQUEST_TIMEOUT = 8000; // Reduced from 45s to 8s
+  private static readonly RETRY_DELAYS = [1000, 2000, 4000]; // Reduced delays for faster failure detection
 
   /**
    * Get API key with fallback to reading from .env files
@@ -333,12 +355,12 @@ export class CurseForgeAPI {
           );
           if (curseforgeLine) {
             const fileKey = curseforgeLine.split("=")[1]?.trim() || "";
-            // Remove quotes if present
-            const cleanKey = fileKey.replace(/^\"|'|\"$/g, "");
+            // Properly remove quotes - handle both single and double quotes
+            const cleanKey = fileKey.replace(/^["'](.*)["']$/, '$1');
 
-            // Support both traditional API keys (32+ chars) and bcrypt-formatted keys (60 chars)
-            if (cleanKey && (cleanKey.length >= 32 || cleanKey.startsWith("$2a$"))) {
-              log(LOG_LEVEL.INFO, `Using API key from ${path.basename(envPath)} file (length: ${cleanKey.length})`);
+            // Validate BCrypt format or fallback to legacy format
+            if (isValidCurseForgeApiKey(cleanKey)) {
+              log(LOG_LEVEL.INFO, `Using API key from ${path.basename(envPath)} file (length: ${cleanKey.length}, format: ${cleanKey.startsWith('$2') ? 'BCrypt' : 'Legacy'})`);
               return cleanKey;
             }
           }
@@ -349,13 +371,15 @@ export class CurseForgeAPI {
     }
 
     // Fallback to environment variable if file reading failed
-    if (apiKey && (apiKey.length >= 32 || apiKey.startsWith("$2a$"))) {
-      log(LOG_LEVEL.INFO, `Using API key from environment variable (length: ${apiKey.length})`);
-      return apiKey;
+    if (apiKey) {
+      if (isValidCurseForgeApiKey(apiKey)) {
+        log(LOG_LEVEL.INFO, `Using API key from environment variable (length: ${apiKey.length}, format: ${apiKey.startsWith('$2') ? 'BCrypt' : 'Legacy'})`);
+        return apiKey;
+      }
     }
 
     // If environment variable is truncated, try to read from files again
-    if (apiKey && apiKey.length < 50 && !apiKey.startsWith("$2a$")) {
+    if (apiKey && apiKey.length < 50 && !isValidCurseForgeApiKey(apiKey)) {
       log(
         LOG_LEVEL.WARN,
         "Environment variable appears truncated, attempting to read from .env files"
@@ -370,9 +394,9 @@ export class CurseForgeAPI {
             );
             if (curseforgeLine) {
               const fileKey = curseforgeLine.split("=")[1]?.trim() || "";
-              const cleanKey = fileKey.replace(/^["']|["']$/g, "");
+              const cleanKey = fileKey.replace(/^["'](.*)["']$/, '$1');
 
-              if (cleanKey && (cleanKey.length > apiKey.length || cleanKey.startsWith("$2a$"))) {
+              if (isValidCurseForgeApiKey(cleanKey)) {
                 log(
                   LOG_LEVEL.INFO,
                   `Using API key from ${path.basename(envPath)} file (environment variable was truncated)`
@@ -1040,27 +1064,48 @@ export class CurseForgeAPI {
    * Start background mod fetching service
    */
   static startBackgroundFetching(): void {
+    // Prevent multiple instances
     if (this.backgroundFetching) {
-      log(LOG_LEVEL.INFO, "Background mod fetching already running");
+      log(LOG_LEVEL.WARN, "Background fetching is already running");
+      return;
+    }
+
+    // Check if we can make requests
+    if (!this.canMakeRequest()) {
+      log(LOG_LEVEL.WARN, "Cannot start background fetching: rate limited or no tokens");
       return;
     }
 
     this.backgroundFetching = true;
     log(LOG_LEVEL.INFO, "Starting background mod fetching service");
 
-    // Start the background fetching process immediately, then set interval
-    this.fetchNextBatchOfMods().catch(error => {
-      console.error("Error in initial background mod fetch:", error);
-    });
-
-    // Start the background fetching process with longer intervals
+    // Use a more conservative interval to prevent overwhelming the API
     this.backgroundFetchInterval = setInterval(async () => {
       try {
+        // Check if we should throttle
+        const now = Date.now();
+        if (now - this.lastBackgroundFetch < this.BACKGROUND_FETCH_THROTTLE) {
+          return;
+        }
+
+        // Check if we can make requests
+        if (!this.canMakeRequest()) {
+          log(LOG_LEVEL.DEBUG, "Skipping background fetch: rate limited");
+          return;
+        }
+
+        // Check if there are already too many active requests
+        if (this.activeRequests >= this.MAX_CONCURRENT_REQUESTS) {
+          log(LOG_LEVEL.DEBUG, "Skipping background fetch: too many active requests");
+          return;
+        }
+
+        this.lastBackgroundFetch = now;
         await this.fetchNextBatchOfMods();
       } catch (error) {
-        console.error("Error in background mod fetching:", error);
+        log(LOG_LEVEL.ERROR, "Background fetch error:", error);
       }
-    }, 60000); // Check every 60 seconds instead of 30 seconds
+    }, this.BACKGROUND_FETCH_THROTTLE);
   }
 
   /**
@@ -1253,6 +1298,8 @@ export class CurseForgeAPI {
     const apiKey = process.env.CURSEFORGE_API_KEY;
     let fileKey = "";
 
+    // Use centralized validation function
+
     // Try to read from .env.local file
     try {
       const envPath = path.join(process.cwd(), ".env.local");
@@ -1264,7 +1311,7 @@ export class CurseForgeAPI {
         );
         if (curseforgeLine) {
           const keyPart = curseforgeLine.split("=")[1]?.trim() || "";
-          fileKey = keyPart.replace(/^["']|["']$/g, "");
+          fileKey = keyPart.replace(/^["'](.*)["']$/, '$1');
         }
       }
     } catch (error) {
@@ -1275,16 +1322,16 @@ export class CurseForgeAPI {
     let finalKey = "";
     let source: "env" | "file" | "none" = "none";
 
-    if (fileKey && fileKey.length >= 32) {
+    if (fileKey && isValidCurseForgeApiKey(fileKey)) {
       finalKey = fileKey;
       source = "file";
-    } else if (apiKey && apiKey.length >= 32) {
+    } else if (apiKey && isValidCurseForgeApiKey(apiKey)) {
       finalKey = apiKey;
       source = "env";
     }
 
-    const isValidFormat =
-      finalKey.length >= 32 && /^[a-zA-Z0-9]+$/.test(finalKey);
+    // Validate format using centralized function
+    const isValidFormat = isValidCurseForgeApiKey(finalKey);
 
     let message = "";
     if (!finalKey) {
@@ -1295,9 +1342,10 @@ export class CurseForgeAPI {
         "API key appears to be truncated. Please check your .env.local file or environment variable configuration.";
     } else if (!isValidFormat) {
       message =
-        "API key format appears invalid. CurseForge API keys should be alphanumeric and at least 32 characters long.";
+        "API key format appears invalid. CurseForge API keys should be either BCrypt hash format ($2a$10$...) or alphanumeric and at least 32 characters long.";
     } else {
-      message = `API key configured successfully (${source === "file" ? "from .env.local file" : "from environment variable"}).`;
+      const keyFormat = finalKey.startsWith('$2') ? "BCrypt hash" : "Legacy alphanumeric";
+      message = `API key configured successfully (${source === "file" ? "from .env.local file" : "from environment variable"}, ${keyFormat} format).`;
     }
 
     return {

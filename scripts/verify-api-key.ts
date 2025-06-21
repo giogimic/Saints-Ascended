@@ -8,6 +8,7 @@ import https from "https";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { isValidCurseForgeApiKey } from "../lib/curseforge-api.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,7 +28,7 @@ function loadEnvFile() {
       if (trimmed && !trimmed.startsWith("#")) {
         const [key, ...valueParts] = trimmed.split("=");
         if (key && valueParts.length > 0) {
-          const value = valueParts.join("=");
+          const value = valueParts.join("=").replace(/^["'](.*)["']$/, '$1'); // Remove quotes properly
           process.env[key] = value;
         }
       }
@@ -41,7 +42,7 @@ function loadEnvFile() {
       if (trimmed && !trimmed.startsWith("#")) {
         const [key, ...valueParts] = trimmed.split("=");
         if (key && valueParts.length > 0) {
-          const value = valueParts.join("=");
+          const value = valueParts.join("=").replace(/^["'](.*)["']$/, '$1'); // Remove quotes properly
           process.env[key] = value;
         }
       }
@@ -71,47 +72,45 @@ if (!API_KEY) {
 
 console.log("📋 API Key Analysis:");
 console.log(`   Length: ${API_KEY.length} characters`);
-console.log(
-  `   Format: ${API_KEY.startsWith("$2a$") ? "Valid (bcrypt format)" : /^[a-zA-Z0-9]+$/.test(API_KEY) ? "Valid (alphanumeric)" : "Invalid (contains special characters)"}`
-);
 
-// Check if it looks like a bcrypt hash (which is what CurseForge is providing)
-if (API_KEY.startsWith("$2a$")) {
-  console.log(
-    "\n✅ This appears to be a bcrypt-formatted API key from CurseForge!"
-  );
-  console.log(
-    "   This is the format that CurseForge is currently providing for API keys."
-  );
-  console.log(
-    "   The key should work with the CurseForge API despite the unusual format."
-  );
-}
+// Use the centralized validation function
+const isValid = isValidCurseForgeApiKey(API_KEY);
+const isBCryptFormat = API_KEY.startsWith("$2") && API_KEY.length === 60;
+const isLegacyFormat = API_KEY.length >= 32 && /^[a-zA-Z0-9]+$/.test(API_KEY);
 
-// Check for truncation - bcrypt keys should be 60 characters
-if (API_KEY.startsWith("$2a$") && API_KEY.length < 60) {
-  console.log("\n⚠️  WARNING: bcrypt API key appears to be truncated!");
-  console.log("   Bcrypt-formatted API keys should be exactly 60 characters long.");
-  console.log("   This might be due to:");
-  console.log("   - Environment variable length limits");
-  console.log("   - Build process truncation");
-  console.log("   - Incorrect copying from CurseForge console");
+console.log(`   Format: ${isValid ? (isBCryptFormat ? "Valid (BCrypt hash)" : "Valid (Legacy alphanumeric)") : "Invalid"}`);
+
+if (isValid) {
+  if (isBCryptFormat) {
+    console.log("\n✅ This is a valid BCrypt-formatted API key from CurseForge!");
+    console.log("   This is the current standard format that CurseForge provides.");
+    console.log("   The key should work perfectly with the CurseForge API.");
+  } else if (isLegacyFormat) {
+    console.log("\n✅ This is a valid legacy alphanumeric API key!");
+    console.log("   This is an older format that should still work with the CurseForge API.");
+  }
+} else {
+  console.log("\n❌ Invalid API key format detected!");
+  console.log("   CurseForge API keys should be either:");
+  console.log("   - BCrypt hash format: $2a$10$... (60 characters)");
+  console.log("   - Legacy alphanumeric: 32+ characters, letters and numbers only");
+  
+  if (API_KEY.startsWith("$2") && API_KEY.length !== 60) {
+    console.log("\n⚠️  WARNING: BCrypt API key appears to be truncated!");
+    console.log("   BCrypt-formatted API keys should be exactly 60 characters long.");
+  } else if (!API_KEY.startsWith("$2") && API_KEY.length < 32) {
+    console.log("\n⚠️  WARNING: API key appears to be too short!");
+    console.log("   Legacy CurseForge API keys should be at least 32 characters long.");
+  }
+  
+  console.log("\n   Common issues:");
+  console.log("   - Environment variable truncation (check shell expansion of $ symbols)");
+  console.log("   - Incorrect quote handling in .env files");
+  console.log("   - Incomplete copying from CurseForge console");
   console.log("\n   Solutions:");
   console.log("   1. Check your .env file for the complete API key");
-  console.log("   2. Remove any quotes around the API key value");
-  console.log("   3. Ensure the API key is copied completely from CurseForge");
-  console.log("   4. Restart your development server after making changes");
-} else if (!API_KEY.startsWith("$2a$") && API_KEY.length < 32) {
-  console.log("\n⚠️  WARNING: Traditional API key appears to be truncated!");
-  console.log("   Traditional CurseForge API keys should be at least 32 characters long.");
-  console.log("   This might be due to:");
-  console.log("   - Environment variable length limits");
-  console.log("   - Build process truncation");
-  console.log("   - Incorrect copying from CurseForge console");
-  console.log("\n   Solutions:");
-  console.log("   1. Check your .env file for the complete API key");
-  console.log("   2. Remove any quotes around the API key value");
-  console.log("   3. Ensure the API key is copied completely from CurseForge");
+  console.log("   2. Ensure quotes are properly handled: CURSEFORGE_API_KEY=\"$2a$10$...\"");
+  console.log("   3. Verify the API key is copied completely from CurseForge");
   console.log("   4. Restart your development server after making changes");
 }
 

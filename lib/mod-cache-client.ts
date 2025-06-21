@@ -199,80 +199,72 @@ class ModCacheClient {
   ): Promise<{ data: CurseForgeModData[]; totalCount: number } | null> {
     // Return early during build time to prevent API calls
     if (this.isBuildTime) {
-      console.log(`[modCacheClient] Skipping API call during build time for key: ${cacheKey}`);
-      return { data: [], totalCount: 0 };
+      console.log(`[modCacheClient] Skipping search API call during build time for query: ${query}`);
+      return null;
     }
 
-    const maxRetries = 2;
-    let lastError: Error | null = null;
+    const sanitizedQuery = (query || "").trim();
+    
+    // Create AbortController for request cancellation
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      console.warn(`[modCacheClient] Request timeout for query: ${sanitizedQuery}`);
+    }, 15000); // Reduced from 30s to 15s
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      let url = '';
-      try {
-        const params = new URLSearchParams({
-          searchFilter: query,
-          sortField: sortBy,
-          sortOrder: sortOrder,
-          pageSize: pageSize.toString(),
-          index: ((page - 1) * pageSize).toString(),
-        });
+    try {
+      const params = new URLSearchParams({
+        query: sanitizedQuery,
+        categoryId: category || "",
+        sortBy: sortBy || "popularity",
+        sortOrder: sortOrder || "desc",
+        pageSize: (pageSize || 20).toString(),
+        index: ((Math.max(1, page || 1) - 1) * (pageSize || 20)).toString(),
+        forceRefresh: "false"
+      });
 
-        if (category) {
-          params.append("categoryId", category);
+      console.log(`[modCacheClient] Fetching from API: ${this.baseUrl}/api/curseforge/search?${params}`);
+      
+      const response = await fetch(`${this.baseUrl}/api/curseforge/search?${params}`, {
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
         }
+      });
 
-        url = `${this.baseUrl}/api/curseforge/search?${params}`;
-        console.log(`[modCacheClient] Fetching from API (attempt ${attempt}/${maxRetries}): ${url}`);
-        
-        // Add timeout to prevent hanging
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // Increased to 30 seconds
-        
-        const response = await fetch(url, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          signal: controller.signal,
-        });
-        
-        clearTimeout(timeoutId);
-        console.log(`[modCacheClient] Fetch response status: ${response.status}`);
+      clearTimeout(timeoutId);
 
-        if (response.ok) {
-          const result = await response.json();
-          this.setSearchInCache(cacheKey, result.mods || [], result.totalCount || 0);
-          return { data: result.mods || [], totalCount: result.totalCount || 0 };
+      if (response.ok) {
+        const result = await response.json();
+        
+        if (result.data && Array.isArray(result.data)) {
+          // Store in cache
+          this.setSearchInCache(cacheKey, result.data, result.totalCount || result.data.length);
+          console.log(`[modCacheClient] Cached ${result.data.length} results for key: ${cacheKey}`);
+          
+          return {
+            data: result.data,
+            totalCount: result.totalCount || result.data.length
+          };
         } else {
-          console.warn(`[modCacheClient] API request failed with status ${response.status} (attempt ${attempt})`);
-          if (attempt === maxRetries) {
-            return null;
-          }
-          // Wait before retry
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          console.warn(`[modCacheClient] API returned invalid data structure for query: ${sanitizedQuery}`);
+          return { data: [], totalCount: 0 };
         }
-      } catch (error) {
-        // Handle network errors gracefully
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        lastError = error instanceof Error ? error : new Error(errorMessage);
-        
-        if (error instanceof Error && error.name === 'AbortError') {
-          console.warn(`[modCacheClient] Request timeout for: ${url} (attempt ${attempt})`);
-        } else {
-          console.warn(`[modCacheClient] Failed to fetch mods from API: ${errorMessage} (attempt ${attempt})`);
-        }
-        
-        if (attempt === maxRetries) {
-          console.error(`[modCacheClient] All ${maxRetries} attempts failed for key: ${cacheKey}`);
-          return null;
-        }
-        
-        // Wait before retry with exponential backoff
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      } else {
+        console.error(`[modCacheClient] API request failed with status ${response.status} for query: ${sanitizedQuery}`);
+        return null;
       }
+    } catch (error: unknown) {
+      clearTimeout(timeoutId);
+      
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.warn(`[modCacheClient] Request aborted due to timeout for query: ${sanitizedQuery}`);
+      } else {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`[modCacheClient] API request error for query: ${sanitizedQuery}`, errorMessage);
+      }
+      return null;
     }
-
-    return null;
   }
 
   /**
@@ -431,10 +423,19 @@ class ModCacheClient {
     page: number,
     pageSize: number
   ): string {
+    // Sanitize inputs to prevent undefined/null in cache keys
+    const sanitizedQuery = (query || "").trim();
+    const sanitizedCategory = category || "all";
+    const sanitizedSortBy = sortBy || "popularity";
+    const sanitizedSortOrder = sortOrder || "desc";
+    const sanitizedPage = Math.max(1, page || 1);
+    const sanitizedPageSize = Math.max(1, pageSize || 20);
+    
+    // Calculate index from page for compatibility with server-side cache
+    const index = (sanitizedPage - 1) * sanitizedPageSize;
+    
     // Match the server-side key format exactly
-    const categoryId = category || 'undefined';
-    const index = ((page - 1) * pageSize).toString();
-    return `search_${query}_${categoryId}_${sortBy}_${sortOrder}_${pageSize}_${index}_false`;
+    return `search_${sanitizedQuery}_${sanitizedCategory}_${sanitizedSortBy}_${sanitizedSortOrder}_${sanitizedPageSize}_${index}_false`;
   }
 
   /**

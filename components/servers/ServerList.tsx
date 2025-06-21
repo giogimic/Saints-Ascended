@@ -13,6 +13,7 @@ import {
 import type { ServerConfig, ServerStatus } from '@/types/server';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
 import toast from 'react-hot-toast';
+import { Button } from '@/components/ui/button';
 
 interface ServerListProps {
   servers: ServerConfig[];
@@ -186,48 +187,42 @@ export function ServerList({
                 {/* Server Actions */}
                 <div className="flex gap-3 mb-4">
                   {status === 'offline' ? (
-                    <button
+                    <Button
                       onClick={() => handleServerAction(server.id, 'start')}
-                      disabled={!!isLoading}
-                      className="btn btn-success btn-sm flex-1"
+                      className="bg-green-600 hover:bg-green-700 text-white flex-1"
+                      size="sm"
                     >
-                      {isLoading === 'start' ? (
-                        <div className="loading loading-spinner loading-xs"></div>
-                      ) : (
-                        <PlayIcon className="h-4 w-4" />
-                      )}
-                      START
-                    </button>
+                      <PlayIcon className="h-4 w-4 mr-1" />
+                      Start
+                    </Button>
                   ) : (
-                    <button
+                    <Button
                       onClick={() => handleServerAction(server.id, 'stop')}
-                      disabled={!!isLoading}
-                      className="btn btn-error btn-sm flex-1"
+                      className="bg-red-600 hover:bg-red-700 text-white flex-1"
+                      size="sm"
                     >
-                      {isLoading === 'stop' ? (
-                        <div className="loading loading-spinner loading-xs"></div>
-                      ) : (
-                        <StopIcon className="h-4 w-4" />
-                      )}
-                      STOP
-                    </button>
+                      <StopIcon className="h-4 w-4 mr-1" />
+                      Stop
+                    </Button>
                   )}
 
-                  <button
+                  <Button
                     onClick={() => handleEditServer(server.id)}
-                    className="btn btn-ghost btn-sm"
-                    title="Edit Server"
+                    variant="ghost"
+                    size="sm"
                   >
                     <PencilIcon className="h-4 w-4" />
-                  </button>
+                  </Button>
 
-                  <button
+                  <Button
                     onClick={() => handleDeleteServer(server.id)}
-                    className="btn btn-ghost btn-sm text-error hover:bg-error/10"
-                    title="Delete Server"
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-600 hover:bg-red-100 hover:text-red-700"
                   >
-                    <TrashIcon className="h-4 w-4" />
-                  </button>
+                    <TrashIcon className="h-4 w-4 mr-1" />
+                    Delete
+                  </Button>
                 </div>
 
                 {/* Server Details */}

@@ -437,7 +437,7 @@ class ModCacheService {
       });
 
       // Convert to CurseForge format
-      const curseForgeMods = mods.map(mod => this.convertDbToCurseForge(mod));
+      const curseForgeMods = mods.map((mod: any) => this.convertDbToCurseForge(mod));
 
       return {
         data: curseForgeMods,

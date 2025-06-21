@@ -436,7 +436,7 @@ export default function CurseForgeTest() {
             ) : (
               <div className="text-center py-8">
                 <p className="text-muted-foreground">
-                  No featured mods loaded. Click "Load Featured" to fetch them.
+                  No featured mods loaded. Click &ldquo;Load Featured&rdquo; to fetch them.
                 </p>
               </div>
             )}
@@ -462,45 +462,51 @@ export default function CurseForgeTest() {
         </Card>
 
         {/* Test Endpoints */}
-        <div className="card bg-base-200 p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Test Endpoints</h2>
+        <Card className="card-cyber">
+          <CardHeader>
+            <CardTitle>Test Endpoints</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Button
+                onClick={testGamesList}
+                disabled={loading}
+                variant="secondary"
+                className="btn-cyber-outline"
+              >
+                Test Games List
+              </Button>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <button
-              onClick={testGamesList}
-              disabled={loading}
-              className="btn btn-secondary"
-            >
-              Test Games List
-            </button>
+              <Button
+                onClick={testCategories}
+                disabled={loading}
+                variant="secondary"
+                className="btn-cyber-outline"
+              >
+                Test Categories
+              </Button>
 
-            <button
-              onClick={testCategories}
-              disabled={loading}
-              className="btn btn-secondary"
-            >
-              Test Categories
-            </button>
-
-            <button
-              onClick={testSearch}
-              disabled={loading}
-              className="btn btn-secondary"
-            >
-              Test Search
-            </button>
-          </div>
-        </div>
+              <Button
+                onClick={testSearch}
+                disabled={loading}
+                variant="secondary"
+                className="btn-cyber-outline"
+              >
+                Test Search
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Test Token Bucket Rate Limiter */}
-        <div className="card bg-base-100 border border-base-content/10 shadow-lg">
-          <div className="card-body">
-            <h3 className="text-lg font-semibold mb-4">
-              Token Bucket Rate Limiter Test
-            </h3>
+        <Card className="card-cyber">
+          <CardHeader>
+            <CardTitle>Token Bucket Rate Limiter Test</CardTitle>
+          </CardHeader>
+          <CardContent>
             <div className="space-y-4">
               <div className="flex gap-4">
-                <button
+                <Button
                   onClick={async () => {
                     try {
                       const response = await fetch(
@@ -516,11 +522,11 @@ export default function CurseForgeTest() {
                       alert("Error fetching token bucket status");
                     }
                   }}
-                  className="btn btn-primary"
+                  className="btn-cyber"
                 >
                   Check Token Bucket Status
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={async () => {
                     try {
                       const response = await fetch(
@@ -539,11 +545,11 @@ export default function CurseForgeTest() {
                       alert("Error starting background fetching");
                     }
                   }}
-                  className="btn btn-success"
+                  className="btn-cyber"
                 >
                   Start Background Fetching
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={async () => {
                     try {
                       const response = await fetch(
@@ -562,55 +568,65 @@ export default function CurseForgeTest() {
                       alert("Error stopping background fetching");
                     }
                   }}
-                  className="btn btn-error"
+                  variant="destructive"
+                  className="btn-cyber-destructive"
                 >
                   Stop Background Fetching
-                </button>
+                </Button>
               </div>
-              <div className="text-sm text-base-content/70">
+              <div className="text-sm text-muted-foreground space-y-1">
                 <p>
-                  • Token bucket allows 60 requests per minute (1 per second)
+                  &bull; Token bucket allows 60 requests per minute (1 per second)
                 </p>
-                <p>• Background fetching automatically respects rate limits</p>
-                <p>• Check browser console for detailed logs</p>
+                <p>&bull; Background fetching automatically respects rate limits</p>
+                <p>&bull; Check browser console for detailed logs</p>
               </div>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {loading && (
-          <div className="alert">
-            <span className="loading loading-spinner"></span>
-            <span>Testing API...</span>
-          </div>
+          <Card className="card-cyber">
+            <CardContent className="flex items-center gap-2 p-4">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+              <span>Testing API...</span>
+            </CardContent>
+          </Card>
         )}
 
         {error && (
-          <div className="alert alert-error mb-6">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="stroke-current shrink-0 h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <span>{error}</span>
-          </div>
+          <Card className="card-cyber border-destructive">
+            <CardContent className="flex items-center gap-2 p-4 text-destructive">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <span>{error}</span>
+            </CardContent>
+          </Card>
         )}
 
         {testResult && (
-          <div className="card bg-base-200 p-6">
-            <h2 className="text-xl font-semibold mb-4">Test Result</h2>
-            <pre className="overflow-auto bg-base-300 p-4 rounded">
-              {JSON.stringify(testResult, null, 2)}
-            </pre>
-          </div>
+          <Card className="card-cyber">
+            <CardHeader>
+              <CardTitle>Test Result</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <pre className="overflow-auto bg-muted p-4 rounded text-sm">
+                {JSON.stringify(testResult, null, 2)}
+              </pre>
+            </CardContent>
+          </Card>
         )}
       </div>
     </Layout>

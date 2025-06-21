@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { ReactNode } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 import { MatrixGrid } from './MatrixGrid'
 import { GlitchOverlay } from './GlitchOverlay'
 
@@ -18,37 +18,51 @@ export function CyberLayout({
   showGlitch = true,
   showGrid = true
 }: CyberLayoutProps) {
+  const [isClient, setIsClient] = useState(false)
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
   return (
     <div className={`relative min-h-screen bg-cyber-bg text-matrix-500 font-mono ${className}`}>
       {/* Background Grid */}
       {showGrid && <MatrixGrid />}
       
       {/* Main Content */}
-      <motion.div
-        className="relative z-10"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5 }}
-      >
-        {children}
-      </motion.div>
+      {isClient ? (
+        <motion.div
+          className="relative z-10"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5 }}
+        >
+          {children}
+        </motion.div>
+      ) : (
+        <div className="relative z-10 opacity-100">
+          {children}
+        </div>
+      )}
       
       {/* Glitch Overlay - Last for top layer */}
       {showGlitch && <GlitchOverlay intensity="low" />}
       
       {/* Scan Line Border Effect */}
-      <motion.div
-        className="fixed top-0 left-0 w-full h-0.5 bg-matrix-scan z-30 pointer-events-none"
-        animate={{
-          x: ['-100%', '100%'],
-        }}
-        transition={{
-          duration: 3,
-          repeat: Infinity,
-          ease: 'linear',
-          repeatDelay: 2
-        }}
-      />
+      {isClient && (
+        <motion.div
+          className="fixed top-0 left-0 w-full h-0.5 bg-matrix-scan z-30 pointer-events-none"
+          animate={{
+            x: ['-100%', '100%'],
+          }}
+          transition={{
+            duration: 3,
+            repeat: Infinity,
+            ease: 'linear',
+            repeatDelay: 2
+          }}
+        />
+      )}
       
       {/* Ambient Glow Effects */}
       <div className="fixed inset-0 pointer-events-none z-5">

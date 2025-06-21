@@ -5,6 +5,13 @@ const nextConfig = {
     domains: ['localhost'],
     unoptimized: true,
   },
+  // Generate build ID with timestamp for cache busting
+  generateBuildId: async () => {
+    if (process.env.NODE_ENV === 'development') {
+      return `dev-${Date.now()}`;
+    }
+    return null; // Use default build ID for production
+  },
   webpack: (config, { isServer, dev }) => {
     if (!isServer) {
       config.resolve.fallback = {
@@ -27,8 +34,56 @@ const nextConfig = {
     maxInactiveAge: 0,
     pagesBufferLength: 2,
   },
+  // Add cache control headers
+  async headers() {
+    if (process.env.NODE_ENV === 'development') {
+      return [
+        {
+          source: '/(.*)',
+          headers: [
+            {
+              key: 'Cache-Control',
+              value: 'no-cache, no-store, must-revalidate, proxy-revalidate, max-age=0',
+            },
+            {
+              key: 'Pragma',
+              value: 'no-cache',
+            },
+            {
+              key: 'Expires',
+              value: '0',
+            },
+            {
+              key: 'Surrogate-Control',
+              value: 'no-store',
+            },
+          ],
+        },
+        {
+          source: '/_next/static/(.*)',
+          headers: [
+            {
+              key: 'Cache-Control',
+              value: 'no-cache, no-store, must-revalidate',
+            },
+          ],
+        },
+        {
+          source: '/api/(.*)',
+          headers: [
+            {
+              key: 'Cache-Control',
+              value: 'no-cache, no-store, must-revalidate',
+            },
+          ],
+        },
+      ];
+    }
+    return [];
+  },
   env: {
     CUSTOM_KEY: 'ark-server-manager',
+    BUILD_TIME: new Date().toISOString(),
   },
   async rewrites() {
     return [

@@ -6,11 +6,13 @@ import {
   TrashIcon,
   ArrowPathIcon,
   Cog6ToothIcon,
-  ServerIcon
+  ServerIcon,
+  EyeIcon
 } from '@heroicons/react/24/outline';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import type { ServerConfig, ServerStatus } from '@/types/server';
 import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
 
 interface ServerTableProps {
   servers: ServerConfig[];
@@ -153,10 +155,10 @@ export function ServerTable({
                     <td className="py-4">
                       <div className="flex items-center justify-center gap-2">
                         {status.status === 'offline' ? (
-                          <button
+                          <Button
+                            size="sm"
+                            className="h-8 w-8 p-0 bg-green-600 hover:bg-green-700 text-white rounded-full"
                             onClick={() => handleServerAction(server.id, 'start')}
-                            disabled={!!isLoading}
-                            className="btn btn-sm btn-circle btn-success"
                             title="Start Server"
                           >
                             {isLoading === 'start' ? (
@@ -164,12 +166,12 @@ export function ServerTable({
                             ) : (
                               <PlayIcon className="h-4 w-4" />
                             )}
-                          </button>
+                          </Button>
                         ) : (
-                          <button
+                          <Button
+                            size="sm"
+                            className="h-8 w-8 p-0 bg-red-600 hover:bg-red-700 text-white rounded-full"
                             onClick={() => handleServerAction(server.id, 'stop')}
-                            disabled={!!isLoading}
-                            className="btn btn-sm btn-circle btn-error"
                             title="Stop Server"
                           >
                             {isLoading === 'stop' ? (
@@ -177,13 +179,13 @@ export function ServerTable({
                             ) : (
                               <StopIcon className="h-4 w-4" />
                             )}
-                          </button>
+                          </Button>
                         )}
 
-                        <button
+                        <Button
+                          size="sm"
+                          className="h-8 w-8 p-0 bg-blue-600 hover:bg-blue-700 text-white rounded-full"
                           onClick={() => handleServerAction(server.id, 'update')}
-                          disabled={!!isLoading}
-                          className="btn btn-sm btn-circle btn-info"
                           title="Update Server"
                         >
                           {isLoading === 'update' ? (
@@ -191,31 +193,35 @@ export function ServerTable({
                           ) : (
                             <ArrowPathIcon className="h-4 w-4" />
                           )}
-                        </button>
+                        </Button>
 
-                        <button
+                        <Button
+                          size="sm"
+                          className="h-8 w-8 p-0 bg-yellow-600 hover:bg-yellow-700 text-white rounded-full"
                           onClick={() => onViewDashboard(server.id)}
-                          className="btn btn-sm btn-circle btn-warning"
                           title="Server Dashboard"
                         >
                           <Cog6ToothIcon className="h-4 w-4" />
-                        </button>
+                        </Button>
 
-                        <button
+                        <Button
+                          size="sm"
+                          className="h-8 w-8 p-0 bg-yellow-600 hover:bg-yellow-700 text-white rounded-full"
                           onClick={() => router.push(`/servers/${server.id}/edit`)}
-                          className="btn btn-sm btn-circle btn-ghost"
                           title="Edit Server"
                         >
                           <PencilIcon className="h-4 w-4" />
-                        </button>
+                        </Button>
 
-                        <button
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0 text-red-600 hover:bg-red-100 hover:text-red-700"
                           onClick={() => onDeleteServer(server.id)}
-                          className="btn btn-sm btn-circle btn-ghost text-error hover:bg-error/10"
                           title="Delete Server"
                         >
                           <TrashIcon className="h-4 w-4" />
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>

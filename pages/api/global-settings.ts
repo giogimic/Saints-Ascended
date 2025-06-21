@@ -5,11 +5,18 @@ import {
   GlobalSettings,
 } from "@/lib/global-settings";
 import { isValidCurseForgeApiKey } from "@/lib/curseforge-api";
+import { getCacheBustHeaders } from '@/lib/cache-bust';
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  // Add cache-busting headers
+  const cacheBustHeaders = getCacheBustHeaders();
+  Object.entries(cacheBustHeaders).forEach(([key, value]) => {
+    res.setHeader(key, value);
+  });
+
   try {
     switch (req.method) {
       case "GET":

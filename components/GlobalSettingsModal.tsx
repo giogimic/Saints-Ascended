@@ -12,6 +12,7 @@ import { GlobalSettings } from "@/lib/global-settings";
 import { ErrorHandler, ErrorType, ErrorSeverity } from "@/lib/error-handler";
 import { useGlobalSettings } from "@/lib/global-settings";
 import { isValidCurseForgeApiKey } from "@/lib/curseforge-api";
+import { Button } from '@/components/ui/button';
 
 interface GlobalSettingsModalProps {
   isOpen: boolean;
@@ -387,37 +388,37 @@ export function GlobalSettingsModal({
                         <span className="label-text text-matrix-600 font-display font-semibold">Favicon *</span>
                       </label>
                       <div className="flex gap-2 mb-2">
-                        <button
-                          type="button"
-                          className={`btn btn-sm flex-1 ${faviconType === "emoji" ? "btn-primary" : "btn-outline"}`}
+                        <Button
                           onClick={() => setFaviconType("emoji")}
+                          className={`flex-1 ${faviconType === "emoji" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}
+                          size="sm"
                         >
-                          Emoji
-                        </button>
-                        <button
-                          type="button"
-                          className={`btn btn-sm flex-1 ${faviconType === "custom" ? "btn-primary" : "btn-outline"}`}
+                          😊 Emoji
+                        </Button>
+                        <Button
                           onClick={() => setFaviconType("custom")}
+                          className={`flex-1 ${faviconType === "custom" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}
+                          size="sm"
                         >
-                          Custom
-                        </button>
+                          🖼️ Custom
+                        </Button>
                       </div>
 
                       {faviconType === "emoji" ? (
                         <div className="grid grid-cols-5 gap-2 sm:grid-cols-10">
                           {EMOJI_OPTIONS.map((emoji) => (
-                            <button
+                            <Button
                               key={emoji}
-                              type="button"
                               onClick={() => handleEmojiSelect(emoji)}
-                              className={`btn btn-sm ${
+                              size="sm"
+                              className={`${
                                 settings.favicon === emoji
-                                  ? "btn-primary"
-                                  : "btn-outline"
+                                  ? "bg-primary text-primary-foreground"
+                                  : "bg-secondary text-secondary-foreground"
                               }`}
                             >
                               {emoji}
-                            </button>
+                            </Button>
                           ))}
                         </div>
                       ) : (
@@ -470,23 +471,15 @@ export function GlobalSettingsModal({
                           disabled={isDownloading}
                           aria-label="SteamCMD path"
                         />
-                        <button
-                          type="button"
+                        <Button
                           onClick={handleDownloadSteamCMD}
-                          className="btn btn-primary"
+                          className="bg-primary text-primary-foreground hover:bg-primary/90"
                           disabled={
                             isDownloading || !settings.steamCmdPath.trim()
                           }
                         >
-                          {isDownloading ? (
-                            <>
-                              <span className="loading loading-spinner loading-sm" />
-                              Downloading...
-                            </>
-                          ) : (
-                            "Download"
-                          )}
-                        </button>
+                          {isDownloading ? "Downloading..." : "Download"}
+                        </Button>
                       </div>
                     </div>
 
@@ -509,27 +502,32 @@ export function GlobalSettingsModal({
                           aria-label="CurseForge API key"
                         />
                         <div className="flex gap-2">
-                          <button
-                            type="button"
+                          <Button
                             onClick={() => {
                               const input = document.querySelector('input[type="password"]') as HTMLInputElement;
                               if (input) {
                                 input.type = input.type === 'password' ? 'text' : 'password';
                               }
                             }}
-                            className="btn btn-ghost btn-sm"
+                            variant="ghost"
+                            size="sm"
                             aria-label="Toggle API key visibility"
                           >
                             👁️ Toggle Visibility
-                          </button>
-                          <a
-                            href="https://console.curseforge.com/#/api-keys"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn btn-outline btn-sm"
+                          </Button>
+                          <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
                           >
-                            🔑 Get API Key
-                          </a>
+                            <a
+                              href="https://console.curseforge.com/#/api-keys"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              🔑 Get API Key
+                            </a>
+                          </Button>
                         </div>
                         <p className="text-sm text-matrix-600 font-mono">
                           Get your API key from the{" "}
@@ -621,28 +619,19 @@ export function GlobalSettingsModal({
 
                     {/* Action Buttons */}
                     <div className="flex justify-end gap-4 mt-8">
-                      <button
-                        type="button"
+                      <Button
                         onClick={onClose}
-                        className="btn btn-ghost min-w-[100px]"
-                        disabled={isSaving || isDownloading}
+                        variant="ghost"
+                        className="min-w-[100px]"
                       >
                         Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="btn btn-primary min-w-[140px]"
-                        disabled={isSaving || isDownloading}
+                      </Button>
+                      <Button
+                        onClick={handleSave}
+                        className="bg-primary text-primary-foreground hover:bg-primary/90 min-w-[140px]"
                       >
-                        {isSaving ? (
-                          <>
-                            <span className="loading loading-spinner loading-sm" />
-                            Saving...
-                          </>
-                        ) : (
-                          "Save Changes"
-                        )}
-                      </button>
+                        Save Settings
+                      </Button>
                     </div>
                   </form>
                 </div>

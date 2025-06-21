@@ -27,19 +27,18 @@ const createPrismaClient = (): PrismaClient => {
       // Apply SQLite performance optimizations
       if (env.database.type === 'sqlite') {
         try {
-          // Apply PRAGMA settings using $queryRaw with Prisma.sql
-          const { Prisma } = await import('@prisma/client');
+          // Apply PRAGMA settings using $queryRaw with template literals
           
           // Enable WAL mode for better concurrency
-          await client.$queryRaw(Prisma.sql`PRAGMA journal_mode = WAL`);
+          await client.$queryRaw`PRAGMA journal_mode = WAL`;
           // Increase cache size for better performance  
-          await client.$queryRaw(Prisma.sql`PRAGMA cache_size = 10000`);
+          await client.$queryRaw`PRAGMA cache_size = 10000`;
           // Reduce sync overhead
-          await client.$queryRaw(Prisma.sql`PRAGMA synchronous = NORMAL`);
+          await client.$queryRaw`PRAGMA synchronous = NORMAL`;
           // Enable memory-mapped I/O
-          await client.$queryRaw(Prisma.sql`PRAGMA mmap_size = 268435456`);
+          await client.$queryRaw`PRAGMA mmap_size = 268435456`;
           // Optimize for faster queries
-          await client.$queryRaw(Prisma.sql`PRAGMA temp_store = MEMORY`);
+          await client.$queryRaw`PRAGMA temp_store = MEMORY`;
           
           console.log('✅ SQLite performance optimizations applied');
         } catch (pragmaError) {
@@ -47,7 +46,7 @@ const createPrismaClient = (): PrismaClient => {
         }
       }
     })
-    .catch((error) => {
+    .catch((error: Error) => {
       console.error('❌ Database connection failed:', error);
       
       if (env.isProduction) {
@@ -114,9 +113,8 @@ export async function initializeDatabase(): Promise<void> {
     if (env.isDevelopment && env.database.type === 'sqlite') {
       console.log('Attempting to create SQLite database file...');
       try {
-        // Use $queryRaw for PRAGMA statements with proper Prisma.sql syntax
-        const { Prisma } = await import('@prisma/client');
-        await prisma.$queryRaw(Prisma.sql`PRAGMA journal_mode = WAL`);
+        // Use $queryRaw for PRAGMA statements with template literals
+        await prisma.$queryRaw`PRAGMA journal_mode = WAL`;
         console.log('✅ SQLite database created successfully');
       } catch (createError) {
         console.error('Failed to create SQLite database:', createError);

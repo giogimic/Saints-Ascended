@@ -355,35 +355,35 @@ const ServerDetailPage = () => {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     <Card className="card-cyber-panel">
                       <CardContent className="p-5">
-                        <div className="flex items-center gap-3 mb-3">
-                          <UsersIcon className="h-6 w-6 text-accent" />
+                      <div className="flex items-center gap-3 mb-3">
+                        <UsersIcon className="h-6 w-6 text-accent" />
                           <h3 className="text-lg font-semibold text-foreground">Players</h3>
-                        </div>
-                        <div className="text-3xl font-bold text-accent tracking-wide">
-                          {players.current}/{players.max}
-                        </div>
+                      </div>
+                      <div className="text-3xl font-bold text-accent tracking-wide">
+                        {players.current}/{players.max}
+                      </div>
                         <div className="text-sm font-mono text-muted-foreground mt-1">
-                          {Math.round((players.current / players.max) * 100)}% capacity
-                        </div>
+                        {Math.round((players.current / players.max) * 100)}% capacity
+                      </div>
                       </CardContent>
                     </Card>
                     
                     <Card className="card-cyber-panel">
                       <CardContent className="p-5">
-                        <div className="flex items-center gap-3 mb-3">
-                          <SignalIcon className="h-6 w-6 text-primary" />
+                      <div className="flex items-center gap-3 mb-3">
+                        <SignalIcon className="h-6 w-6 text-primary" />
                           <h3 className="text-lg font-semibold text-foreground">Map</h3>
-                        </div>
+                      </div>
                         <div className="text-xl font-bold text-foreground truncate">{server.map}</div>
                       </CardContent>
                     </Card>
                     
                     <Card className="card-cyber-panel">
                       <CardContent className="p-5">
-                        <div className="flex items-center gap-3 mb-3">
+                      <div className="flex items-center gap-3 mb-3">
                           <GlobeAltIcon className="h-6 w-6 text-neon-blue" />
                           <h3 className="text-lg font-semibold text-foreground">Port</h3>
-                        </div>
+                      </div>
                         <div className="text-xl font-bold text-foreground">{server.port}</div>
                       </CardContent>
                     </Card>
@@ -439,7 +439,7 @@ const ServerDetailPage = () => {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <Button
-                        onClick={() => router.push(`/servers/${server.id}/edit?tab=mods`)}
+                          onClick={() => router.push(`/servers/${server.id}/edit?tab=mods`)}
                         variant="outline"
                         className="w-full btn-cyber-outline rounded-xl py-3 text-base"
                       >
@@ -448,7 +448,7 @@ const ServerDetailPage = () => {
                       </Button>
                       
                       <Button
-                        onClick={() => router.push(`/servers/${server.id}/edit?tab=cluster`)}
+                          onClick={() => router.push(`/servers/${server.id}/edit?tab=cluster`)}
                         variant="outline"
                         className="w-full btn-cyber-outline rounded-xl py-3 text-base"
                       >
@@ -457,7 +457,7 @@ const ServerDetailPage = () => {
                       </Button>
                       
                       <Button
-                        onClick={() => router.push(`/servers/${server.id}/edit?tab=general`)}
+                          onClick={() => router.push(`/servers/${server.id}/edit?tab=general`)}
                         variant="outline"
                         className="w-full btn-cyber-outline rounded-xl py-3 text-base"
                       >
@@ -466,13 +466,13 @@ const ServerDetailPage = () => {
                       </Button>
                       
                       <Button
-                        onClick={() => setShowConfigEditor(!showConfigEditor)}
+                          onClick={() => setShowConfigEditor(!showConfigEditor)}
                         className={`w-full rounded-xl py-3 text-base ${
-                          showConfigEditor 
+                            showConfigEditor 
                             ? 'btn-cyber hover:shadow-matrix-glow' 
                             : 'btn-cyber-outline'
-                        }`}
-                      >
+                          }`}
+                        >
                         <WrenchScrewdriverIcon className="h-5 w-5 mr-3" />
                         {showConfigEditor ? 'Hide Config' : 'Quick Config'}
                       </Button>
@@ -514,7 +514,7 @@ const ServerDetailPage = () => {
                         <CardContent className="p-6">
                           <div className="text-base font-medium text-muted-foreground uppercase tracking-wider mb-3">
                             Max Players
-                          </div>
+                    </div>
                           <div className="text-lg font-bold text-foreground">{server.maxPlayers}</div>
                         </CardContent>
                       </Card>
@@ -523,7 +523,7 @@ const ServerDetailPage = () => {
                         <CardContent className="p-6">
                           <div className="text-base font-medium text-muted-foreground uppercase tracking-wider mb-3">
                             Executable Path
-                          </div>
+                  </div>
                           <div className="text-lg font-mono text-foreground break-all">{server.executablePath}</div>
                         </CardContent>
                       </Card>
@@ -545,12 +545,12 @@ const ServerDetailPage = () => {
           />
         )}
 
-        {showAddServerModal && (
-          <AddServerForm
-            onSuccess={handleAddServerSuccess}
+      {showAddServerModal && (
+        <AddServerForm
+          onSuccess={handleAddServerSuccess}
             onClose={handleAddServerCancel}
-          />
-        )}
+        />
+      )}
       </Layout>
     </>
   );

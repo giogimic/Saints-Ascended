@@ -6,7 +6,7 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+:root {
     --background: 210 40% 2%;
     --foreground: 120 100% 85%;
     --card: 210 40% 4%;
@@ -19,7 +19,7 @@
     --secondary-foreground: 120 100% 85%;
     --muted: 210 40% 6%;
     --muted-foreground: 120 50% 60%;
-    --accent: 120 100% 50%;
+  --accent: 120 100% 50%;
     --accent-foreground: 210 40% 2%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
@@ -55,8 +55,8 @@
 @layer base {
   * {
     @apply border-border;
-  }
-  body {
+}
+body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
@@ -77,34 +77,34 @@
     @apply border border-matrix-500/50 hover:border-matrix-500;
     @apply hover:bg-matrix-900/50 hover:text-matrix-400;
     @apply transition-all duration-300;
-  }
+}
 
   .btn-cyber-ghost {
     @apply bg-transparent text-matrix-400 font-semibold tracking-wide;
     @apply hover:bg-matrix-900/50 hover:text-matrix-300;
     @apply transition-all duration-200;
-  }
+}
 
   /* Card variants */
   .card-cyber {
     @apply bg-cyber-panel border border-matrix-500/30 rounded-lg;
     @apply shadow-matrix-glow;
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
-  }
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
 
   .card-cyber-panel {
     @apply bg-card border border-border rounded-lg shadow-lg;
     -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
-  }
+}
 
   /* Input variants */
   .input-cyber {
     @apply bg-cyber-bg border border-matrix-500/30 text-matrix-400;
     @apply placeholder:text-matrix-600 focus:border-matrix-500 focus:outline-none;
     @apply transition-all duration-200;
-  }
+}
 
   /* Badge variants */
   .badge-cyber {
@@ -113,67 +113,67 @@
 
   .badge-success {
     @apply bg-matrix-500/20 text-matrix-400 border border-matrix-500/50;
-  }
+}
 
   .badge-warning {
     @apply bg-cyber-warning/20 text-cyber-warning border border-cyber-warning/50;
-  }
+}
 
   .badge-error {
     @apply bg-cyber-error/20 text-cyber-error border border-cyber-error/50;
-  }
+}
 
   .badge-info {
     @apply bg-neon-blue/20 text-neon-blue border border-neon-blue/50;
-  }
+}
 
   /* Status indicators */
-  .status-online {
+.status-online {
     @apply text-matrix-400 bg-matrix-500/20 ring-matrix-500/50;
-  }
+}
 
-  .status-offline {
+.status-offline {
     @apply text-cyber-error bg-cyber-error/20 ring-cyber-error/50;
-  }
+}
 
-  .status-warning {
+.status-warning {
     @apply text-cyber-warning bg-cyber-warning/20 ring-cyber-warning/50;
   }
 
   .status-unknown {
     @apply text-muted-foreground bg-muted/20 ring-border;
-  }
+}
 
   /* Terminal/console styling */
   .terminal-window {
     @apply bg-cyber-bg border border-matrix-500/30 rounded-lg;
     @apply shadow-matrix-glow font-mono text-matrix-400;
-  }
+}
 
   /* Glitch effects */
   .glitch-hover:hover {
     @apply animate-glitch;
-  }
+}
 
   .shadow-glow {
     @apply shadow-matrix-glow;
-  }
+}
 
   /* Matrix grid background */
   .matrix-grid {
-    background-image: 
+  background-image: 
       linear-gradient(90deg, transparent 49%, rgba(34, 197, 94, 0.1) 50%, transparent 51%),
       linear-gradient(0deg, transparent 49%, rgba(34, 197, 94, 0.1) 50%, transparent 51%);
-    background-size: 40px 40px;
-  }
+  background-size: 40px 40px;
+}
 
   /* Scan line effect */
   .scan-line::after {
-    content: '';
+  content: '';
     @apply absolute inset-0 pointer-events-none;
     background: linear-gradient(90deg, transparent 0%, rgba(34, 197, 94, 0.1) 50%, transparent 100%);
     @apply animate-scan-line;
-  }
+}
 }
 
 /* Custom scrollbar and utilities */
@@ -194,20 +194,20 @@
   .scrollbar-cyber::-webkit-scrollbar-thumb {
     background-color: rgb(34 197 94);
     border-radius: 9999px;
-  }
+}
 
   .scrollbar-cyber::-webkit-scrollbar-thumb:hover {
     background-color: rgb(74 222 128);
-  }
+}
 
   /* Text shadows for cyberpunk effect */
-  .text-shadow-matrix {
+.text-shadow-matrix {
     text-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
-  }
+}
 
   .text-shadow-glow {
     text-shadow: 0 0 20px currentColor;
-  }
+}
 
   /* Backdrop effects */
   .backdrop-cyber {

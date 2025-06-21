@@ -1,6 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
+import { useEffect, useState } from 'react'
 
 interface MatrixGridProps {
   className?: string
@@ -8,13 +9,14 @@ interface MatrixGridProps {
 }
 
 export function MatrixGrid({ className = '', animate = true }: MatrixGridProps) {
-  return (
-    <motion.div
-      className={`fixed inset-0 pointer-events-none z-0 ${className}`}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: animate ? 1 : 0.5 }}
-      transition={{ duration: 2 }}
-    >
+  const [isClient, setIsClient] = useState(false)
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  const gridContent = (
+    <>
       {/* Main Grid Pattern */}
       <div 
         className="absolute inset-0 bg-matrix-grid"
@@ -29,7 +31,7 @@ export function MatrixGrid({ className = '', animate = true }: MatrixGridProps) 
       <div className="absolute top-0 left-0 w-full h-full bg-gradient-radial from-transparent via-matrix-500/5 to-transparent" />
       
       {/* Moving Scan Lines */}
-      {animate && (
+      {animate && isClient && (
         <>
           <motion.div
             className="absolute top-0 left-0 w-full h-0.5 bg-matrix-scan"
@@ -66,6 +68,21 @@ export function MatrixGrid({ className = '', animate = true }: MatrixGridProps) 
           backgroundSize: '256px 256px'
         }}
       />
+    </>
+  )
+
+  return isClient ? (
+    <motion.div
+      className={`fixed inset-0 pointer-events-none z-0 ${className}`}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: animate ? 1 : 0.5 }}
+      transition={{ duration: 2 }}
+    >
+      {gridContent}
     </motion.div>
+  ) : (
+    <div className={`fixed inset-0 pointer-events-none z-0 opacity-100 ${className}`}>
+      {gridContent}
+    </div>
   )
 } 

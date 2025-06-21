@@ -93,8 +93,7 @@ export function ServerCard({
 
   return (
     <Card 
-      variant="elevated" 
-      className="group hover:scale-[1.02] transition-all duration-200 relative overflow-hidden"
+      className="group hover:scale-[1.02] transition-all duration-200 relative overflow-hidden shadow-lg shadow-primary-green/10 hover:shadow-primary-green/20"
     >
       {/* Status indicator line */}
       <div className={cn('absolute top-0 left-0 right-0 h-1', statusConfig.dotColor)} />
@@ -102,11 +101,11 @@ export function ServerCard({
       <CardHeader>
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-cyber-panel border-2 border-matrix-500 flex items-center justify-center shadow-matrix">
-              <ServerIcon className="h-6 w-6 text-matrix-500 drop-shadow-matrix" />
+            <div className="w-12 h-12 bg-cyber-panel border-2 border-primary-green/30 flex items-center justify-center shadow-lg shadow-primary-green/20">
+              <ServerIcon className="h-6 w-6 text-primary-green drop-shadow-lg" />
             </div>
             <div className="flex-1 min-w-0">
-              <CardTitle size="md" className="text-matrix-500 mb-1">
+              <CardTitle className="text-primary-green mb-1">
                 {server.name}
               </CardTitle>
               <p className="text-sm text-matrix-600 font-mono truncate uppercase tracking-wider">

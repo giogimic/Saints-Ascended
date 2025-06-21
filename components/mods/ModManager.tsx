@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Image from "next/image";
 import { ModInfo } from "../../types/server";
 import { CurseForgeModData } from "../../types/curseforge";
@@ -25,6 +25,16 @@ import {
 import { useModal } from "@/context/ModalContext";
 import { ErrorHandler } from "@/lib/error-handler";
 import { unifiedModManager, UnifiedModData } from "@/lib/unified-mod-manager";
+
+// ShadCN UI Components for modern table layout
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 
 // Global cache for category data to prevent duplicate API calls
 const categoryDataCache = new Map<string, {
@@ -1135,37 +1145,37 @@ const ModManager: React.FC<ModManagerProps> = ({
 
   const renderFilters = () => (
     <div className="space-y-4">
-      <h3 className="font-bold text-matrix-400 uppercase tracking-wider">Actions</h3>
+      <h3 className="font-bold text-primary-green uppercase tracking-wider font-mono">Actions</h3>
       
       {/* Search Mods Button */}
-      <button
+      <Button
         onClick={() => setShowSearchModal(true)}
-        className="w-full bg-matrix-600 text-white px-3 py-2 text-sm hover:bg-matrix-500 transition-colors flex items-center justify-center gap-2"
+        className="w-full bg-primary-green text-bg-dark hover:bg-secondary-green"
         title="Search CurseForge for mods"
       >
-        <MagnifyingGlassIcon className="h-4 w-4" />
+        <MagnifyingGlassIcon className="h-4 w-4 mr-2" />
         Search Mods
-      </button>
+      </Button>
 
       {/* Add Mods Button */}
-      <button
+      <Button
         onClick={() => setShowAddModModal(true)}
-        className="w-full bg-matrix-500 text-black px-3 py-2 text-sm hover:bg-matrix-400 transition-colors flex items-center justify-center gap-2 font-bold"
+        className="w-full bg-secondary-green text-bg-dark hover:bg-primary-green"
         title="Add mods by ID"
       >
-        <PlusIcon className="h-4 w-4" />
+        <PlusIcon className="h-4 w-4 mr-2" />
         Add Mods by ID
-      </button>
+      </Button>
 
-      <div className="border-t border-matrix-500/30 pt-4">
-        <h4 className="font-bold text-matrix-400 uppercase tracking-wider text-xs mb-2">Filter Installed</h4>
-      <input
-        type="text"
-        placeholder="Search installed mods..."
-        value={installedModsSearchQuery}
-        onChange={(e) => setInstalledModsSearchQuery(e.target.value)}
-          className="w-full bg-cyber-bg border-2 border-matrix-500/50 focus:border-matrix-500 p-2 text-matrix-400 font-mono text-sm"
-      />
+      <div className="border-t border-primary-green/30 pt-4">
+        <h4 className="font-bold text-primary-green uppercase tracking-wider text-xs mb-2 font-mono">Filter Installed</h4>
+        <Input
+          type="text"
+          placeholder="Search installed mods..."
+          value={installedModsSearchQuery}
+          onChange={(e) => setInstalledModsSearchQuery(e.target.value)}
+          className="w-full"
+        />
       </div>
     </div>
   );
@@ -1174,19 +1184,19 @@ const ModManager: React.FC<ModManagerProps> = ({
   const renderLaunchOptions = () => (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <h3 className="font-bold text-matrix-400 uppercase tracking-wider">Mod Launch Options</h3>
-        <div className="text-xs text-matrix-600">
+        <h3 className="font-bold text-primary-green uppercase tracking-wider font-mono">Mod Launch Options</h3>
+        <div className="text-xs text-text-muted font-mono">
           Auto-generated from enabled mods
         </div>
       </div>
-      <textarea
+      <Textarea
         value={launchOptions}
         onChange={handleLaunchOptionsChange}
         placeholder="-mods=ModID1,ModID2,ModID3 (Auto-generated based on enabled mods)"
-        className="w-full h-24 bg-cyber-bg border-2 border-matrix-500/50 focus:border-matrix-500 p-2 text-matrix-400 font-mono resize-none text-sm"
+        className="h-24"
         title="Launch options are automatically generated from your enabled mods. You can also manually edit them if needed."
       />
-      <div className="text-xs text-matrix-600 mt-1">
+      <div className="text-xs text-text-muted mt-1 font-mono">
         💡 Tip: Launch options update automatically when you enable/disable mods
       </div>
     </div>
@@ -1401,7 +1411,7 @@ const ModManager: React.FC<ModManagerProps> = ({
     );
   };
 
-  // Render main mod list
+  // Render main mod list using ShadCN Table - [Small Pic] | Mod Name | Author | Category | ModID | Actions
   const renderModList = () => {
     const displayMods = getDisplayMods();
     
@@ -1414,11 +1424,11 @@ const ModManager: React.FC<ModManagerProps> = ({
     // Loading state
     if (isLoadingMods) {
       return (
-        <div className="text-center p-8 border-2 border-dashed border-matrix-500/30">
-          <div className="loading loading-spinner loading-lg text-matrix-500 mx-auto mb-4"></div>
-          <p className="text-matrix-600">Loading installed mods...</p>
-          <p className="text-xs text-matrix-700">Fetching mod data from server (timeout: 15s)</p>
-          <p className="text-xs text-matrix-800 mt-2">
+        <div className="text-center p-8 border-2 border-dashed border-primary-green/30">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-green mx-auto mb-4"></div>
+          <p className="text-text-secondary font-mono">Loading installed mods...</p>
+          <p className="text-xs text-text-muted">Fetching mod data from server (timeout: 25s)</p>
+          <p className="text-xs text-text-muted mt-2">
             {backgroundFetchStatus?.isRunning 
               ? "🔄 Background caching is active" 
               : "💡 Background caching will start automatically"
@@ -1431,38 +1441,37 @@ const ModManager: React.FC<ModManagerProps> = ({
     // Empty state
     if (filteredInstalledMods.length === 0) {
       return (
-        <div className="text-center p-8 border-2 border-dashed border-matrix-500/30">
-          <div className="text-matrix-500 mb-4">
-            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-            </svg>
+        <div className="text-center p-8 border-2 border-dashed border-primary-green/30">
+          <div className="text-text-secondary mb-4">
+            <PuzzlePieceIcon className="w-16 h-16 mx-auto" />
           </div>
-          <h3 className="text-lg font-semibold text-matrix-400 mb-2">No Mods Found</h3>
+          <h3 className="text-lg font-semibold text-primary-green mb-2 font-mono uppercase">No Mods Found</h3>
           {installedModsSearchQuery ? (
             <div>
-              <p className="text-matrix-600 mb-4">No mods match your search &quot;{installedModsSearchQuery}&quot;</p>
-              <button 
+              <p className="text-text-secondary mb-4">No mods match your search &quot;{installedModsSearchQuery}&quot;</p>
+              <Button 
                 onClick={() => setInstalledModsSearchQuery("")}
-                className="btn btn-sm btn-outline text-matrix-400 border-matrix-500 hover:bg-matrix-500 hover:text-black"
+                variant="outline"
+                className="border-primary-green/50 text-primary-green hover:bg-primary-green/20"
               >
                 Clear Search
-              </button>
+              </Button>
             </div>
           ) : (
             <div>
-              <p className="text-matrix-600 mb-2">No mods are currently installed on this server</p>
-              <p className="text-xs text-matrix-700 mb-4">
+              <p className="text-text-secondary mb-2">No mods are currently installed on this server</p>
+              <p className="text-xs text-text-muted mb-4">
                 {backgroundFetchStatus?.isRunning 
                   ? "🔄 Background caching is active - mod data will be available soon" 
                   : "💡 Try searching for mods to install some"
                 }
               </p>
-              <button 
+              <Button 
                 onClick={() => setSelectedCategory("Popular")}
-                className="btn btn-sm btn-primary bg-matrix-500 border-matrix-500 text-black hover:bg-matrix-400"
+                className="bg-primary-green text-bg-dark hover:bg-secondary-green"
               >
                 Browse Popular Mods
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -1470,156 +1479,134 @@ const ModManager: React.FC<ModManagerProps> = ({
     }
 
     return (
-      <div className="space-y-3">
-        {filteredInstalledMods.map((mod) => (
-          <div key={mod.id} className="bg-cyber-bg/50 border border-matrix-500/20 p-4 hover:bg-matrix-900/50 transition-colors">
-            <div className="flex items-start gap-4">
-              {/* Mod Icon/Logo */}
-              <div className="flex-shrink-0">
-                <div className="w-16 h-16 bg-matrix-800/50 rounded flex items-center justify-center border border-matrix-500/30">
-                  <PuzzlePieceIcon className="h-8 w-8 text-matrix-600" />
-                </div>
-              </div>
+      <div className="bg-cyber-panel border border-primary-green/20 shadow-lg shadow-primary-green/10">
+        <Table>
+          <TableHeader>
+            <TableRow className="border-primary-green/20 hover:bg-primary-green/5">
+              <TableHead className="w-16 text-primary-green font-mono uppercase">Image</TableHead>
+              <TableHead className="text-primary-green font-mono uppercase">Mod Name</TableHead>
+              <TableHead className="text-primary-green font-mono uppercase">Author</TableHead>
+              <TableHead className="text-primary-green font-mono uppercase">Category</TableHead>
+              <TableHead className="text-primary-green font-mono uppercase">Mod ID</TableHead>
+              <TableHead className="text-primary-green font-mono uppercase">Status</TableHead>
+              <TableHead className="w-32 text-primary-green font-mono uppercase">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredInstalledMods.map((mod) => (
+              <TableRow 
+                key={mod.id} 
+                className="border-primary-green/10 hover:bg-primary-green/5 transition-colors"
+              >
+                {/* Small Pic */}
+                <TableCell>
+                  <Avatar className="h-8 w-8 border border-primary-green/30">
+                    <AvatarImage 
+                      src={mod._curseforgeData?.logo?.thumbnailUrl || "/placeholder.png"} 
+                      alt={mod.name} 
+                    />
+                    <AvatarFallback className="bg-cyber-panel text-primary-green text-xs font-mono">
+                      {mod.name.charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                </TableCell>
 
-              {/* Mod Information */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="font-bold text-matrix-400 text-lg truncate">{mod.name}</h3>
-                    <p className="text-sm text-matrix-600 mt-1 line-clamp-2">{mod.description}</p>
-                    
-                    {/* Mod Stats */}
-                    <div className="flex items-center gap-4 mt-2 text-xs text-matrix-700">
-                      <span className="flex items-center gap-1">
-                        📦 Version: {mod.version}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        🆔 ID: {mod.workshopId}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        📊 {typeof mod.size === 'number' ? `${(mod.size / 1024 / 1024).toFixed(1)} MB` : 'Unknown'}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        📅 {formatDate(mod.lastUpdated)}
-                      </span>
+                {/* Mod Name */}
+                <TableCell className="font-mono text-primary-green">
+                  <div>
+                    <div className="font-bold truncate max-w-[200px]" title={mod.name}>
+                      {mod.name}
                     </div>
-
-                    {/* Dependencies & Incompatibilities */}
-                    {(mod.dependencies.length > 0 || mod.incompatibilities.length > 0) && (
-                      <div className="mt-2 text-xs">
-                        {mod.dependencies.length > 0 && (
-                          <div className="text-matrix-400">
-                            🔗 Dependencies: {mod.dependencies.join(', ')}
-                          </div>
-                        )}
-                        {mod.incompatibilities.length > 0 && (
-                          <div className="text-red-400">
-                            ⚠️ Conflicts: {mod.incompatibilities.join(', ')}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Enabled/Disabled Status */}
-                  <div className="flex-shrink-0 ml-4">
-                    <div className={clsx(
-                      "px-3 py-1 text-xs font-bold uppercase tracking-wider",
-                      mod.enabled 
-                        ? "bg-green-900/30 text-green-400 border border-green-500/30" 
-                        : "bg-red-900/30 text-red-400 border border-red-500/30"
-                    )}>
-                      {mod.enabled ? "✅ Enabled" : "❌ Disabled"}
+                    <div className="text-xs text-text-secondary truncate max-w-[200px]" title={mod.description}>
+                      {mod.description}
                     </div>
                   </div>
-                </div>
+                </TableCell>
 
-                {/* Action Buttons */}
-                <div className="flex items-center gap-2 mt-4">
-                  <button
-                    onClick={() => toggleMod(mod.id)}
+                {/* Author */}
+                <TableCell className="text-text-secondary font-mono">
+                  {mod._curseforgeData?.authors?.[0]?.name || "Unknown"}
+                </TableCell>
+
+                {/* Category */}
+                <TableCell>
+                  <Badge variant="cyberpunk" className="text-xs">
+                    {mod._curseforgeData?.categories?.[0]?.name || "Utility"}
+                  </Badge>
+                </TableCell>
+
+                {/* Mod ID */}
+                <TableCell className="font-mono text-primary-green font-bold">
+                  {mod.workshopId}
+                </TableCell>
+
+                {/* Status */}
+                <TableCell>
+                  <Badge 
+                    variant={mod.enabled ? "default" : "outline"}
                     className={clsx(
-                      "px-4 py-2 text-sm font-bold transition-colors",
-                      mod.enabled
-                        ? "bg-red-600 hover:bg-red-500 text-white"
-                        : "bg-green-600 hover:bg-green-500 text-white"
+                      "text-xs font-mono uppercase",
+                      mod.enabled 
+                        ? "bg-green-500/20 text-green-400 border-green-500/30" 
+                        : "bg-red-500/20 text-red-400 border-red-500/30"
                     )}
-                    title={mod.enabled ? "Disable mod" : "Enable mod"}
                   >
-                    {mod.enabled ? "Disable" : "Enable"}
-                  </button>
+                    {mod.enabled ? "Enabled" : "Disabled"}
+                  </Badge>
+                </TableCell>
 
-                  <button
-                    onClick={() => removeMod(mod.id)}
-                    className="bg-red-700 hover:bg-red-600 text-white px-4 py-2 text-sm font-bold transition-colors"
-                    title="Remove mod completely"
-                  >
-                    Remove
-                  </button>
+                {/* Actions */}
+                <TableCell>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      onClick={() => toggleMod(mod.id)}
+                      size="sm"
+                      variant={mod.enabled ? "destructive" : "default"}
+                      className={clsx(
+                        "text-xs px-2 py-1 h-7",
+                        mod.enabled
+                          ? "bg-red-600/80 hover:bg-red-600 text-white"
+                          : "bg-green-600/80 hover:bg-green-600 text-white"
+                      )}
+                      title={mod.enabled ? "Disable mod" : "Enable mod"}
+                    >
+                      {mod.enabled ? "Off" : "On"}
+                    </Button>
 
-                  {/* View on CurseForge (if available) */}
-                  <button
-                    onClick={() => window.open(`https://www.curseforge.com/ark-survival-ascended/mods/${mod.workshopId}`, '_blank')}
-                    className="bg-matrix-600 hover:bg-matrix-500 text-white px-4 py-2 text-sm font-bold transition-colors flex items-center gap-1"
-                    title="View on CurseForge"
-                  >
-                    <EyeIcon className="h-4 w-4" />
-                    View
-                  </button>
-                </div>
-              </div>
-            </div>
+                    <Button
+                      onClick={() => removeMod(mod.id)}
+                      size="sm"
+                      variant="destructive"
+                      className="text-xs px-2 py-1 h-7 bg-red-700/80 hover:bg-red-700"
+                      title="Remove mod completely"
+                    >
+                      <TrashIcon className="h-3 w-3" />
+                    </Button>
 
-            {/* Load Order (for advanced users) */}
-            <div className="mt-3 pt-3 border-t border-matrix-500/20">
-              <div className="flex items-center justify-between text-xs text-matrix-700">
-                <span>Load Order: {mod.loadOrder}</span>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      // Move up in load order
-                      const currentIndex = mods.findIndex(m => m.id === mod.id);
-                      if (currentIndex > 0) {
-                        const newMods = [...mods];
-                        [newMods[currentIndex], newMods[currentIndex - 1]] = [newMods[currentIndex - 1], newMods[currentIndex]];
-                        // Update load orders
-                        newMods.forEach((m, i) => m.loadOrder = i);
-                        setMods(newMods);
-                        saveInstalledModsToCache(newMods);
-                        updateLaunchOptions(newMods);
-                      }
-                    }}
-                    disabled={mod.loadOrder === 0}
-                    className="text-matrix-600 hover:text-matrix-400 disabled:opacity-30 disabled:cursor-not-allowed"
-                    title="Move up in load order"
-                  >
-                    ⬆️
-                  </button>
-                  <button
-                    onClick={() => {
-                      // Move down in load order
-                      const currentIndex = mods.findIndex(m => m.id === mod.id);
-                      if (currentIndex < mods.length - 1) {
-                        const newMods = [...mods];
-                        [newMods[currentIndex], newMods[currentIndex + 1]] = [newMods[currentIndex + 1], newMods[currentIndex]];
-                        // Update load orders
-                        newMods.forEach((m, i) => m.loadOrder = i);
-                        setMods(newMods);
-                        saveInstalledModsToCache(newMods);
-                        updateLaunchOptions(newMods);
-                      }
-                    }}
-                    disabled={mod.loadOrder === mods.length - 1}
-                    className="text-matrix-600 hover:text-matrix-400 disabled:opacity-30 disabled:cursor-not-allowed"
-                    title="Move down in load order"
-                  >
-                    ⬇️
-                  </button>
-                </div>
-              </div>
+                    <Button
+                      onClick={() => window.open(`https://www.curseforge.com/ark-survival-ascended/mods/${mod.workshopId}`, '_blank')}
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs px-2 py-1 h-7 text-primary-green hover:bg-primary-green/20"
+                      title="View on CurseForge"
+                    >
+                      <EyeIcon className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+
+        {/* Load Order Controls - Simplified for table view */}
+        {filteredInstalledMods.length > 1 && (
+          <div className="p-4 border-t border-primary-green/20 bg-cyber-panel/50">
+            <div className="text-xs text-text-muted font-mono">
+              💡 Load order: {filteredInstalledMods.map(mod => `${mod.name} (${mod.loadOrder})`).join(', ')}
             </div>
           </div>
-        ))}
+        )}
       </div>
     );
   };
@@ -1645,209 +1632,188 @@ const ModManager: React.FC<ModManagerProps> = ({
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex border-b-2 border-matrix-500/30 mb-6">
+        {/* Tab Navigation using ShadCN Tabs */}
+        <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="mb-6">
+          <TabsList className="bg-cyber-panel border border-primary-green/20 w-full justify-start">
+            {MOD_CATEGORIES.map((category) => (
+              <TabsTrigger 
+                key={category}
+                value={category}
+                className="font-mono uppercase tracking-wider text-sm data-[state=active]:bg-primary-green/20 data-[state=active]:text-primary-green"
+              >
+                {category}
+                {category === "Installed" && mods.length > 0 && (
+                  <Badge variant="cyberpunk" className="ml-2 text-xs px-1 py-0">
+                    {mods.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
+          {/* Tab Content */}
           {MOD_CATEGORIES.map((category) => (
-            <button
-              key={category}
-              onClick={() => setSelectedCategory(category)}
-              className={clsx(
-                "px-4 py-2 font-mono transition-all duration-200 uppercase tracking-wider text-sm",
-                selectedCategory === category
-                  ? "bg-matrix-500/20 text-matrix-400 border-b-2 border-matrix-500"
-                  : "text-matrix-600 hover:bg-matrix-900/50 hover:text-matrix-400"
-              )}
-            >
-              {category}
-              {category === "Installed" && mods.length > 0 && (
-                <span className="ml-2 bg-matrix-900/50 text-matrix-500 px-2 py-0.5 text-xs">
-                  {mods.length}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-        
-        {/* Main Content Area */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {/* Left Panel: Filters and Actions */}
-          <div className="md:col-span-1 space-y-6">
-            {renderFilters()}
-            {renderLaunchOptions()}
-            {renderBackgroundFetchControls()}
-          </div>
-
-          {/* Right Panel: Mod List */}
-          <div className="md:col-span-3">
-            {selectedCategory === 'Installed' 
-              ? renderModList() 
-              : <CategoryModsDisplay category={selectedCategory} />
-            }
-          </div>
-        </div>
-
-        {/* Search Modal */}
-        {showSearchModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-cyber-panel border-2 border-matrix-500/30 shadow-matrix-glow w-full max-w-4xl mx-4 max-h-[80vh] overflow-hidden">
-              <div className="p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xl font-bold text-matrix-400 uppercase tracking-wider">Search CurseForge Mods</h3>
-                  <button
-                    onClick={() => setShowSearchModal(false)}
-                    className="text-matrix-600 hover:text-matrix-400 transition-colors"
-                    aria-label="Close search modal"
-                  >
-                    <XMarkIcon className="h-6 w-6" />
-                  </button>
+            <TabsContent key={category} value={category} className="mt-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                {/* Left Panel: Filters and Actions */}
+                <div className="md:col-span-1 space-y-6">
+                  {renderFilters()}
+                  {renderLaunchOptions()}
+                  {renderBackgroundFetchControls()}
                 </div>
 
-                <form onSubmit={(e) => { e.preventDefault(); performSearch(searchModalQuery); }} className="mb-4">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={searchModalQuery}
-                      onChange={(e) => setSearchModalQuery(e.target.value)}
-                      placeholder="Search for mods... (e.g., 'quality of life', 'map', 'building')"
-                      className="flex-1 bg-cyber-bg border-2 border-matrix-500/50 focus:border-matrix-500 p-3 text-matrix-400 font-mono"
-                    />
-                    <button
-                      type="submit"
-                      disabled={isSearching || !searchModalQuery.trim()}
-                      className="bg-matrix-600 text-white px-6 py-3 hover:bg-matrix-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isSearching ? 'Searching...' : 'Search'}
-                    </button>
-                  </div>
-                </form>
+                {/* Right Panel: Mod List */}
+                <div className="md:col-span-3">
+                  {category === 'Installed' 
+                    ? renderModList() 
+                    : <CategoryModsDisplay category={category} />
+                  }
+                </div>
+              </div>
+            </TabsContent>
+          ))}
+        </Tabs>
 
-                {/* Search Error */}
-                {searchError && (
-                  <div className="mb-4 p-3 bg-red-900/20 border border-red-500/30 text-red-400">
-                    <ExclamationTriangleIcon className="h-5 w-5 inline mr-2" />
-                    {searchError}
-                  </div>
-                )}
+        {/* Search Modal using ShadCN Dialog */}
+        <Dialog open={showSearchModal} onOpenChange={setShowSearchModal}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-primary-green uppercase tracking-wider font-mono">
+                Search CurseForge Mods
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
 
-                {/* Search Results */}
-                <div className="h-[50vh] overflow-y-auto pr-2">
-                  {isSearching ? (
-                    <div className="text-center py-10">
-                      <div className="loading loading-spinner loading-lg text-matrix-500 mx-auto mb-4"></div>
-                      <p className="text-matrix-600">Searching CurseForge...</p>
-                    </div>
-                  ) : searchResults.length === 0 && searchModalQuery ? (
-                    <div className="text-center text-matrix-600 py-10">
-                      <p>No mods found. Try a different search term.</p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {searchResults.map((mod: CurseForgeModData) => (
-                        <div
-                          key={mod.id}
-                          className="bg-cyber-bg/50 border border-matrix-500/20 p-4 hover:bg-matrix-900/50 transition-colors"
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="flex-shrink-0">
-                              {mod.logo?.thumbnailUrl ? (
-                                <img
-                                  src={mod.logo.thumbnailUrl}
-                                  alt={mod.name}
-                                  className="w-12 h-12 rounded object-cover border border-matrix-500/30"
-                                />
-                              ) : (
-                                <div className="w-12 h-12 bg-matrix-800/50 rounded flex items-center justify-center border border-matrix-500/30">
-                                  <PuzzlePieceIcon className="h-6 w-6 text-matrix-600" />
-                                </div>
+              <form onSubmit={(e) => { e.preventDefault(); performSearch(searchModalQuery); }} className="mb-4">
+                <div className="flex gap-2">
+                  <Input
+                    type="text"
+                    value={searchModalQuery}
+                    onChange={(e) => setSearchModalQuery(e.target.value)}
+                    placeholder="Search for mods... (e.g., 'quality of life', 'map', 'building')"
+                    className="flex-1"
+                  />
+                  <Button
+                    type="submit"
+                    disabled={isSearching || !searchModalQuery.trim()}
+                    className="bg-primary-green text-bg-dark hover:bg-secondary-green"
+                  >
+                    {isSearching ? 'Searching...' : 'Search'}
+                  </Button>
+                </div>
+              </form>
+
+              {/* Search Error */}
+              {searchError && (
+                <div className="mb-4 p-3 bg-red-900/20 border border-red-500/30 text-red-400 rounded">
+                  <ExclamationTriangleIcon className="h-5 w-5 inline mr-2" />
+                  {searchError}
+                </div>
+              )}
+
+              {/* Search Results */}
+              <div className="h-[50vh] overflow-y-auto pr-2">
+                {isSearching ? (
+                  <div className="text-center py-10">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-green mx-auto mb-4"></div>
+                    <p className="text-text-secondary font-mono">Searching CurseForge...</p>
+                  </div>
+                ) : searchResults.length === 0 && searchModalQuery ? (
+                  <div className="text-center text-text-secondary py-10">
+                    <p>No mods found. Try a different search term.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {searchResults.map((mod: CurseForgeModData) => (
+                      <div
+                        key={mod.id}
+                        className="bg-cyber-panel border border-primary-green/20 p-4 hover:bg-primary-green/5 transition-colors rounded"
+                      >
+                        <div className="flex items-start gap-3">
+                          <Avatar className="h-12 w-12">
+                            <AvatarImage src={mod.logo?.thumbnailUrl} alt={mod.name} />
+                            <AvatarFallback className="bg-cyber-panel text-primary-green text-xs">
+                              {mod.name.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-bold text-primary-green text-sm truncate font-mono">{mod.name}</h4>
+                            <p className="text-xs text-text-secondary line-clamp-2 mt-1">{mod.summary}</p>
+                            <div className="flex items-center gap-3 mt-2 text-xs text-text-muted">
+                              <span>⬇️ {mod.downloadCount?.toLocaleString() || '0'}</span>
+                              {mod.thumbsUpCount && mod.thumbsUpCount > 0 && (
+                                <span>👍 {mod.thumbsUpCount.toLocaleString()}</span>
                               )}
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-bold text-matrix-400 text-sm truncate">{mod.name}</h4>
-                              <p className="text-xs text-matrix-600 line-clamp-2 mt-1">{mod.summary}</p>
-                              <div className="flex items-center gap-3 mt-2 text-xs text-matrix-700">
-                                <span>⬇️ {mod.downloadCount?.toLocaleString() || '0'}</span>
-                                {mod.thumbsUpCount && mod.thumbsUpCount > 0 && (
-                                  <span>👍 {mod.thumbsUpCount.toLocaleString()}</span>
-                                )}
-                              </div>
-                            </div>
                           </div>
-                          <button
-                            onClick={() => addMod(mod)}
-                            className="w-full mt-3 bg-matrix-600 text-white px-3 py-2 text-xs hover:bg-matrix-500 transition-colors"
-                            title="Add Mod"
-                          >
-                            <PlusIcon className="h-4 w-4 inline mr-1" />
-                            Add Mod
-                          </button>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                        <Button
+                          onClick={() => addMod(mod)}
+                          className="w-full mt-3 bg-primary-green text-bg-dark hover:bg-secondary-green"
+                          size="sm"
+                        >
+                          <PlusIcon className="h-4 w-4 mr-1" />
+                          Add Mod
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-        )}
+          </DialogContent>
+        </Dialog>
 
-        {/* Add Mods by ID Modal */}
-        {showAddModModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-cyber-panel border-2 border-matrix-500/30 shadow-matrix-glow w-full max-w-md mx-4">
-              <div className="p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xl font-bold text-matrix-400 uppercase tracking-wider">Add Mods by ID</h3>
-                  <button
-                    onClick={() => {
-                      setShowAddModModal(false);
-                      setManualModId("");
-                    }}
-                    className="text-matrix-600 hover:text-matrix-400 transition-colors"
-                    aria-label="Close add mods modal"
-                  >
-                    <XMarkIcon className="h-6 w-6" />
-                  </button>
-                </div>
+        {/* Add Mods by ID Modal using ShadCN Dialog */}
+        <Dialog open={showAddModModal} onOpenChange={(open) => {
+          setShowAddModModal(open);
+          if (!open) setManualModId("");
+        }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-primary-green uppercase tracking-wider font-mono">
+                Add Mods by ID
+              </DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-primary-green mb-2 font-mono">
+                  CurseForge Mod IDs
+                </label>
+                <textarea
+                  value={manualModId}
+                  onChange={(e) => setManualModId(e.target.value)}
+                  placeholder="Enter mod IDs separated by commas or line breaks:&#10;&#10;12345,67890,112233&#10;&#10;Or one per line:&#10;12345&#10;67890&#10;112233"
+                  className="w-full h-32 bg-cyber-panel border border-primary-green/30 focus:border-primary-green p-3 text-primary-green font-mono text-sm resize-none rounded"
+                />
+                <p className="text-xs text-text-muted mt-1 font-mono">
+                  💡 You can paste multiple mod IDs separated by commas or line breaks
+                </p>
+              </div>
 
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-bold text-matrix-400 mb-2">
-                      CurseForge Mod IDs
-                    </label>
-                    <textarea
-                      value={manualModId}
-                      onChange={(e) => setManualModId(e.target.value)}
-                      placeholder="Enter mod IDs separated by commas or line breaks:&#10;&#10;12345,67890,112233&#10;&#10;Or one per line:&#10;12345&#10;67890&#10;112233"
-                      className="w-full h-32 bg-cyber-bg border-2 border-matrix-500/50 focus:border-matrix-500 p-3 text-matrix-400 font-mono text-sm resize-none"
-                    />
-                    <p className="text-xs text-matrix-600 mt-1">
-                      💡 You can paste multiple mod IDs separated by commas or line breaks
-                    </p>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        setShowAddModModal(false);
-                        setManualModId("");
-                      }}
-                      className="flex-1 bg-matrix-800 text-matrix-400 px-4 py-2 hover:bg-matrix-700 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleAddManualMod}
-                      disabled={!manualModId.trim()}
-                      className="flex-1 bg-matrix-600 text-white px-4 py-2 hover:bg-matrix-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold"
-                    >
-                      Add Mods
-                    </button>
-                  </div>
-                </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => {
+                    setShowAddModModal(false);
+                    setManualModId("");
+                  }}
+                  variant="outline"
+                  className="flex-1 border-primary-green/50 text-primary-green hover:bg-primary-green/20"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleAddManualMod}
+                  disabled={!manualModId.trim()}
+                  className="flex-1 bg-primary-green text-bg-dark hover:bg-secondary-green"
+                >
+                  Add Mods
+                </Button>
               </div>
             </div>
-          </div>
-        )}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
